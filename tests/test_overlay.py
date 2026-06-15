@@ -10,6 +10,7 @@ from ritualist.overlay import (
     ActionPreview,
     BestEffortOverlayController,
     ConfirmationRequest,
+    NullOverlayController,
     TargetRegion,
     format_confirmation_request,
 )
@@ -167,6 +168,38 @@ def test_desktop_click_preview_can_be_disabled_without_disabling_confirmation_de
 
     assert summary.results[0].status == "cancelled"
     assert overlay.previews == []
+    assert fakes.desktop.calls == []
+    request = requests[0]
+    assert isinstance(request, ConfirmationRequest)
+    assert request.window_title == "Battle.net"
+    assert request.target_text == "Play"
+
+
+def test_null_overlay_does_not_trigger_hidden_preview_probe():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    requests: list[ConfirmationRequest | str] = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: requests.append(request) or False,
+        overlay=NullOverlayController(),
+    ).run(recipe)
+
+    assert summary.results[0].status == "cancelled"
     assert fakes.desktop.calls == []
     request = requests[0]
     assert isinstance(request, ConfirmationRequest)

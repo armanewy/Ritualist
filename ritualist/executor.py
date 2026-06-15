@@ -58,7 +58,7 @@ class WorkflowExecutor:
         self.stop_requested = stop_requested or (lambda: False)
         self.strict = strict
         self.config = config or load_app_config()
-        self._overlay_available = overlay is not None
+        self._overlay_available = overlay is not None and not isinstance(overlay, NullOverlayController)
         self.overlay = BestEffortOverlayController(overlay or NullOverlayController())
 
     def run(self, recipe: Recipe) -> RunSummary:

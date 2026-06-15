@@ -27,6 +27,7 @@ class OverlayWindow(QWidget):
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._wait_timer = QTimer(self)
         self._wait_timer.setInterval(1000)
         self._wait_timer.timeout.connect(self._tick_wait)
