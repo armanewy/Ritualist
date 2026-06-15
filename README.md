@@ -94,6 +94,17 @@ python -m pytest tests\test_runtime_smoke.py
 Remove-Item Env:\RITUALIST_RUNTIME_SMOKE
 ```
 
+## Performance
+
+See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract, runtime event rules, and performance budgets.
+
+### Performance Non-Negotiables
+
+- Keep slow runtime, filesystem, adapter, and process work off the UI thread.
+- Prefer event-driven Home updates over polling or broad synchronous reloads.
+- Keep Pause and Stop controls responsive even when adapters are busy.
+- Preserve local-first behavior and existing safety gates.
+
 ## Recipe Format
 
 ```yaml

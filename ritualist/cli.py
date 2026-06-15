@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import time
 from typing import Annotated
 
@@ -9,6 +10,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from .actions.registry import create_default_registry
+from .adapters.fake import FakeAdapters
 from .adapters import create_default_adapters
 from .app_setup import initialize_app
 from .doctor import build_doctor_report
@@ -16,6 +18,7 @@ from .errors import RitualistError
 from .executor import WorkflowExecutor
 from .logging_setup import setup_logging
 from .overlay import format_confirmation_request
+from .perf import PerformanceReport, measure_operation
 from .paths import (
     app_data_dir,
     browser_profiles_dir,
@@ -29,6 +32,8 @@ from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_r
 from .run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
+perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
+app.add_typer(perf_app, name="perf")
 console = Console()
 
 
@@ -109,6 +114,242 @@ def actions(
             "yes" if metadata.allowed_in_imported_packs else "no",
         )
     console.print(table)
+
+
+@perf_app.command("doctor")
+def perf_doctor(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    var_values: Annotated[
+        list[str] | None,
+        typer.Option("--var", "-v", help="Template override in KEY=VALUE form."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure recipe doctor report construction."""
+    try:
+        with measure_operation("perf.doctor") as report:
+            parsed, _raw, missing_variables = load_recipe_for_diagnostics(
+                recipe,
+                _parse_vars(var_values or []),
+            )
+            doctor_report = build_doctor_report(parsed, missing_variables=missing_variables)
+            report.counts.update(
+                {
+                    "checks": len(doctor_report.checks),
+                    "errors": doctor_report.errors_count,
+                    "warnings": doctor_report.warnings_count,
+                    "actions": len(doctor_report.action_metadata),
+                    "execution_steps": len(parsed.execution_steps),
+                    "missing_variables": len(missing_variables),
+                }
+            )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    payload = _performance_payload(
+        report,
+        recipe_id=doctor_report.recipe_id,
+        recipe_name=doctor_report.recipe_name,
+        compatibility=doctor_report.compatibility,
+        compatibility_score=doctor_report.compatibility_score,
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(
+        "compatibility: "
+        f"{escape(doctor_report.compatibility)} ({doctor_report.compatibility_score})"
+    )
+    console.print(f"recipe: {escape(doctor_report.recipe_name)} ({escape(doctor_report.recipe_id)})")
+
+
+@perf_app.command("list-runs")
+def perf_list_runs(
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum runs to load.")] = 20,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure recent run metadata loading."""
+    with measure_operation("perf.list-runs") as report:
+        records = list_recent_runs(limit=limit)
+        status_counts = Counter(str(record.metadata.get("status", "")) for record in records)
+        report.counts.update(
+            {
+                "runs": len(records),
+                "steps": sum(len(record.steps) for record in records),
+                **{
+                    f"status_{status or 'unknown'}": count
+                    for status, count in sorted(status_counts.items())
+                },
+            }
+        )
+
+    payload = _performance_payload(
+        report,
+        runs=[
+            {
+                "run_id": record.run_id,
+                "recipe_id": record.metadata.get("recipe_id"),
+                "status": record.metadata.get("status"),
+                "steps": len(record.steps),
+            }
+            for record in records
+        ],
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    if records:
+        console.print("[bold]Loaded runs[/]")
+        for record in records:
+            console.print(
+                "- "
+                f"{escape(record.run_id)} | "
+                f"{escape(str(record.metadata.get('recipe_id', '')))} | "
+                f"{escape(str(record.metadata.get('status', '')))} | "
+                f"{len(record.steps)} steps"
+            )
+    else:
+        console.print("No runs found.")
+
+
+@perf_app.command("load-recipes")
+def perf_load_recipes(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure installed recipe discovery and validation."""
+    with measure_operation("perf.load-recipes") as report:
+        rows = discover_recipes()
+        valid_recipes = [recipe for _path, recipe, _error in rows if recipe is not None]
+        invalid_count = len(rows) - len(valid_recipes)
+        report.counts.update(
+            {
+                "recipes": len(rows),
+                "valid": len(valid_recipes),
+                "invalid": invalid_count,
+                "execution_steps": sum(len(recipe.execution_steps) for recipe in valid_recipes),
+            }
+        )
+
+    payload = _performance_payload(
+        report,
+        recipes=[
+            {
+                "path": str(path),
+                "recipe_id": recipe.id if recipe is not None else path.stem,
+                "status": "valid" if recipe is not None else "invalid",
+                "execution_steps": len(recipe.execution_steps) if recipe is not None else 0,
+                "error": error,
+            }
+            for path, recipe, error in rows
+        ],
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    if rows:
+        console.print("[bold]Loaded recipes[/]")
+        for path, recipe, error in rows:
+            if recipe is None:
+                console.print(f"- {escape(path.stem)} | invalid | {escape(error or '')}")
+            else:
+                console.print(
+                    f"- {escape(recipe.id)} | valid | {len(recipe.execution_steps)} steps"
+                )
+    else:
+        console.print("No recipes found. Run [bold]ritualist init[/] first.")
+
+
+@perf_app.command("fake-run")
+def perf_fake_run(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    var_values: Annotated[
+        list[str] | None,
+        typer.Option("--var", "-v", help="Template override in KEY=VALUE form."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure a recipe run using fake adapters and no run log side effects."""
+    confirmations = 0
+    fakes = FakeAdapters()
+
+    def confirm_fake(_request: object) -> bool:
+        nonlocal confirmations
+        confirmations += 1
+        return True
+
+    try:
+        with measure_operation("perf.fake-run") as report:
+            parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
+            executor = WorkflowExecutor(
+                registry=create_default_registry(),
+                adapters=fakes.bundle(),
+                dry_run=False,
+                confirmer=confirm_fake,
+                run_logger=None,
+            )
+            summary = executor.run(parsed)
+            status_counts = Counter(result.status for result in summary.results)
+            report.counts.update(
+                {
+                    "steps_total": len(parsed.execution_steps),
+                    "steps_completed": len(summary.results),
+                    "confirmations": confirmations,
+                    "shell_calls": len(fakes.shell.calls),
+                    "browser_calls": len(fakes.browser.calls),
+                    "window_calls": len(fakes.window.calls),
+                    "desktop_calls": len(fakes.desktop.calls),
+                    "input_calls": len(fakes.input.calls),
+                    **{
+                        f"status_{status}": count
+                        for status, count in sorted(status_counts.items())
+                    },
+                }
+            )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    payload = _performance_payload(
+        report,
+        recipe_id=summary.recipe_id,
+        recipe_name=summary.recipe_name,
+        success=summary.success,
+        results=[
+            {
+                "index": result.index,
+                "step_name": result.step_name,
+                "action": result.action,
+                "status": result.status,
+            }
+            for result in summary.results
+        ],
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(f"recipe: {escape(summary.recipe_name)} ({escape(summary.recipe_id)})")
+    console.print(f"success: {'yes' if summary.success else 'no'}")
 
 
 @app.command()
@@ -469,6 +710,25 @@ def _print_paths(paths: dict[str, object]) -> None:
 def _print_reconciled_runs(repaired: list[object]) -> None:
     for repair in repaired:
         console.print(f"Marked {escape(repair.run_id)} as interrupted.")
+
+
+def _performance_payload(report: PerformanceReport, **extra: object) -> dict[str, object]:
+    payload: dict[str, object] = report.model_dump(mode="json")
+    payload.update(extra)
+    return payload
+
+
+def _print_performance_report(report: PerformanceReport) -> None:
+    console.print(f"operation: {escape(report.operation)}")
+    console.print(f"duration_ms: {report.duration_ms:.3f}")
+    if report.counts:
+        console.print("[bold]counts[/]")
+        for key, value in sorted(report.counts.items()):
+            console.print(f"- {escape(key)}: {value}")
+    if report.warnings:
+        console.print("[bold]warnings[/]")
+        for warning in report.warnings:
+            console.print(f"- {escape(warning)}")
 
 
 def _print_init_report(report: object) -> None:

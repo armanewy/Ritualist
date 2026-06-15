@@ -116,6 +116,108 @@ def test_actions_prints_json_metadata():
     assert click_text["allowed_in_imported_packs"] is False
 
 
+def test_perf_load_recipes_prints_duration_and_counts(tmp_path, monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.discover_recipes",
+        lambda: [(tmp_path / "demo.yaml", recipe, None)],
+    )
+
+    result = CliRunner().invoke(app, ["perf", "load-recipes"])
+
+    assert result.exit_code == 0
+    assert "duration_ms:" in result.output
+    assert "recipes: 1" in result.output
+    assert "valid: 1" in result.output
+
+
+def test_perf_doctor_json_is_valid(tmp_path, monkeypatch):
+    app_path = tmp_path / "demo.exe"
+    app_path.write_text("", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [{"action": "app.launch", "command": str(app_path)}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+
+    result = CliRunner().invoke(app, ["perf", "doctor", "demo", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["operation"] == "perf.doctor"
+    assert data["recipe_id"] == "demo"
+    assert data["duration_ms"] >= 0
+    assert data["counts"]["checks"] >= 1
+
+
+def test_perf_list_runs_json_counts_steps(tmp_path, monkeypatch):
+    record = RunRecord(
+        run_id="20260615T120000Z_demo",
+        path=tmp_path / "20260615T120000Z_demo",
+        metadata={"recipe_id": "demo", "status": "success"},
+        steps=[{"index": 1, "status": "success"}],
+    )
+    monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
+
+    result = CliRunner().invoke(app, ["perf", "list-runs", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["operation"] == "perf.list-runs"
+    assert data["counts"]["runs"] == 1
+    assert data["counts"]["steps"] == 1
+    assert data["runs"][0]["run_id"] == "20260615T120000Z_demo"
+
+
+def test_perf_fake_run_uses_fake_adapters_and_confirms(monkeypatch):
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {"action": "app.launch", "command": "demo.exe"},
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Demo",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.FakeAdapters", lambda: fakes)
+
+    result = CliRunner().invoke(app, ["perf", "fake-run", "demo", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["operation"] == "perf.fake-run"
+    assert data["success"] is True
+    assert data["counts"]["steps_completed"] == 3
+    assert data["counts"]["confirmations"] == 1
+    assert data["counts"]["browser_calls"] == 1
+    assert data["counts"]["shell_calls"] == 1
+    assert data["counts"]["desktop_calls"] == 1
+    assert fakes.browser.calls[0][0] == "open_url"
+    assert fakes.shell.calls[0][0] == "launch"
+    assert fakes.desktop.calls[0][0] == "click_text"
+
+
 def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
     report = InitReport(
         paths={
