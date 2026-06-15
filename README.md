@@ -183,6 +183,29 @@ python -m ritualist doctor gaming_mode still works from the development checkout
 
 Playwright browser binaries and persistent profile behavior should be retested after packaging. Keep the one-folder build working before attempting a one-file executable.
 
+### Packaged App Troubleshooting
+
+If `dist\Ritualist\Ritualist.exe` opens but a workflow fails, use **About / Diagnostics** first. It shows whether the app is running from a PyInstaller bundle, where user data/logs/runs/browser profiles live, and whether PySide6, Playwright, and Windows UI Automation dependencies are importable. Use **Copy Diagnostics** when filing a bug diary entry.
+
+If the Playwright browser is missing or browser steps fail immediately, rerun this from the development checkout before rebuilding:
+
+```powershell
+python -m playwright install chromium
+.\scripts\build_windows_app.ps1
+```
+
+If Battle.net cannot launch, run **Doctor** for the selected recipe or `python -m ritualist doctor gaming_mode`. Missing-path errors mean the installed recipe variable/config points at a local file that does not exist on this machine.
+
+If UI Automation labels are not found, use the development CLI to inspect the live window:
+
+```powershell
+python -m ritualist inspect-window "Battle.net" --control-type Button --limit 100
+```
+
+Then update `desktop.click_text` labels in the installed recipe. Ritualist still does not use coordinate clicks or gameplay automation.
+
+Packaged startup failures are written to `startup-error.log` under the logs directory when possible. Normal app logs are under `logs`, and run details are under `runs`; the exact locations are shown in **About / Diagnostics** and by `python -m ritualist paths`.
+
 ## Diagnostics
 
 `ritualist doctor <recipe-id-or-path>` validates a recipe without opening browsers, launching apps, or clicking. It checks optional dependency availability, OS support, browser profile creation, local app paths, and the window/text targets for `desktop.click_text`.

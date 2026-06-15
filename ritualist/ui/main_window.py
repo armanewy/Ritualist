@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from ritualist.adapters import create_default_adapters
 from ritualist.app_setup import initialize_app
+from ritualist.doctor import diagnose_recipe
 from ritualist.errors import RitualistError
 from ritualist.executor import WorkflowExecutor
 from ritualist.logging_setup import setup_logging
@@ -29,6 +30,7 @@ from ritualist.recipe_loader import discover_recipes, load_recipe
 from ritualist.run_logs import RunLogWriter
 
 from .dialogs import ask_confirmation, show_error
+from .diagnostics_dialog import DiagnosticsDialog
 from .runner_thread import RunnerThread
 
 
@@ -76,11 +78,14 @@ class MainWindow(QMainWindow):
         self.run_button.clicked.connect(lambda: self.run_recipe(dry_run=False))
         self.dry_run_button = QPushButton("Dry Run")
         self.dry_run_button.clicked.connect(lambda: self.run_recipe(dry_run=True))
+        self.doctor_button = QPushButton("Doctor")
+        self.doctor_button.clicked.connect(self.doctor_recipe)
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop_run)
         self.stop_button.setEnabled(False)
         button_row.addWidget(self.run_button)
         button_row.addWidget(self.dry_run_button)
+        button_row.addWidget(self.doctor_button)
         button_row.addWidget(self.stop_button)
         button_row.addStretch(1)
         layout.addLayout(button_row)
@@ -92,9 +97,12 @@ class MainWindow(QMainWindow):
         config_button.clicked.connect(lambda: self.open_path(config_file()))
         logs_button = QPushButton("Open Logs/Runs Folder")
         logs_button.clicked.connect(lambda: self.open_path(runs_dir()))
+        diagnostics_button = QPushButton("About / Diagnostics")
+        diagnostics_button.clicked.connect(self.show_diagnostics)
         folder_row.addWidget(recipes_button)
         folder_row.addWidget(config_button)
         folder_row.addWidget(logs_button)
+        folder_row.addWidget(diagnostics_button)
         folder_row.addStretch(1)
         layout.addLayout(folder_row)
 
@@ -183,6 +191,21 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"Loaded {self.recipe.id}")
         self.append_log(f"Loaded {self.recipe.name}")
 
+    def doctor_recipe(self) -> None:
+        if self.recipe is None:
+            self.load_current_recipe()
+        if self.recipe is None:
+            return
+        self.append_log(f"Doctor: {self.recipe.name} ({self.recipe.id})")
+        try:
+            checks = diagnose_recipe(self.recipe)
+        except RitualistError as exc:
+            self.append_log(f"doctor error: {exc}")
+            show_error(self, "Doctor Failed", str(exc))
+            return
+        for check in checks:
+            self.append_log(f"{check.status}: {check.name} - {check.message}")
+
     def populate_steps(self) -> None:
         self.steps_table.setRowCount(0)
         if self.recipe is None:
@@ -209,9 +232,7 @@ class MainWindow(QMainWindow):
         if self.recipe is None:
             return
 
-        self.run_button.setEnabled(False)
-        self.dry_run_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
+        self.set_run_controls_enabled(False)
         self.status_label.setText("Running")
         logger = setup_logging()
         executor = WorkflowExecutor(
@@ -263,6 +284,7 @@ class MainWindow(QMainWindow):
     def set_run_controls_enabled(self, enabled: bool) -> None:
         self.run_button.setEnabled(enabled)
         self.dry_run_button.setEnabled(enabled)
+        self.doctor_button.setEnabled(enabled)
         self.stop_button.setEnabled(not enabled)
 
     def open_path(self, path: Path) -> None:
@@ -270,6 +292,10 @@ class MainWindow(QMainWindow):
         if path == config_file() and not path.exists():
             path.write_text("", encoding="utf-8")
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def show_diagnostics(self) -> None:
+        dialog = DiagnosticsDialog(self)
+        dialog.exec()
 
     def append_log(self, message: str) -> None:
         self.log.appendPlainText(message)
