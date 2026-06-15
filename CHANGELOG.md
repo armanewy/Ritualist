@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added a best-effort PySide6 visual trust overlay for GUI runs before window and desktop click actions.
+- Added target previews for window focus/minimize/maximize actions and UI Automation bounds previews for `desktop.click_text` when available.
+- Added a waiting HUD for long `window.wait` steps.
+- Improved risky-action confirmation prompts with step, action, window, and target details.
+- Added UI config options for action overlays, overlay duration, and desktop click previews.
+
 ## v0.1.0-alpha.1
 
 Initial alpha release of Ritualist as a local-first Windows personal workflow app.

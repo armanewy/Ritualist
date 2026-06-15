@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ritualist.actions.base import AdapterBundle
+from ritualist.overlay import ScreenRect, TargetRegion
 
 
 @dataclass
@@ -49,6 +50,13 @@ class FakeBrowserAdapter(RecordingAdapter):
 
 
 class FakeWindowAdapter(RecordingAdapter):
+    def find_window_region(self, **kwargs: Any) -> TargetRegion:
+        self.record("find_window_region", **kwargs)
+        return TargetRegion(
+            rect=ScreenRect(10, 20, 300, 200),
+            window_title=kwargs.get("title_contains") or kwargs.get("process_name") or "Window",
+        )
+
     def focus(self, **kwargs: Any) -> None:
         self.record("focus", **kwargs)
 
@@ -63,6 +71,15 @@ class FakeWindowAdapter(RecordingAdapter):
 
 
 class FakeDesktopAdapter(RecordingAdapter):
+    def find_text_region(self, **kwargs: Any) -> TargetRegion:
+        self.record("find_text_region", **kwargs)
+        return TargetRegion(
+            rect=ScreenRect(30, 40, 120, 36),
+            window_title=kwargs.get("window_title_contains"),
+            target_text=kwargs.get("text"),
+            control_type=kwargs.get("control_type"),
+        )
+
     def click_text(self, **kwargs: Any) -> None:
         self.record("click_text", **kwargs)
 

@@ -85,6 +85,11 @@ def _ensure_config_file() -> bool:
     config = {
         "version": "0.1",
         "default_recipe": "gaming_mode",
+        "ui": {
+            "show_action_overlay": True,
+            "overlay_duration_ms": 700,
+            "preview_desktop_clicks": True,
+        },
     }
     path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     return True

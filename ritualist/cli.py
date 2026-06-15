@@ -15,6 +15,7 @@ from .doctor import diagnose_recipe
 from .errors import RitualistError
 from .executor import WorkflowExecutor
 from .logging_setup import setup_logging
+from .overlay import format_confirmation_request
 from .paths import (
     app_data_dir,
     browser_profiles_dir,
@@ -318,7 +319,10 @@ def _run_recipe(
             registry=registry,
             adapters=adapters,
             dry_run=dry_run,
-            confirmer=lambda prompt: typer.confirm(prompt, default=False),
+            confirmer=lambda request: typer.confirm(
+                format_confirmation_request(request),
+                default=False,
+            ),
             status_callback=lambda event: console.print(
                 f"[dim]{event.index}/{event.total}[/] "
                 f"{escape(event.status)}: {escape(event.step_name)}"

@@ -39,7 +39,13 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
     assert report.sample_copied is True
     assert report.changed is True
     assert config_path.exists()
-    assert yaml.safe_load(config_path.read_text(encoding="utf-8"))["default_recipe"] == "gaming_mode"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config["default_recipe"] == "gaming_mode"
+    assert config["ui"] == {
+        "show_action_overlay": True,
+        "overlay_duration_ms": 700,
+        "preview_desktop_clicks": True,
+    }
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"
     assert rows[0][1].steps[0].keep_open is True

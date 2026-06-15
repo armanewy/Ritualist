@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -37,6 +38,7 @@ def test_main_window_has_personal_app_controls_and_loads_selected_recipe(tmp_pat
     assert window.dry_run_button.text() == "Dry Run"
     assert window.doctor_button.text() == "Doctor"
     assert window.stop_button.text() == "Stop"
+    assert window.keep_open_label.text() == "Keep-open: inactive"
     assert window.recipe is recipe
     assert window.path_edit.text() == str(recipe_path)
     assert window.status_label.text() == "Loaded gaming_mode"
@@ -69,6 +71,35 @@ def test_main_window_doctor_prints_checks_without_running_recipe(tmp_path, monke
     assert app is not None
     assert "Doctor: Gaming Mode (gaming_mode)" in window.log.toPlainText()
     assert "ok: recipe - loaded gaming_mode" in window.log.toPlainText()
+
+    window.close()
+
+
+def test_main_window_marks_keep_open_active_on_reached_browser_step(tmp_path, monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    recipe_path = tmp_path / "gaming_mode.yaml"
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                }
+            ],
+        }
+    )
+    monkeypatch.setattr(main_window, "reconcile_running_runs", lambda: [])
+    monkeypatch.setattr(main_window, "discover_recipes", lambda: [(recipe_path, recipe, None)])
+    monkeypatch.setattr(main_window, "load_recipe", lambda path: recipe)
+
+    window = main_window.MainWindow()
+    window.on_step_event(SimpleNamespace(index=1, action="browser.open", status="success"))
+
+    assert app is not None
+    assert window.keep_open_label.text() == "Keep-open: active"
 
     window.close()
 

@@ -6,9 +6,20 @@ import time
 from typing import Any
 
 from ritualist.errors import DependencyMissingError, PlatformUnsupportedError, RitualistError
+from ritualist.overlay import ScreenRect, TargetRegion
 
 
 class WindowsWindowManager:
+    def find_window_region(
+        self,
+        *,
+        title_contains: str | None,
+        process_name: str | None,
+        timeout_seconds: float,
+    ) -> TargetRegion:
+        window = self._find_window(title_contains, process_name, timeout_seconds)
+        return TargetRegion(rect=_window_rect(window), window_title=_safe_window_text(window))
+
     def focus(
         self,
         *,
@@ -120,3 +131,32 @@ def _safe_process_id(window: Any) -> int | None:
         return int(window.process_id())
     except Exception:  # noqa: BLE001
         return None
+
+
+def _window_rect(window: Any) -> ScreenRect | None:
+    try:
+        rect = window.rectangle()
+    except Exception:  # noqa: BLE001
+        return None
+    return _screen_rect_from_object(rect)
+
+
+def _screen_rect_from_object(rect: Any) -> ScreenRect | None:
+    try:
+        left = int(rect.left)
+        top = int(rect.top)
+        right = int(rect.right)
+        bottom = int(rect.bottom)
+    except Exception:  # noqa: BLE001
+        try:
+            left = int(rect.left())
+            top = int(rect.top())
+            right = int(rect.right())
+            bottom = int(rect.bottom())
+        except Exception:  # noqa: BLE001
+            return None
+    width = max(0, right - left)
+    height = max(0, bottom - top)
+    if width <= 0 or height <= 0:
+        return None
+    return ScreenRect(x=left, y=top, width=width, height=height)

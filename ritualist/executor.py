@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import Any
 
 from .actions.base import (
     ActionContext,
@@ -14,8 +15,17 @@ from .actions.base import (
     StepResult,
 )
 from .actions.registry import ActionRegistry, create_default_registry
+from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
-from .models import Recipe, WorkflowStep
+from .models import DesktopClickTextStep, Recipe, WindowMatchMixin, WindowWaitStep, WorkflowStep
+from .overlay import (
+    ActionPreview,
+    BestEffortOverlayController,
+    ConfirmationRequest,
+    NullOverlayController,
+    OverlayController,
+    TargetRegion,
+)
 
 
 class WorkflowExecutor:
@@ -31,6 +41,8 @@ class WorkflowExecutor:
         run_logger: object | None = None,
         stop_requested: Callable[[], bool] | None = None,
         strict: bool = False,
+        config: AppConfig | None = None,
+        overlay: OverlayController | None = None,
     ) -> None:
         if adapters is None:
             from .adapters import create_default_adapters
@@ -45,6 +57,8 @@ class WorkflowExecutor:
         self.run_logger = run_logger
         self.stop_requested = stop_requested or (lambda: False)
         self.strict = strict
+        self.config = config or load_app_config()
+        self.overlay = BestEffortOverlayController(overlay or NullOverlayController())
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
@@ -57,6 +71,8 @@ class WorkflowExecutor:
             logger=self.logger,
             confirm=self.confirmer,
             recipe=recipe,
+            config=self.config,
+            overlay=self.overlay,
         )
 
         for index, step in enumerate(recipe.steps, start=1):
@@ -91,9 +107,13 @@ class WorkflowExecutor:
                 dry_run_step = True
                 self.logger.info("dry-run step %s/%s: %s", index, total, step.display_name)
             else:
+                wait_overlay = None
                 try:
+                    wait_overlay = self._start_wait_overlay(step)
+                    preview_region = self._find_preview_region(step)
+                    self._show_action_preview(step, preview_region)
                     if step.requires_confirmation:
-                        prompt = f"Run '{step.display_name}' ({step.action})?"
+                        prompt = self._confirmation_request(step, preview_region)
                         self._heartbeat(index, step.display_name)
                         if not self.confirmer(prompt):
                             raise UserCancelledError("user declined confirmation")
@@ -114,6 +134,9 @@ class WorkflowExecutor:
                         status = "failed"
                         message = str(exc)
                         self.logger.exception("step failed: %s", step.display_name)
+                finally:
+                    if wait_overlay is not None:
+                        wait_overlay.close()
 
             result = StepResult(
                 index=index,
@@ -174,6 +197,83 @@ class WorkflowExecutor:
         if heartbeat is not None:
             heartbeat(step_id=step_id, step_name=step_name)
 
+    def _start_wait_overlay(self, step: WorkflowStep) -> Any:
+        if not self.config.ui.show_action_overlay or not isinstance(step, WindowWaitStep):
+            return None
+        label = f"Waiting for {_window_match_label(step)}..."
+        return self.overlay.start_wait(label)
+
+    def _find_preview_region(self, step: WorkflowStep) -> TargetRegion | None:
+        if not self.config.ui.show_action_overlay:
+            return None
+        try:
+            if isinstance(step, DesktopClickTextStep):
+                if not self.config.ui.preview_desktop_clicks:
+                    return None
+                finder = getattr(self.adapters.desktop, "find_text_region", None)
+                if finder is None:
+                    return TargetRegion(
+                        window_title=step.window_title_contains,
+                        target_text=step.text,
+                        control_type=step.control_type,
+                    )
+                timeout = min(step.timeout_seconds or 10.0, 2.0)
+                return finder(
+                    text=step.text,
+                    window_title_contains=step.window_title_contains,
+                    control_type=step.control_type,
+                    exact=step.exact,
+                    timeout_seconds=timeout,
+                )
+            if step.action in {"window.focus", "window.minimize", "window.maximize"} and isinstance(
+                step, WindowMatchMixin
+            ):
+                finder = getattr(self.adapters.window, "find_window_region", None)
+                if finder is None:
+                    return TargetRegion(window_title=_window_match_label(step))
+                timeout = min(step.timeout_seconds or 10.0, 2.0)
+                return finder(
+                    title_contains=step.title_contains,
+                    process_name=step.process_name,
+                    timeout_seconds=timeout,
+                )
+        except Exception as exc:  # noqa: BLE001 - preview is best-effort only.
+            self.logger.debug("action preview lookup failed for %s: %s", step.display_name, exc)
+            return None
+        return None
+
+    def _show_action_preview(self, step: WorkflowStep, region: TargetRegion | None) -> None:
+        if not self.config.ui.show_action_overlay:
+            return
+        if isinstance(step, DesktopClickTextStep) and not self.config.ui.preview_desktop_clicks:
+            return
+        label = _preview_label(step)
+        if label is None:
+            return
+        self.overlay.show_preview(
+            ActionPreview(
+                action=step.action,
+                step_name=step.display_name,
+                label=label,
+                region=region,
+            ),
+            duration_ms=self.config.ui.overlay_duration_ms,
+        )
+
+    def _confirmation_request(
+        self,
+        step: WorkflowStep,
+        region: TargetRegion | None,
+    ) -> ConfirmationRequest:
+        return ConfirmationRequest(
+            prompt=f"Run '{step.display_name}' ({step.action})?",
+            action=step.action,
+            step_name=step.display_name,
+            window_title=_confirmation_window_title(step, region),
+            target_text=_confirmation_target_text(step, region),
+            control_type=region.control_type if region and region.control_type else getattr(step, "control_type", None),
+        )
+
 
 def _deny_confirmation(prompt: str) -> bool:
     return False
@@ -181,3 +281,41 @@ def _deny_confirmation(prompt: str) -> bool:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _preview_label(step: WorkflowStep) -> str | None:
+    if isinstance(step, DesktopClickTextStep):
+        return f"Ritualist: clicking {step.text}"
+    if step.action == "window.focus":
+        return "Ritualist: focusing window"
+    if step.action == "window.minimize":
+        return "Ritualist: minimizing window"
+    if step.action == "window.maximize":
+        return "Ritualist: maximizing window"
+    return None
+
+
+def _window_match_label(step: WindowMatchMixin) -> str:
+    if step.title_contains:
+        return step.title_contains
+    if step.process_name:
+        return step.process_name
+    return "window"
+
+
+def _confirmation_window_title(step: WorkflowStep, region: TargetRegion | None) -> str | None:
+    if region and region.window_title:
+        return region.window_title
+    if isinstance(step, DesktopClickTextStep):
+        return step.window_title_contains
+    if isinstance(step, WindowMatchMixin):
+        return _window_match_label(step)
+    return None
+
+
+def _confirmation_target_text(step: WorkflowStep, region: TargetRegion | None) -> str | None:
+    if region and region.target_text:
+        return region.target_text
+    if isinstance(step, DesktopClickTextStep):
+        return step.text
+    return None

@@ -9,9 +9,10 @@ from ritualist.executor import WorkflowExecutor
 
 class RunnerThread(QThread):
     log_message = Signal(str)
+    step_event = Signal(object)
     failed = Signal(str)
     finished_result = Signal(object)
-    confirmation_requested = Signal(str)
+    confirmation_requested = Signal(object)
 
     def __init__(self, executor: WorkflowExecutor, recipe) -> None:
         super().__init__()
@@ -22,12 +23,14 @@ class RunnerThread(QThread):
 
     def run(self) -> None:
         self.executor.confirmer = self._confirm
-        self.executor.status_callback = (
-            lambda event: self.log_message.emit(
+        def status_callback(event) -> None:
+            self.log_message.emit(
                 f"{event.index}/{event.total} {event.status}: {event.step_name}"
                 + (f" - {event.message}" if event.message else "")
             )
-        )
+            self.step_event.emit(event)
+
+        self.executor.status_callback = status_callback
         try:
             summary = self.executor.run(self.recipe)
         except Exception as exc:  # noqa: BLE001 - report any worker failure to GUI.

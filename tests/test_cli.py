@@ -445,7 +445,9 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
 
     assert result.exit_code == 1
     assert called == [True]
-    assert fakes.desktop.calls == []
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
+    assert "Window: Battle.net" in result.output
+    assert "Target: Play" in result.output
     assert "Confirmation declined; no confirmed risky action was performed." in result.output
 
 

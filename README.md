@@ -132,6 +132,19 @@ The recipe exposes only structured actions. It does not permit arbitrary Python 
 - Clicking visible text exactly equal to `Play` must include `requires_confirmation: true`.
 - No telemetry, accounts, cloud backend, or remote execution are present.
 
+## Visual Trust Layer
+
+The GUI shows a best-effort transparent overlay before window focus/minimize/maximize and desktop click actions. For `desktop.click_text`, Ritualist previews the UI Automation element bounds when Windows exposes them, then keeps the existing confirmation gate for risky actions such as `Play`. Long `window.wait` steps show a small waiting HUD with elapsed seconds.
+
+Overlay failures never fail the workflow. These settings live under `ui` in `config.yaml`:
+
+```yaml
+ui:
+  show_action_overlay: true
+  overlay_duration_ms: 700
+  preview_desktop_clicks: true
+```
+
 ## Local Data
 
 Use `ritualist paths` to inspect local directories. Ritualist creates:

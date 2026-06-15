@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from ritualist.errors import DependencyMissingError, PlatformUnsupportedError, RitualistError
+from ritualist.overlay import ScreenRect, TargetRegion
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,39 @@ class WindowInspection:
 
 
 class WindowsUIAutomationAdapter:
+    def find_text_region(
+        self,
+        *,
+        text: str,
+        window_title_contains: str,
+        control_type: str | None,
+        exact: bool,
+        timeout_seconds: float,
+    ) -> TargetRegion | None:
+        _ensure_windows()
+        desktop = _desktop()
+        deadline = time.monotonic() + timeout_seconds
+        matcher = _text_matcher(text, exact)
+
+        while time.monotonic() < deadline:
+            roots = _candidate_roots(desktop, window_title_contains)
+            for root in roots:
+                for element in _preferred_descendants(root, control_type):
+                    label = _element_text(element)
+                    if matcher(label):
+                        return TargetRegion(
+                            rect=_element_rect(element),
+                            window_title=_element_text(root),
+                            target_text=label or text,
+                            control_type=control_type,
+                        )
+            time.sleep(0.25)
+        return TargetRegion(
+            window_title=window_title_contains,
+            target_text=text,
+            control_type=control_type,
+        )
+
     def inspect_windows(
         self,
         *,
@@ -181,6 +215,35 @@ def _element_text(element: Any) -> str:
         return str(element.element_info.name or "")
     except Exception:  # noqa: BLE001
         return ""
+
+
+def _element_rect(element: Any) -> ScreenRect | None:
+    try:
+        rect = element.rectangle()
+    except Exception:  # noqa: BLE001
+        return None
+    return _screen_rect_from_object(rect)
+
+
+def _screen_rect_from_object(rect: Any) -> ScreenRect | None:
+    try:
+        left = int(rect.left)
+        top = int(rect.top)
+        right = int(rect.right)
+        bottom = int(rect.bottom)
+    except Exception:  # noqa: BLE001
+        try:
+            left = int(rect.left())
+            top = int(rect.top())
+            right = int(rect.right())
+            bottom = int(rect.bottom())
+        except Exception:  # noqa: BLE001
+            return None
+    width = max(0, right - left)
+    height = max(0, bottom - top)
+    if width <= 0 or height <= 0:
+        return None
+    return ScreenRect(x=left, y=top, width=width, height=height)
 
 
 def _text_matcher(text: str, exact: bool):

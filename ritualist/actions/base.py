@@ -7,10 +7,12 @@ from pathlib import Path
 from logging import Logger
 from typing import Any, Protocol
 
+from ritualist.config import AppConfig
 from ritualist.models import Recipe, WorkflowStep
+from ritualist.overlay import ConfirmationRequest, OverlayController
 
 
-ConfirmationCallback = Callable[[str], bool]
+ConfirmationCallback = Callable[[ConfirmationRequest | str], bool]
 StatusCallback = Callable[["StepEvent"], None]
 
 
@@ -65,6 +67,8 @@ class ActionContext:
     logger: Logger
     confirm: ConfirmationCallback
     recipe: Recipe
+    config: AppConfig
+    overlay: OverlayController
 
 
 class ActionHandler(Protocol):

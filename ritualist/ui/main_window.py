@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from ritualist.adapters import create_default_adapters
 from ritualist.app_setup import initialize_app
+from ritualist.config import load_app_config
 from ritualist.doctor import diagnose_recipe
 from ritualist.errors import RitualistError
 from ritualist.executor import WorkflowExecutor
@@ -32,6 +33,7 @@ from ritualist.run_logs import RunLogWriter, reconcile_running_runs
 
 from .dialogs import ask_confirmation, show_error
 from .diagnostics_dialog import DiagnosticsDialog
+from .overlay import QtOverlayController
 from .runner_thread import RunnerThread
 
 
@@ -44,6 +46,7 @@ class MainWindow(QMainWindow):
         self.discovered_recipes: dict[str, Path] = {}
         self.runner: RunnerThread | None = None
         self._close_after_run_stops = False
+        self.overlay_controller = QtOverlayController()
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -110,6 +113,8 @@ class MainWindow(QMainWindow):
 
         self.status_label = QLabel("Ready")
         layout.addWidget(self.status_label)
+        self.keep_open_label = QLabel("Keep-open: inactive")
+        layout.addWidget(self.keep_open_label)
 
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
@@ -238,22 +243,34 @@ class MainWindow(QMainWindow):
 
         self.set_run_controls_enabled(False)
         self.status_label.setText("Running")
+        self.keep_open_label.setText("Keep-open: inactive")
         logger = setup_logging()
+        config = load_app_config()
         executor = WorkflowExecutor(
             adapters=create_default_adapters(),
             dry_run=dry_run,
             logger=logger,
             run_logger=RunLogWriter(),
             stop_requested=lambda: bool(self.runner and self.runner.isInterruptionRequested()),
+            config=config,
+            overlay=self.overlay_controller,
         )
         self.runner = RunnerThread(executor, self.recipe)
         self.runner.log_message.connect(self.append_log)
+        self.runner.step_event.connect(self.on_step_event)
         self.runner.failed.connect(self.on_failed)
         self.runner.finished_result.connect(self.on_finished)
         self.runner.confirmation_requested.connect(self.on_confirmation_requested)
         self.runner.start()
 
-    def on_confirmation_requested(self, prompt: str) -> None:
+    def on_step_event(self, event) -> None:
+        if event.status != "success" or event.action != "browser.open":
+            return
+        step = self._step_by_index(event.index)
+        if step is not None and getattr(step, "keep_open", False):
+            self.keep_open_label.setText("Keep-open: active")
+
+    def on_confirmation_requested(self, prompt: object) -> None:
         if self.runner is None:
             return
         self.runner.answer_confirmation(ask_confirmation(self, prompt))
@@ -277,6 +294,13 @@ class MainWindow(QMainWindow):
         final_text = "Run finished" if summary.success else "Run stopped"
         self.append_log(f"{final_text}: {summary_text}")
         self.status_label.setText(final_text)
+        keep_open_active = self._summary_requests_keep_open(summary)
+        self.keep_open_label.setText(
+            "Keep-open: active" if keep_open_active else "Keep-open: inactive"
+        )
+        self.append_log(
+            "Keep-open: active" if keep_open_active else "Keep-open: inactive"
+        )
         self.set_run_controls_enabled(True)
         if self._close_after_run_stops:
             self._close_after_run_stops = False
@@ -290,6 +314,7 @@ class MainWindow(QMainWindow):
         self.append_log("Stop requested; the current step may finish before the run stops")
         self.status_label.setText("Stop requested")
         self.stop_button.setEnabled(False)
+        self.keep_open_label.setText("Keep-open: inactive")
 
     def set_run_controls_enabled(self, enabled: bool) -> None:
         self.run_button.setEnabled(enabled)
@@ -345,3 +370,21 @@ class MainWindow(QMainWindow):
 
     def append_log(self, message: str) -> None:
         self.log.appendPlainText(message)
+
+    def _summary_requests_keep_open(self, summary) -> bool:
+        for result in summary.results:
+            step = self._step_by_index(result.index)
+            if (
+                result.action == "browser.open"
+                and result.status == "success"
+                and step is not None
+                and getattr(step, "keep_open", False)
+            ):
+                return True
+        return False
+
+    def _step_by_index(self, index: int):
+        if self.recipe is None:
+            return None
+        steps_by_index = {index: step for index, step in enumerate(self.recipe.steps, start=1)}
+        return steps_by_index.get(index)
