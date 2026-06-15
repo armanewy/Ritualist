@@ -109,7 +109,7 @@ def run(
         bool,
         typer.Option(
             "--keep-alive",
-            help="Keep the CLI process alive after a successful run so Playwright browser media stays open.",
+            help="Keep the CLI process alive after execution so Playwright browser media stays open.",
         ),
     ] = False,
     var_values: Annotated[
