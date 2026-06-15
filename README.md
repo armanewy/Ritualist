@@ -71,6 +71,8 @@ python -m ritualist inspect-window "Battle.net"
 python -m ritualist run gaming_mode
 ```
 
+`init` is safe to rerun. It creates missing directories, installs bundled samples if absent, and applies narrow sample migrations such as adding `keep_open: true` to older installed `gaming_mode` recipes.
+
 The sample recipe sets `keep_open: true` on `browser.open`, so after the workflow reaches the browser step, the Ritualist CLI stays alive even if a later desktop step fails or the final Play confirmation is cancelled. Press `Ctrl+C` to exit the Ritualist CLI and let Playwright close its browser process.
 
 ## Test

@@ -29,8 +29,33 @@ def _ensure_config_file() -> None:
 
 def _copy_sample_recipe(*, overwrite: bool) -> None:
     destination = recipes_dir() / "gaming_mode.yaml"
-    if destination.exists() and not overwrite:
+    if not destination.exists() or overwrite:
+        source = files("ritualist.sample_recipes").joinpath("gaming_mode.yaml")
+        with source.open("rb") as src, destination.open("wb") as dst:
+            shutil.copyfileobj(src, dst)
+    _migrate_gaming_mode_sample(destination)
+
+
+def _migrate_gaming_mode_sample(path: Path) -> None:
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
         return
-    source = files("ritualist.sample_recipes").joinpath("gaming_mode.yaml")
-    with source.open("rb") as src, destination.open("wb") as dst:
-        shutil.copyfileobj(src, dst)
+    if not isinstance(raw, dict) or raw.get("id") != "gaming_mode":
+        return
+
+    steps = raw.get("steps")
+    if not isinstance(steps, list):
+        return
+
+    changed = False
+    for step in steps:
+        if not isinstance(step, dict) or step.get("action") != "browser.open":
+            continue
+        if "keep_open" not in step:
+            step["keep_open"] = True
+            changed = True
+        break
+
+    if changed:
+        path.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
