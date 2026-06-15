@@ -15,6 +15,8 @@ This v0.1 implementation includes:
 - Step-by-step logging, per-run logs, and status
 - Tests for the workflow engine using fake adapters
 
+Release details for `v0.1.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+
 ## Install
 
 Core CLI and tests:
