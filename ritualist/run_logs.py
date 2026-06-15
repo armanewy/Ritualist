@@ -58,7 +58,7 @@ class RunLogWriter:
             "last_step_id": None,
             "last_step_name": None,
             "final_message": None,
-            "steps_total": len(recipe.steps),
+            "steps_total": len(recipe.execution_steps),
             "steps_completed": 0,
         }
         self._write_run_json()

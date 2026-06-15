@@ -7,6 +7,7 @@
 - Added a waiting HUD for long `window.wait` steps.
 - Improved risky-action confirmation prompts with step, action, window, and target details.
 - Added UI config options for action overlays, overlay duration, and desktop click previews.
+- Added read-only assertion actions and optional assertion-only `preflight`/`verify` recipe sections.
 
 ## v0.1.0-alpha.1
 

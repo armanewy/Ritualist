@@ -10,16 +10,18 @@ def test_render_template_data_supports_nested_values():
     rendered = render_template_data(
         {
             "url": "{{ media.url }}",
+            "path": "${ media.path }",
             "message": "Open {{ media.name }}",
-            "steps": ["{{ media.name }}"],
+            "steps": ["{{ media.name }}", "${media.name}"],
         },
-        {"media": {"url": "https://example.test", "name": "Video"}},
+        {"media": {"url": "https://example.test", "name": "Video", "path": "C:/demo"}},
     )
 
     assert rendered == {
         "url": "https://example.test",
+        "path": "C:/demo",
         "message": "Open Video",
-        "steps": ["Video"],
+        "steps": ["Video", "Video"],
     }
 
 

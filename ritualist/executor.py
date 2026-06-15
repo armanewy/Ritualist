@@ -17,7 +17,7 @@ from .actions.base import (
 from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
-from .models import DesktopClickTextStep, Recipe, WindowMatchMixin, WindowWaitStep, WorkflowStep
+from .models import DesktopClickTextStep, ExecutableStep, Recipe, WindowMatchMixin, WindowWaitStep
 from .overlay import (
     ActionPreview,
     BestEffortOverlayController,
@@ -63,7 +63,8 @@ class WorkflowExecutor:
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
-        total = len(recipe.steps)
+        steps = recipe.execution_steps
+        total = len(steps)
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
         context = ActionContext(
@@ -76,7 +77,7 @@ class WorkflowExecutor:
             overlay=self.overlay,
         )
 
-        for index, step in enumerate(recipe.steps, start=1):
+        for index, step in enumerate(steps, start=1):
             if self.stop_requested():
                 self._heartbeat(index, step.display_name)
                 result = StepResult(
@@ -174,7 +175,7 @@ class WorkflowExecutor:
         self,
         index: int,
         total: int,
-        step: WorkflowStep,
+        step: ExecutableStep,
         status: str,
         message: str = "",
     ) -> None:
@@ -198,13 +199,13 @@ class WorkflowExecutor:
         if heartbeat is not None:
             heartbeat(step_id=step_id, step_name=step_name)
 
-    def _start_wait_overlay(self, step: WorkflowStep) -> Any:
+    def _start_wait_overlay(self, step: ExecutableStep) -> Any:
         if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):
             return None
         label = f"Waiting for {_window_match_label(step)}..."
         return self.overlay.start_wait(label)
 
-    def _find_preview_region(self, step: WorkflowStep) -> TargetRegion | None:
+    def _find_preview_region(self, step: ExecutableStep) -> TargetRegion | None:
         if not self._visual_trust_enabled:
             return None
         try:
@@ -243,7 +244,7 @@ class WorkflowExecutor:
             return None
         return None
 
-    def _show_action_preview(self, step: WorkflowStep, region: TargetRegion | None) -> None:
+    def _show_action_preview(self, step: ExecutableStep, region: TargetRegion | None) -> None:
         if not self._visual_trust_enabled:
             return
         if isinstance(step, DesktopClickTextStep) and not self.config.ui.preview_desktop_clicks:
@@ -267,7 +268,7 @@ class WorkflowExecutor:
 
     def _confirmation_request(
         self,
-        step: WorkflowStep,
+        step: ExecutableStep,
         region: TargetRegion | None,
     ) -> ConfirmationRequest:
         return ConfirmationRequest(
@@ -288,7 +289,7 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _preview_label(step: WorkflowStep) -> str | None:
+def _preview_label(step: ExecutableStep) -> str | None:
     if isinstance(step, DesktopClickTextStep):
         return f"Ritualist: clicking {step.text}"
     if step.action == "window.focus":
@@ -308,7 +309,7 @@ def _window_match_label(step: WindowMatchMixin) -> str:
     return "window"
 
 
-def _confirmation_window_title(step: WorkflowStep, region: TargetRegion | None) -> str | None:
+def _confirmation_window_title(step: ExecutableStep, region: TargetRegion | None) -> str | None:
     if region and region.window_title:
         return region.window_title
     if isinstance(step, DesktopClickTextStep):
@@ -318,7 +319,7 @@ def _confirmation_window_title(step: WorkflowStep, region: TargetRegion | None) 
     return None
 
 
-def _confirmation_target_text(step: WorkflowStep, region: TargetRegion | None) -> str | None:
+def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None) -> str | None:
     if region and region.target_text:
         return region.target_text
     if isinstance(step, DesktopClickTextStep):

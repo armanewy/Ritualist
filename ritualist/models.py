@@ -123,6 +123,64 @@ class ConfirmAskStep(StepBase):
     prompt: str
 
 
+class AssertFileExistsStep(StepBase):
+    action: Literal["assert.file_exists"]
+    path: str
+
+
+class AssertPathExistsStep(StepBase):
+    action: Literal["assert.path_exists"]
+    path: str
+
+
+class AssertProcessRunningStep(StepBase):
+    action: Literal["assert.process_running"]
+    process_name: str
+
+
+class AssertWindowExistsStep(WindowMatchMixin, StepBase):
+    action: Literal["assert.window_exists"]
+
+
+class AssertWindowTextVisibleStep(StepBase):
+    action: Literal["assert.window_text_visible"]
+    window_title_contains: str
+    text: str
+    control_type: str | None = None
+    exact: bool = True
+
+    @model_validator(mode="after")
+    def enforce_window_scope(self) -> "AssertWindowTextVisibleStep":
+        if not self.window_title_contains.strip():
+            raise SafetyError("assert.window_text_visible requires window_title_contains")
+        return self
+
+
+class AssertBrowserTextVisibleStep(StepBase):
+    action: Literal["assert.browser_text_visible"]
+    text: str
+    exact: bool = True
+
+
+class AssertRegistryValueStep(StepBase):
+    action: Literal["assert.registry_value"]
+    key: str
+    value_name: str = ""
+    expected_value: Any | None = None
+
+
+AssertionStep = Annotated[
+    AssertFileExistsStep
+    | AssertPathExistsStep
+    | AssertProcessRunningStep
+    | AssertWindowExistsStep
+    | AssertWindowTextVisibleStep
+    | AssertBrowserTextVisibleStep
+    | AssertRegistryValueStep,
+    Field(discriminator="action"),
+]
+
+
 WorkflowStep = Annotated[
     BrowserOpenStep
     | BrowserMediaStep
@@ -138,6 +196,8 @@ WorkflowStep = Annotated[
     Field(discriminator="action"),
 ]
 
+ExecutableStep = WorkflowStep | AssertionStep
+
 
 class Recipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -147,7 +207,13 @@ class Recipe(BaseModel):
     name: str
     description: str | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
+    preflight: list[AssertionStep] = Field(default_factory=list)
     steps: list[WorkflowStep] = Field(min_length=1)
+    verify: list[AssertionStep] = Field(default_factory=list)
+
+    @property
+    def execution_steps(self) -> list[ExecutableStep]:
+        return [*self.preflight, *self.steps, *self.verify]
 
     @field_validator("version")
     @classmethod

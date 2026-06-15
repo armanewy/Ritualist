@@ -33,6 +33,68 @@ def test_load_recipe_renders_variables(tmp_path):
     assert recipe.steps[0].url == "https://example.test"
 
 
+def test_load_recipe_supports_preflight_and_verify_assertions(tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            f"""
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            variables:
+              marker: {marker}
+            preflight:
+              - action: assert.file_exists
+                path: "${{marker}}"
+            steps:
+              - action: app.launch
+                command: demo.exe
+            verify:
+              - action: assert.window_text_visible
+                window_title_contains: Vendor App
+                text: Connected
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.preflight[0].path == str(marker)
+    assert recipe.steps[0].action == "app.launch"
+    assert recipe.verify[0].text == "Connected"
+    assert [step.action for step in recipe.execution_steps] == [
+        "assert.file_exists",
+        "app.launch",
+        "assert.window_text_visible",
+    ]
+
+
+def test_preflight_rejects_mutating_actions(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            preflight:
+              - action: app.launch
+                command: demo.exe
+            steps:
+              - action: app.launch
+                command: demo.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError):
+        load_recipe(path)
+
+
 def test_load_recipe_accepts_overrides(tmp_path):
     path = tmp_path / "recipe.yaml"
     path.write_text(

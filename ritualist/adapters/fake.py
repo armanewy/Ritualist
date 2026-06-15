@@ -11,6 +11,7 @@ from ritualist.overlay import ScreenRect, TargetRegion
 class RecordingAdapter:
     calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = field(default_factory=list)
     failures: dict[str, Exception] = field(default_factory=dict)
+    responses: dict[str, Any] = field(default_factory=dict)
 
     def record(self, name: str, *args: Any, **kwargs: Any) -> None:
         self.calls.append((name, args, kwargs))
@@ -24,6 +25,10 @@ class FakeShellAdapter(RecordingAdapter):
 
     def wait_process(self, process_name: str, *, timeout_seconds: float) -> None:
         self.record("wait_process", process_name, timeout_seconds=timeout_seconds)
+
+    def process_running(self, process_name: str, *, timeout_seconds: float = 0) -> bool:
+        self.record("process_running", process_name, timeout_seconds=timeout_seconds)
+        return bool(self.responses.get("process_running", True))
 
 
 class FakeBrowserAdapter(RecordingAdapter):
@@ -48,8 +53,16 @@ class FakeBrowserAdapter(RecordingAdapter):
     def configure_media(self, **kwargs: Any) -> None:
         self.record("configure_media", **kwargs)
 
+    def text_visible(self, **kwargs: Any) -> bool:
+        self.record("text_visible", **kwargs)
+        return bool(self.responses.get("text_visible", True))
+
 
 class FakeWindowAdapter(RecordingAdapter):
+    def window_exists(self, **kwargs: Any) -> bool:
+        self.record("window_exists", **kwargs)
+        return bool(self.responses.get("window_exists", True))
+
     def find_window_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_window_region", **kwargs)
         return TargetRegion(
@@ -71,6 +84,10 @@ class FakeWindowAdapter(RecordingAdapter):
 
 
 class FakeDesktopAdapter(RecordingAdapter):
+    def text_visible(self, **kwargs: Any) -> bool:
+        self.record("text_visible", **kwargs)
+        return bool(self.responses.get("text_visible", True))
+
     def find_text_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_text_region", **kwargs)
         return TargetRegion(

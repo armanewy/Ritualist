@@ -10,6 +10,21 @@ from ritualist.overlay import ScreenRect, TargetRegion
 
 
 class WindowsWindowManager:
+    def window_exists(
+        self,
+        *,
+        title_contains: str | None,
+        process_name: str | None,
+        timeout_seconds: float,
+    ) -> bool:
+        try:
+            self._find_window(title_contains, process_name, timeout_seconds)
+            return True
+        except (DependencyMissingError, PlatformUnsupportedError):
+            raise
+        except RitualistError:
+            return False
+
     def find_window_region(
         self,
         *,

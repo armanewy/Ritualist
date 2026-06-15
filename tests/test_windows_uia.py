@@ -132,3 +132,24 @@ def test_find_text_region_returns_element_bounds(monkeypatch):
     assert region.rect.y == 200
     assert region.rect.width == 80
     assert region.rect.height == 40
+
+
+def test_text_visible_is_read_only(monkeypatch):
+    button = FakeElement("Connected")
+    desktop = FakeDesktop(FakeRoot("Vendor App", [button]))
+    pywinauto = ModuleType("pywinauto")
+    pywinauto.Desktop = lambda backend: desktop
+    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
+
+    visible = WindowsUIAutomationAdapter().text_visible(
+        text="Connected",
+        window_title_contains="Vendor App",
+        control_type=None,
+        exact=True,
+        timeout_seconds=0.01,
+    )
+
+    assert visible is True
+    assert button.invoked is False
+    assert button.clicked is False

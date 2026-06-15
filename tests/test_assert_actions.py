@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+import sys
+from types import ModuleType
+
+from ritualist.adapters.fake import FakeAdapters
+from ritualist.config import AppConfig
+from ritualist.executor import WorkflowExecutor
+from ritualist.models import AssertRegistryValueStep, Recipe
+
+
+def test_preflight_assertions_run_before_steps(tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "preflight": [{"action": "assert.file_exists", "path": str(marker)}],
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert [result.action for result in summary.results] == [
+        "assert.file_exists",
+        "app.launch",
+    ]
+    assert fakes.shell.calls[0][0] == "launch"
+
+
+def test_preflight_assertion_failure_stops_before_steps(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "preflight": [{"action": "assert.path_exists", "path": str(tmp_path / "missing")}],
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert not summary.success
+    assert summary.results[0].action == "assert.path_exists"
+    assert summary.results[0].status == "failed"
+    assert "path does not exist" in summary.results[0].message
+    assert fakes.shell.calls == []
+
+
+def test_verify_assertions_run_after_steps():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [
+                {
+                    "action": "assert.window_text_visible",
+                    "window_title_contains": "Vendor App",
+                    "text": "Connected",
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert [result.action for result in summary.results] == [
+        "app.launch",
+        "assert.window_text_visible",
+    ]
+    assert fakes.desktop.calls[0][0] == "text_visible"
+    assert fakes.desktop.calls[0][2]["text"] == "Connected"
+
+
+def test_process_window_and_browser_assertions_are_read_only():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "preflight": [{"action": "assert.process_running", "process_name": "demo.exe"}],
+            "steps": [{"action": "browser.open", "url": "https://example.test"}],
+            "verify": [
+                {"action": "assert.window_exists", "title_contains": "Vendor App"},
+                {"action": "assert.browser_text_visible", "text": "Ready"},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.shell.calls] == ["process_running"]
+    assert [call[0] for call in fakes.window.calls] == ["window_exists"]
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "text_visible"]
+
+
+def test_false_adapter_assertion_result_fails_without_mutating():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [{"action": "assert.window_exists", "title_contains": "Vendor App"}],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.window.responses["window_exists"] = False
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert not summary.success
+    assert summary.results[-1].status == "failed"
+    assert "window not found" in summary.results[-1].message
+    assert [call[0] for call in fakes.window.calls] == ["window_exists"]
+
+
+def test_registry_assertion_is_windows_only(monkeypatch):
+    monkeypatch.setattr("ritualist.actions.assert_actions.sys.platform", "linux")
+    step = AssertRegistryValueStep.model_validate(
+        {
+            "action": "assert.registry_value",
+            "key": r"HKCU\\Software\\Vendor",
+            "value_name": "Connected",
+        }
+    )
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        config=AppConfig(),
+    ).run(
+        Recipe.model_validate(
+            {
+                "id": "run",
+                "name": "Run",
+                "steps": [{"action": "app.launch", "command": "demo.exe"}],
+                "verify": [step.model_dump()],
+            }
+        )
+    )
+
+    assert not summary.success
+    assert "only supported on Windows" in summary.results[-1].message
+
+
+def test_registry_assertion_reads_value_with_fake_winreg(monkeypatch):
+    winreg = ModuleType("winreg")
+    winreg.HKEY_CURRENT_USER = object()
+    winreg.HKEY_LOCAL_MACHINE = object()
+    winreg.HKEY_CLASSES_ROOT = object()
+    winreg.HKEY_USERS = object()
+    winreg.HKEY_CURRENT_CONFIG = object()
+    winreg.KEY_READ = 1
+    opened = {}
+
+    class FakeKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    def open_key(hive, subkey, _reserved, access):
+        opened["hive"] = hive
+        opened["subkey"] = subkey
+        opened["access"] = access
+        return FakeKey()
+
+    def query_value(_handle, value_name):
+        assert value_name == "Connected"
+        return "yes", 1
+
+    winreg.OpenKey = open_key
+    winreg.QueryValueEx = query_value
+    monkeypatch.setattr("ritualist.actions.assert_actions.sys.platform", "win32")
+    monkeypatch.setitem(sys.modules, "winreg", winreg)
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [
+                {
+                    "action": "assert.registry_value",
+                    "key": r"HKCU\\Software\\Vendor",
+                    "value_name": "Connected",
+                    "expected_value": "yes",
+                }
+            ],
+        }
+    )
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert opened["subkey"] == r"Software\\Vendor"

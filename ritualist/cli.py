@@ -364,7 +364,7 @@ def _print_steps(recipe: object) -> None:
     table.add_column("Action")
     table.add_column("Optional")
     table.add_column("Confirm")
-    for index, step in enumerate(recipe.steps, start=1):
+    for index, step in enumerate(recipe.execution_steps, start=1):
         table.add_row(
             str(index),
             escape(step.display_name),
@@ -447,7 +447,7 @@ def _print_post_run_summary(summary: object, *, keep_open_active: bool) -> None:
 
 
 def _summary_requests_keep_open(recipe: object, summary: object) -> bool:
-    steps_by_index = {index: step for index, step in enumerate(recipe.steps, start=1)}
+    steps_by_index = {index: step for index, step in enumerate(recipe.execution_steps, start=1)}
     for result in summary.results:
         step = steps_by_index.get(result.index)
         if (

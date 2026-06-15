@@ -60,6 +60,24 @@ class PlaywrightBrowserAdapter:
             {"selector": selector, "play": play, "loop": loop, "muted": muted},
         )
 
+    def text_visible(self, *, text: str, exact: bool, timeout_seconds: float) -> bool:
+        if self._page is None:
+            raise RitualistError("assert.browser_text_visible requires a prior browser.open step")
+        try:
+            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "browser assertions require Playwright; install ritualist[browser] and run "
+                "'python -m playwright install chromium'"
+            ) from exc
+
+        locator = self._page.get_by_text(text, exact=exact).first
+        try:
+            locator.wait_for(state="visible", timeout=timeout_seconds * 1000)
+        except PlaywrightTimeoutError:
+            return False
+        return True
+
     def close(self) -> None:
         if self._context is not None:
             self._context.close()

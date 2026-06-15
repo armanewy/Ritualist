@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.steps_table.setRowCount(0)
         if self.recipe is None:
             return
-        for index, step in enumerate(self.recipe.steps, start=1):
+        for index, step in enumerate(self.recipe.execution_steps, start=1):
             row = self.steps_table.rowCount()
             self.steps_table.insertRow(row)
             values = [
@@ -395,5 +395,5 @@ class MainWindow(QMainWindow):
     def _step_by_index(self, index: int):
         if self.recipe is None:
             return None
-        steps_by_index = {index: step for index, step in enumerate(self.recipe.steps, start=1)}
+        steps_by_index = {index: step for index, step in enumerate(self.recipe.execution_steps, start=1)}
         return steps_by_index.get(index)

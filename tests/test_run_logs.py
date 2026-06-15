@@ -75,6 +75,29 @@ def test_run_log_writer_redacts_failed_browser_url(tmp_path):
     assert "token=secret" not in steps_text
 
 
+def test_run_log_writer_counts_preflight_and_verify_steps(tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "preflight": [{"action": "assert.file_exists", "path": str(marker)}],
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [{"action": "assert.path_exists", "path": str(marker)}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), run_logger=writer).run(recipe)
+
+    assert summary.success
+    assert summary.run_dir is not None
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_json["steps_total"] == 3
+    assert run_json["steps_completed"] == 3
+
+
 def test_reconcile_running_run_with_dead_pid_marks_interrupted_and_keeps_steps(tmp_path):
     run_dir = tmp_path / "20260615T175148Z_gaming_mode"
     run_dir.mkdir()

@@ -17,6 +17,30 @@ class WindowInspection:
 
 
 class WindowsUIAutomationAdapter:
+    def text_visible(
+        self,
+        *,
+        text: str,
+        window_title_contains: str,
+        control_type: str | None,
+        exact: bool,
+        timeout_seconds: float,
+    ) -> bool:
+        _ensure_windows()
+        desktop = _desktop()
+        deadline = time.monotonic() + timeout_seconds
+        matcher = _text_matcher(text, exact)
+
+        while True:
+            roots = _candidate_roots(desktop, window_title_contains)
+            for root in roots:
+                for element in _preferred_descendants(root, control_type):
+                    if matcher(_element_text(element)):
+                        return True
+            if timeout_seconds <= 0 or time.monotonic() >= deadline:
+                return False
+            time.sleep(0.25)
+
     def find_text_region(
         self,
         *,

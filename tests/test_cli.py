@@ -324,6 +324,58 @@ def test_doctor_reports_recipe_checks(tmp_path, monkeypatch):
     assert "target window contains" in result.output
 
 
+def test_doctor_reports_assertion_checks(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "preflight": [
+                {"action": "assert.process_running", "process_name": "demo.exe"},
+                {"action": "assert.file_exists", "path": "C:/demo/profile.json"},
+            ],
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [
+                {
+                    "action": "assert.window_text_visible",
+                    "window_title_contains": "Vendor App",
+                    "text": "Connected",
+                },
+                {"action": "assert.browser_text_visible", "text": "Ready"},
+            ],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 0
+    assert "assert.window_text_visible" in result.output
+    assert "Connected" in result.output
+    assert "assert.browser_text_visible" in result.output
+    assert "psutil import works" in result.output
+
+
+def test_doctor_warns_when_browser_assertion_has_no_browser_open(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [{"action": "assert.browser_text_visible", "text": "Ready"}],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 0
+    assert "assert.browser_text_visible" in result.output
+    assert "browser.open" in result.output
+
+
 def test_doctor_fails_on_error_and_preserves_dependency_extras(monkeypatch):
     recipe = Recipe.model_validate(
         {

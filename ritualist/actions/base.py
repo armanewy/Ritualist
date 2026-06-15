@@ -8,7 +8,7 @@ from logging import Logger
 from typing import Any, Protocol
 
 from ritualist.config import AppConfig
-from ritualist.models import Recipe, WorkflowStep
+from ritualist.models import ExecutableStep, Recipe
 from ritualist.overlay import ConfirmationRequest, OverlayController
 
 
@@ -74,5 +74,5 @@ class ActionContext:
 class ActionHandler(Protocol):
     action_type: str
 
-    def run(self, step: WorkflowStep, context: ActionContext) -> str:
+    def run(self, step: ExecutableStep, context: ActionContext) -> str:
         """Run an action and return a short user-facing message."""

@@ -24,6 +24,7 @@ class ActionRegistry:
 
 def create_default_registry() -> ActionRegistry:
     from .app_actions import AppLaunchHandler, AppWaitProcessHandler
+    from .assert_actions import create_assertion_handlers
     from .browser_actions import BrowserMediaHandler, BrowserOpenHandler
     from .confirm_actions import ConfirmAskHandler
     from .desktop_actions import DesktopClickTextHandler
@@ -37,6 +38,7 @@ def create_default_registry() -> ActionRegistry:
 
     registry = ActionRegistry()
     for handler in (
+        *create_assertion_handlers(),
         BrowserOpenHandler(),
         BrowserMediaHandler(),
         AppLaunchHandler(),

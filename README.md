@@ -102,6 +102,11 @@ name: Gaming Mode
 variables:
   youtube_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
   battle_net_window: Battle.net
+  battle_net_app: C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe
+preflight:
+  - name: Battle.net is installed
+    action: assert.file_exists
+    path: "${battle_net_app}"
 steps:
   - name: Open video
     action: browser.open
@@ -120,9 +125,25 @@ steps:
     text: Play
     window_title_contains: "{{ battle_net_window }}"
     requires_confirmation: true
+verify:
+  - name: Battle.net window is visible
+    action: assert.window_exists
+    title_contains: "{{ battle_net_window }}"
 ```
 
 The recipe exposes only structured actions. It does not permit arbitrary Python or recipe-supplied JavaScript.
+
+`preflight` and `verify` are optional assertion-only sections. They run before and after `steps`, respectively, and are intended for read-only checks:
+
+- `assert.file_exists`
+- `assert.path_exists`
+- `assert.process_running`
+- `assert.window_exists`
+- `assert.window_text_visible`
+- `assert.browser_text_visible`
+- `assert.registry_value` on Windows
+
+Assertions do not click, type, launch apps, or modify browser/page state. They pass with a short message or fail the run with a clear assertion error unless marked `optional: true`.
 
 ## Safety
 

@@ -52,25 +52,31 @@ class ShellAdapter:
                 raise RitualistError(f"process exited with code {return_code}: {command}")
 
     def wait_process(self, process_name: str, *, timeout_seconds: float) -> None:
+        if self.process_running(process_name, timeout_seconds=timeout_seconds):
+            return
+        raise RitualistError(f"process did not appear within {timeout_seconds:g}s: {process_name}")
+
+    def process_running(self, process_name: str, *, timeout_seconds: float = 0) -> bool:
         try:
             import psutil
         except ImportError as exc:
             raise DependencyMissingError(
-                "app.wait_process requires optional dependency psutil; install ritualist[windows]"
+                "process checks require optional dependency psutil; install ritualist[windows]"
             ) from exc
 
         deadline = time.monotonic() + timeout_seconds
         normalized = process_name.casefold()
-        while time.monotonic() < deadline:
+        while True:
             for process in psutil.process_iter(["name"]):
                 try:
                     name = process.info.get("name") or ""
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
                 if name.casefold() == normalized:
-                    return
+                    return True
+            if timeout_seconds <= 0 or time.monotonic() >= deadline:
+                return False
             time.sleep(0.25)
-        raise RitualistError(f"process did not appear within {timeout_seconds:g}s: {process_name}")
 
 
 def _looks_like_startfile_target(command: str) -> bool:
