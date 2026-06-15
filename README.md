@@ -148,6 +148,41 @@ Playwright owns the browser process it launches. When a CLI run exits, the brows
 
 GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
 
+## Building A Local Windows App
+
+Use a PyInstaller one-folder build for v0.1-alpha packaging. One-folder mode leaves the executable and its support files visible under `dist\Ritualist`, which makes missing data files and DLL issues easier to diagnose than a one-file bundle.
+
+Build on Windows:
+
+```powershell
+python -m pip install -e ".[all,dev]"
+python -m playwright install chromium
+.\scripts\build_windows_app.ps1
+```
+
+The build script runs PyInstaller in one-folder/windowed mode and writes:
+
+```text
+dist\Ritualist\Ritualist.exe
+```
+
+`Ritualist.exe` launches the GUI through `ritualist.desktop_entry`; it does not run any ritual automatically. The normal development CLI stays available through `python -m ritualist` and the `ritualist` console command.
+
+Bundled sample recipes are collected into the app bundle so **Initialize App** can still install `gaming_mode.yaml`. User data still belongs in the platform user-data directory shown by `ritualist paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Ritualist`.
+
+Manual packaged-build smoke checks:
+
+```text
+dist\Ritualist\Ritualist.exe opens the GUI
+Initialize App works
+Open Recipes Folder works
+Dry Run selected recipe works with gaming_mode
+Open Logs/Runs Folder works
+python -m ritualist doctor gaming_mode still works from the development checkout
+```
+
+Playwright browser binaries and persistent profile behavior should be retested after packaging. Keep the one-folder build working before attempting a one-file executable.
+
 ## Diagnostics
 
 `ritualist doctor <recipe-id-or-path>` validates a recipe without opening browsers, launching apps, or clicking. It checks optional dependency availability, OS support, browser profile creation, local app paths, and the window/text targets for `desktop.click_text`.
