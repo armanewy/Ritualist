@@ -1,0 +1,40 @@
+version: "0.1"
+name: Gaming Mode
+description: Open a looping video, minimize Chrome, launch Battle.net, and ask before Play.
+variables:
+  youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  battle_net_path: 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'
+steps:
+  - name: Open ambience video
+    action: browser.open
+    url: "{{ youtube_url }}"
+    browser: chrome
+
+  - name: Loop and play video
+    action: browser.media
+    selector: video
+    loop: true
+    play: true
+
+  - name: Minimize Chrome
+    action: window.minimize
+    title_contains: YouTube
+    optional: true
+    timeout_seconds: 5
+
+  - name: Launch Battle.net
+    action: app.launch
+    command: "{{ battle_net_path }}"
+
+  - name: Select Diablo IV
+    action: desktop.click_text
+    text: Diablo IV
+    exact: false
+    optional: true
+    timeout_seconds: 20
+
+  - name: Ask before clicking Play
+    action: desktop.click_text
+    text: Play
+    requires_confirmation: true
+    timeout_seconds: 20
