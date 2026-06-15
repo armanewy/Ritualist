@@ -1,0 +1,9 @@
+id: wait_runbook
+name: Wait Runbook
+steps:
+  - name: Let the status settle
+    action: wait.seconds
+    seconds: 0.01
+  - name: Continue when ready
+    action: wait.for_user
+    prompt: Continue the runbook?

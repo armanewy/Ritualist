@@ -31,6 +31,7 @@ from .paths import (
 )
 from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
 from .run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
+from .runtime_control import RuntimeControl
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
@@ -632,6 +633,8 @@ def _run_recipe(
         parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
         registry = create_default_registry()
         adapters = create_default_adapters()
+        runtime_control = RuntimeControl()
+        run_logger = RunLogWriter()
         executor = WorkflowExecutor(
             registry=registry,
             adapters=adapters,
@@ -645,16 +648,34 @@ def _run_recipe(
                 f"{escape(event.status)}: {escape(event.step_name)}"
             ),
             logger=logger,
-            run_logger=RunLogWriter(),
+            run_logger=run_logger,
+            runtime_control=runtime_control,
+            stop_requested=runtime_control.is_stopping,
         )
-        summary = executor.run(parsed)
+        try:
+            summary = executor.run(parsed)
+        except KeyboardInterrupt:
+            runtime_control.stop()
+            _finish_run_logger_as_stopped(run_logger, logger=logger)
+            console.print("[yellow]Interrupted; stop requested.[/]")
+            _print_post_run_summary(
+                None,
+                keep_open_active=False,
+                run_logger=run_logger,
+                interrupted=True,
+            )
+            raise typer.Exit(1) from None
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
 
     _print_results(summary.results)
     keep_open_active = not dry_run and (keep_alive or _summary_requests_keep_open(parsed, summary))
-    _print_post_run_summary(summary, keep_open_active=keep_open_active)
+    _print_post_run_summary(
+        summary,
+        keep_open_active=keep_open_active,
+        run_logger=run_logger,
+    )
     if keep_open_active:
         _keep_alive_until_interrupted()
     if not summary.success:
@@ -812,18 +833,132 @@ def _print_init_report(report: object) -> None:
             console.print(f"  - {escape(change)}")
 
 
-def _print_post_run_summary(summary: object, *, keep_open_active: bool) -> None:
+def _print_post_run_summary(
+    summary: object | None,
+    *,
+    keep_open_active: bool,
+    run_logger: object | None = None,
+    interrupted: bool = False,
+) -> None:
     counts: dict[str, int] = {}
-    for result in summary.results:
-        counts[result.status] = counts.get(result.status, 0) + 1
+    if summary is not None:
+        for result in summary.results:
+            counts[result.status] = counts.get(result.status, 0) + 1
     counts_text = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
     console.print(f"Summary: {escape(counts_text or 'no steps recorded')}")
-    if any(
+    metadata = _run_logger_metadata(run_logger)
+    console.print(
+        f"Final run state: {escape(_final_run_state(summary, metadata, interrupted=interrupted))}"
+    )
+    console.print(f"Outcome: {escape(_run_outcome(summary, interrupted=interrupted))}")
+    step_text = _current_or_last_step(summary, metadata)
+    if step_text:
+        console.print(f"Current/last step: {escape(step_text)}")
+    if _metadata_has_value(metadata, "current_step_state"):
+        console.print(
+            f"Current step state: {escape(str(metadata.get('current_step_state', '')))}"
+        )
+    for key, label in (
+        ("wait_metadata", "Waiting"),
+        ("paused_metadata", "Paused"),
+        ("confirming_metadata", "Confirming"),
+    ):
+        if _metadata_has_value(metadata, key):
+            console.print(f"{label}: {escape(_format_metadata_value(metadata.get(key)))}")
+    if summary is not None and any(
         result.status == "cancelled" and "declined confirmation" in result.message
         for result in summary.results
     ):
         console.print("Confirmation declined; no confirmed risky action was performed.")
     console.print(f"Keep-open: {'active' if keep_open_active else 'inactive'}")
+
+
+def _finish_run_logger_as_stopped(run_logger: object, *, logger: object) -> None:
+    finish = getattr(run_logger, "finish", None)
+    if finish is None:
+        return
+    try:
+        finish(success=False, final_state="stopped")
+    except TypeError:
+        try:
+            finish(success=False)
+        except Exception as exc:  # noqa: BLE001 - finalizing after Ctrl+C is best effort.
+            debug = getattr(logger, "debug", None)
+            if debug is not None:
+                debug("failed to finalize interrupted run: %s", exc)
+    except Exception as exc:  # noqa: BLE001 - finalizing after Ctrl+C is best effort.
+        debug = getattr(logger, "debug", None)
+        if debug is not None:
+            debug("failed to finalize interrupted run: %s", exc)
+
+
+def _run_logger_metadata(run_logger: object | None) -> dict[str, object]:
+    if run_logger is None:
+        return {}
+    metadata = getattr(run_logger, "_metadata", None)
+    if isinstance(metadata, dict):
+        return metadata
+    run_dir = getattr(run_logger, "run_dir", None)
+    if run_dir is None:
+        return {}
+    try:
+        record = load_run(run_dir)
+    except Exception:  # noqa: BLE001 - summary metadata is best effort.
+        return {}
+    if record is None:
+        return {}
+    return record.metadata
+
+
+def _final_run_state(
+    summary: object | None,
+    metadata: dict[str, object],
+    *,
+    interrupted: bool,
+) -> str:
+    if _metadata_has_value(metadata, "final_state"):
+        return str(metadata.get("final_state"))
+    if _metadata_has_value(metadata, "status") and metadata.get("status") != "running":
+        return str(metadata.get("status"))
+    if interrupted:
+        return "stopped"
+    return _run_outcome(summary, interrupted=False)
+
+
+def _run_outcome(summary: object | None, *, interrupted: bool) -> str:
+    if interrupted:
+        return "interrupted"
+    if summary is None:
+        return "stopped"
+    results = getattr(summary, "results", [])
+    statuses = [getattr(result, "status", "") for result in results]
+    if any(status == "failed" for status in statuses):
+        return "failed"
+    if any(status == "cancelled" for status in statuses):
+        return "stopped"
+    if getattr(summary, "success", False):
+        return "success"
+    return "stopped"
+
+
+def _current_or_last_step(summary: object | None, metadata: dict[str, object]) -> str:
+    step_id = metadata.get("last_step_id")
+    step_name = metadata.get("last_step_name")
+    step_state = metadata.get("current_step_state")
+    if step_id is not None or step_name:
+        label = f"#{step_id}" if step_id is not None else "unknown step"
+        if step_name:
+            label = f"{label} {step_name}"
+        if step_state:
+            label = f"{label} ({step_state})"
+        return label
+    if summary is None or not getattr(summary, "results", []):
+        return ""
+    result = summary.results[-1]
+    label = f"#{result.index} {result.step_name}"
+    if result.status:
+        label = f"{label} ({result.status})"
+    return label
 
 
 def _summary_requests_keep_open(recipe: object, summary: object) -> bool:

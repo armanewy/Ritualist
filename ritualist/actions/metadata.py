@@ -19,7 +19,7 @@ CapabilityName = Literal[
 ]
 
 PlatformName = Literal["windows", "macos", "linux"]
-CategoryName = Literal["app", "assert", "browser", "confirm", "desktop", "input", "window"]
+CategoryName = Literal["app", "assert", "browser", "confirm", "desktop", "input", "wait", "window"]
 SideEffectLevel = Literal[
     "read_only",
     "launches_app",

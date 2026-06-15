@@ -44,6 +44,7 @@ def create_default_registry() -> ActionRegistry:
     from .confirm_actions import ConfirmAskHandler
     from .desktop_actions import DesktopClickTextHandler
     from .input_actions import InputHotkeyHandler
+    from .wait_actions import create_wait_handlers
     from .window_actions import (
         WindowFocusHandler,
         WindowMaximizeHandler,
@@ -65,6 +66,7 @@ def create_default_registry() -> ActionRegistry:
         DesktopClickTextHandler(),
         InputHotkeyHandler(),
         ConfirmAskHandler(),
+        *create_wait_handlers(),
     ):
         registry.register(handler)
     return registry

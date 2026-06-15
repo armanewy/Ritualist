@@ -180,6 +180,28 @@ def test_run_log_writer_redacts_failed_browser_url(tmp_path):
     assert "token=secret" not in steps_text
 
 
+def test_run_log_writer_records_failed_final_state_for_required_failure(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [{"action": "browser.open", "url": "https://example.test"}],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.failures["open_url"] = RuntimeError("network blocked")
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), run_logger=writer).run(recipe)
+
+    assert not summary.success
+    assert summary.run_dir is not None
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_json["status"] == "stopped"
+    assert run_json["final_state"] == "failed"
+    assert run_json["current_run_state"] == "failed"
+
+
 def test_run_log_writer_counts_preflight_and_verify_steps(tmp_path):
     marker = tmp_path / "marker.txt"
     marker.write_text("ok", encoding="utf-8")

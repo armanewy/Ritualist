@@ -123,6 +123,39 @@ class ConfirmAskStep(StepBase):
     prompt: str
 
 
+class WaitSecondsStep(StepBase):
+    action: Literal["wait.seconds"]
+    seconds: float = Field(gt=0)
+
+
+class WaitForUserStep(StepBase):
+    action: Literal["wait.for_user"]
+    prompt: str = Field(min_length=1)
+
+
+class WaitForFileStep(StepBase):
+    action: Literal["wait.for_file"]
+    path: str = Field(min_length=1)
+
+
+class WaitForProcessStep(StepBase):
+    action: Literal["wait.for_process"]
+    process_name: str = Field(min_length=1)
+
+
+class WaitForProcessExitStep(StepBase):
+    action: Literal["wait.for_process_exit"]
+    process_name: str = Field(min_length=1)
+
+
+class WaitForWindowStep(WindowMatchMixin, StepBase):
+    action: Literal["wait.for_window"]
+
+
+class WaitForWindowGoneStep(WindowMatchMixin, StepBase):
+    action: Literal["wait.for_window_gone"]
+
+
 class AssertFileExistsStep(StepBase):
     action: Literal["assert.file_exists"]
     path: str
@@ -192,7 +225,14 @@ WorkflowStep = Annotated[
     | WindowWaitStep
     | DesktopClickTextStep
     | InputHotkeyStep
-    | ConfirmAskStep,
+    | ConfirmAskStep
+    | WaitSecondsStep
+    | WaitForUserStep
+    | WaitForFileStep
+    | WaitForProcessStep
+    | WaitForProcessExitStep
+    | WaitForWindowStep
+    | WaitForWindowGoneStep,
     Field(discriminator="action"),
 ]
 

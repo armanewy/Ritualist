@@ -31,6 +31,7 @@ from ritualist.overlay import NullOverlayController
 from ritualist.paths import config_file, recipes_dir, runs_dir
 from ritualist.recipe_loader import discover_recipes, load_recipe
 from ritualist.run_logs import RunLogWriter, reconcile_running_runs
+from ritualist.runtime_control import RuntimeControl
 
 from .dialogs import ask_confirmation, show_error
 from .diagnostics_dialog import DiagnosticsDialog
@@ -89,9 +90,17 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop_run)
         self.stop_button.setEnabled(False)
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.clicked.connect(self.pause_run)
+        self.pause_button.setEnabled(False)
+        self.resume_button = QPushButton("Resume")
+        self.resume_button.clicked.connect(self.resume_run)
+        self.resume_button.setEnabled(False)
         button_row.addWidget(self.run_button)
         button_row.addWidget(self.dry_run_button)
         button_row.addWidget(self.doctor_button)
+        button_row.addWidget(self.pause_button)
+        button_row.addWidget(self.resume_button)
         button_row.addWidget(self.stop_button)
         button_row.addStretch(1)
         layout.addLayout(button_row)
@@ -114,6 +123,8 @@ class MainWindow(QMainWindow):
 
         self.status_label = QLabel("Ready")
         layout.addWidget(self.status_label)
+        self.run_state_label = QLabel("Run state: stopped")
+        layout.addWidget(self.run_state_label)
         self.keep_open_label = QLabel("Keep-open: inactive")
         layout.addWidget(self.keep_open_label)
 
@@ -249,22 +260,27 @@ class MainWindow(QMainWindow):
             return
 
         self.set_run_controls_enabled(False)
+        self.set_run_state("running")
         self.status_label.setText("Running")
         self.keep_open_label.setText("Keep-open: inactive")
         logger = setup_logging()
         config = load_app_config()
+        control = RuntimeControl()
         executor = WorkflowExecutor(
             adapters=create_default_adapters(),
             dry_run=dry_run,
             logger=logger,
             run_logger=RunLogWriter(),
-            stop_requested=lambda: bool(self.runner and self.runner.isInterruptionRequested()),
+            runtime_control=control,
+            stop_requested=control.is_stopping,
             config=config,
             overlay=self.overlay_controller,
         )
-        self.runner = RunnerThread(executor, self.recipe)
+        self.runner = RunnerThread(executor, self.recipe, control)
         self.runner.log_message.connect(self.append_log)
         self.runner.step_event.connect(self.on_step_event)
+        self.runner.run_state_changed.connect(self.on_run_state_changed)
+        self.runner.stopped.connect(self.on_stopped)
         self.runner.failed.connect(self.on_failed)
         self.runner.finished_result.connect(self.on_finished)
         self.runner.confirmation_requested.connect(self.on_confirmation_requested)
@@ -282,8 +298,29 @@ class MainWindow(QMainWindow):
             return
         self.runner.answer_confirmation(ask_confirmation(self, prompt))
 
+    def on_run_state_changed(self, state: str) -> None:
+        self.set_run_state(state)
+        if state == "paused":
+            self.stop_button.setEnabled(True)
+            self.pause_button.setEnabled(False)
+            self.resume_button.setEnabled(True)
+        elif state in {"running", "waiting", "confirming"}:
+            self.stop_button.setEnabled(True)
+            self.pause_button.setEnabled(True)
+            self.resume_button.setEnabled(False)
+
+    def on_stopped(self, message: str) -> None:
+        self.append_log(f"Stopped: {message}")
+        self.set_run_state("stopped")
+        self.status_label.setText("Run stopped")
+        self.set_run_controls_enabled(True)
+        if self._close_after_run_stops:
+            self._close_after_run_stops = False
+            self.close()
+
     def on_failed(self, message: str) -> None:
         self.append_log(f"Failed: {message}")
+        self.set_run_state("failed")
         self.status_label.setText("Run failed")
         show_error(self, "Run Failed", message)
         self.set_run_controls_enabled(True)
@@ -298,8 +335,14 @@ class MainWindow(QMainWindow):
         for result in summary.results:
             counts[result.status] = counts.get(result.status, 0) + 1
         summary_text = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
-        final_text = "Run finished" if summary.success else "Run stopped"
+        final_state = self._final_run_state(summary)
+        final_text = {
+            "success": "Run finished",
+            "failed": "Run failed",
+            "stopped": "Run stopped",
+        }[final_state]
         self.append_log(f"{final_text}: {summary_text}")
+        self.set_run_state(final_state)
         self.status_label.setText(final_text)
         keep_open_active = self._summary_requests_keep_open(summary)
         self.keep_open_label.setText(
@@ -316,18 +359,47 @@ class MainWindow(QMainWindow):
     def stop_run(self) -> None:
         if self.runner is None or not self.runner.isRunning():
             return
-        self.runner.requestInterruption()
-        self.runner.answer_confirmation(False)
+        stop = getattr(self.runner, "stop", None)
+        if stop is not None:
+            stop()
+        else:
+            self.runner.requestInterruption()
+            self.runner.answer_confirmation(False)
         self.append_log("Stop requested; the current step may finish before the run stops")
         self.status_label.setText("Stop requested")
         self.stop_button.setEnabled(False)
+        self.pause_button.setEnabled(False)
+        self.resume_button.setEnabled(False)
         self.keep_open_label.setText("Keep-open: inactive")
+
+    def pause_run(self) -> None:
+        if self.runner is None or not self.runner.isRunning():
+            return
+        pause = getattr(self.runner, "pause", None)
+        if pause is not None:
+            pause()
+        self.append_log("Pause requested; the current step may finish before the run pauses")
+        self.on_run_state_changed("paused")
+
+    def resume_run(self) -> None:
+        if self.runner is None or not self.runner.isRunning():
+            return
+        resume = getattr(self.runner, "resume", None)
+        if resume is not None:
+            resume()
+        self.append_log("Resume requested")
+        self.on_run_state_changed("running")
 
     def set_run_controls_enabled(self, enabled: bool) -> None:
         self.run_button.setEnabled(enabled)
         self.dry_run_button.setEnabled(enabled)
         self.doctor_button.setEnabled(enabled)
         self.stop_button.setEnabled(not enabled)
+        self.pause_button.setEnabled(not enabled)
+        self.resume_button.setEnabled(False)
+
+    def set_run_state(self, state: str) -> None:
+        self.run_state_label.setText(f"Run state: {state}")
 
     def open_path(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -401,3 +473,10 @@ class MainWindow(QMainWindow):
             return None
         steps_by_index = {index: step for index, step in enumerate(self.recipe.execution_steps, start=1)}
         return steps_by_index.get(index)
+
+    def _final_run_state(self, summary) -> str:
+        if summary.success:
+            return "success"
+        if any(result.status == "failed" for result in summary.results):
+            return "failed"
+        return "stopped"

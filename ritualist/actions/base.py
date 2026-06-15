@@ -11,6 +11,7 @@ from ritualist.config import AppConfig
 from ritualist.actions.metadata import ActionMetadata
 from ritualist.models import ExecutableStep, Recipe
 from ritualist.overlay import ConfirmationRequest, OverlayController
+from ritualist.runtime_control import RuntimeControl
 
 
 ConfirmationCallback = Callable[[ConfirmationRequest | str], bool]
@@ -70,6 +71,8 @@ class ActionContext:
     recipe: Recipe
     config: AppConfig
     overlay: OverlayController
+    runtime_control: RuntimeControl
+    heartbeat: Callable[[], None] | None = None
 
 
 class ActionHandler(Protocol):

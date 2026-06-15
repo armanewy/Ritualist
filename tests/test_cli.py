@@ -47,6 +47,61 @@ def test_run_defaults_to_real_run(monkeypatch):
     assert fakes.shell.calls[0][0] == "launch"
 
 
+def test_keyboard_interrupt_requests_runtime_stop_and_finalizes_stopped(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    controls = []
+    writers = []
+
+    class FakeRuntimeControl:
+        def __init__(self):
+            self.stopped = False
+            controls.append(self)
+
+        def stop(self):
+            self.stopped = True
+
+        def is_stopping(self):
+            return self.stopped
+
+    class InterruptingExecutor:
+        def __init__(self, *, run_logger, stop_requested, dry_run, runtime_control, **_kwargs):
+            self.run_logger = run_logger
+            self.stop_requested = stop_requested
+            self.dry_run = dry_run
+            self.runtime_control = runtime_control
+
+        def run(self, recipe):
+            assert self.stop_requested() is False
+            assert self.runtime_control is controls[0]
+            self.run_logger.start(recipe, dry_run=self.dry_run)
+            raise KeyboardInterrupt
+
+    class CapturingRunLogWriter(DummyRunLogWriter):
+        def __init__(self):
+            writers.append(self)
+
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: FakeAdapters().bundle())
+    monkeypatch.setattr("ritualist.cli.RuntimeControl", FakeRuntimeControl)
+    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", InterruptingExecutor)
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", CapturingRunLogWriter)
+
+    result = CliRunner().invoke(app, ["run", "demo"])
+
+    assert result.exit_code == 1
+    assert controls[0].stopped is True
+    assert writers[0].success is False
+    assert "Interrupted; stop requested." in result.output
+    assert "Final run state: stopped" in result.output
+    assert "Outcome: interrupted" in result.output
+
+
 def test_dry_run_command_does_not_call_adapters(monkeypatch):
     fakes = FakeAdapters()
     recipe = Recipe.model_validate(
@@ -1018,6 +1073,8 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
     assert fakes.desktop.calls == []
     assert "Window: Battle.net" in result.output
     assert "Target: Play" in result.output
+    assert "Final run state: stopped" in result.output
+    assert "Outcome: stopped" in result.output
     assert "Confirmation declined; no confirmed risky action was performed." in result.output
 
 

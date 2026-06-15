@@ -93,7 +93,7 @@ class WindowsWindowManager:
         deadline = time.monotonic() + timeout_seconds
         desktop = Desktop(backend="uia")
 
-        while time.monotonic() < deadline:
+        while True:
             for window in desktop.windows():
                 title = _safe_window_text(window)
                 if title_pattern and not title_pattern.search(title):
@@ -101,7 +101,9 @@ class WindowsWindowManager:
                 if process_ids is not None and _safe_process_id(window) not in process_ids:
                     continue
                 return window
-            time.sleep(0.25)
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
 
         matcher = title_contains or process_name or "window"
         raise RitualistError(f"window not found within {timeout_seconds:g}s: {matcher}")

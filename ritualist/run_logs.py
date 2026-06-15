@@ -88,7 +88,13 @@ class RunLogWriter:
         self._write_run_json()
         self._steps_jsonl.write_text("", encoding="utf-8")
 
-    def heartbeat(self, step_id: int | None = None, step_name: str | None = None) -> None:
+    def heartbeat(
+        self,
+        step_id: int | None = None,
+        step_name: str | None = None,
+        run_state: str | None = None,
+        step_state: str | None = None,
+    ) -> None:
         if self._run_json is None:
             return
         self._metadata["last_heartbeat_at"] = _now_iso()
@@ -97,13 +103,16 @@ class RunLogWriter:
         if step_name is not None:
             self._metadata["last_step_name"] = step_name
         if step_id is not None or step_name is not None:
-            if self._metadata.get("current_step_state") != "running":
-                self._metadata["current_step_state"] = "running"
-            if self._metadata.get("current_run_state") != "running":
-                self._set_run_state("running", event="run.state_changed")
+            resolved_step_state = step_state or "running"
+            resolved_run_state = run_state or "running"
+            if self._metadata.get("current_step_state") != resolved_step_state:
+                self._metadata["current_step_state"] = resolved_step_state
+            if self._metadata.get("current_run_state") != resolved_run_state:
+                self._set_run_state(resolved_run_state, event="run.state_changed")
             self._append_event_summary(
                 "heartbeat",
-                step_state="running",
+                run_state=resolved_run_state,
+                step_state=resolved_step_state,
                 step_id=step_id,
                 step_name=step_name,
             )
@@ -141,17 +150,17 @@ class RunLogWriter:
         )
         self._write_run_json()
 
-    def finish(self, *, success: bool) -> None:
+    def finish(self, *, success: bool, final_state: str | None = None) -> None:
         if self._run_json is None:
             return
-        final_state = "success" if success else "stopped"
-        self._metadata["status"] = final_state
+        resolved_final_state = final_state or ("success" if success else "stopped")
+        self._metadata["status"] = "success" if resolved_final_state == "success" else "stopped"
         self._metadata["ended_at"] = _now_iso()
         self._metadata["last_heartbeat_at"] = self._metadata["ended_at"]
         self._metadata["final_message"] = None
-        self._metadata["final_state"] = final_state
-        self._set_run_state(final_state, event="run.finished")
-        self._append_event_summary("run.finished", run_state=final_state)
+        self._metadata["final_state"] = resolved_final_state
+        self._set_run_state(resolved_final_state, event="run.finished")
+        self._append_event_summary("run.finished", run_state=resolved_final_state)
         self._clear_transient_metadata()
         self._write_run_json()
 

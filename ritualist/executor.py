@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
@@ -26,6 +27,22 @@ from .overlay import (
     OverlayController,
     TargetRegion,
 )
+from .runtime_control import RuntimeControl, RuntimeStoppedError
+from .runtime_models import (
+    Heartbeat,
+    LogMessage,
+    RunFinished,
+    RunStarted,
+    RunState,
+    RunStateChanged,
+    RuntimeEvent,
+    StepFinished,
+    StepStarted,
+    StepState,
+)
+
+
+RuntimeEventCallback = Callable[[RuntimeEvent], None]
 
 
 class WorkflowExecutor:
@@ -40,6 +57,8 @@ class WorkflowExecutor:
         logger: logging.Logger | None = None,
         run_logger: object | None = None,
         stop_requested: Callable[[], bool] | None = None,
+        runtime_control: RuntimeControl | None = None,
+        runtime_event_callback: RuntimeEventCallback | None = None,
         strict: bool = False,
         config: AppConfig | None = None,
         overlay: OverlayController | None = None,
@@ -56,10 +75,16 @@ class WorkflowExecutor:
         self.logger = logger or logging.getLogger("ritualist")
         self.run_logger = run_logger
         self.stop_requested = stop_requested or (lambda: False)
+        self.runtime_control = runtime_control or RuntimeControl()
+        self.runtime_event_callback = runtime_event_callback
         self.strict = strict
         self.config = config or load_app_config()
         self._overlay_available = overlay is not None and not isinstance(overlay, NullOverlayController)
         self.overlay = BestEffortOverlayController(overlay or NullOverlayController())
+        self._run_id: str | None = None
+        self._event_sequence = 0
+        self._run_started_at: datetime | None = None
+        self._run_state = RunState.IDLE
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
@@ -67,6 +92,7 @@ class WorkflowExecutor:
         total = len(steps)
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
+        self._start_runtime_run(recipe, total)
         context = ActionContext(
             adapters=self.adapters,
             dry_run=self.dry_run,
@@ -75,11 +101,15 @@ class WorkflowExecutor:
             recipe=recipe,
             config=self.config,
             overlay=self.overlay,
+            runtime_control=self.runtime_control,
         )
 
         for index, step in enumerate(steps, start=1):
-            if self.stop_requested():
-                self._heartbeat(index, step.display_name)
+            self._heartbeat(index, step.display_name, step_state=StepState.PENDING)
+            try:
+                self._checkpoint_control()
+            except RuntimeStoppedError as exc:
+                self._change_run_state(RunState.STOPPING, message=str(exc))
                 result = StepResult(
                     index=index,
                     step_name=step.display_name,
@@ -94,9 +124,10 @@ class WorkflowExecutor:
                 results.append(result)
                 if self.run_logger is not None:
                     self.run_logger.write_step(result)
+                self._emit_step_finished(result, step)
                 self._emit(index, total, step, "cancelled", result.message)
                 break
-            self._heartbeat(index, step.display_name)
+            self._start_step(index, step)
             self._emit(index, total, step, "running")
             started_at = _now()
             status = "success"
@@ -108,6 +139,11 @@ class WorkflowExecutor:
                 message = f"would run {step.action}"
                 dry_run_step = True
                 self.logger.info("dry-run step %s/%s: %s", index, total, step.display_name)
+                self._emit_log_message(
+                    "info",
+                    f"dry-run step {index}/{total}: {step.display_name}",
+                    step_index=index,
+                )
             else:
                 wait_overlay = None
                 try:
@@ -120,10 +156,34 @@ class WorkflowExecutor:
                         if not self.confirmer(prompt):
                             raise UserCancelledError("user declined confirmation")
 
+                    self._checkpoint_control()
                     handler = self.registry.get(step.action)
+                    context.heartbeat = (
+                        lambda step_id=index, step_name=step.display_name, active_step=step: self._heartbeat(
+                            step_id,
+                            step_name,
+                            run_state=_active_run_state_for_step(active_step),
+                            step_state=_active_step_state_for_step(active_step),
+                        )
+                    )
                     self.logger.info("starting step %s/%s: %s", index, total, step.display_name)
+                    self._emit_log_message(
+                        "info",
+                        f"starting step {index}/{total}: {step.display_name}",
+                        step_index=index,
+                    )
                     message = handler.run(step, context)
+                    self._checkpoint_control()
                     self.logger.info("finished step %s/%s: %s", index, total, step.display_name)
+                    self._emit_log_message(
+                        "info",
+                        f"finished step {index}/{total}: {step.display_name}",
+                        step_index=index,
+                    )
+                except RuntimeStoppedError as exc:
+                    status = "cancelled"
+                    message = str(exc)
+                    self._change_run_state(RunState.STOPPING, message=message)
                 except UserCancelledError as exc:
                     status = "cancelled"
                     message = str(exc)
@@ -132,10 +192,20 @@ class WorkflowExecutor:
                         status = "skipped"
                         message = f"optional step failed: {exc}"
                         self.logger.warning(message)
+                        self._emit_log_message(
+                            "warning",
+                            f"optional step failed: {step.display_name}",
+                            step_index=index,
+                        )
                     else:
                         status = "failed"
                         message = str(exc)
                         self.logger.exception("step failed: %s", step.display_name)
+                        self._emit_log_message(
+                            "error",
+                            f"step failed: {step.display_name}",
+                            step_index=index,
+                        )
                 finally:
                     if wait_overlay is not None:
                         wait_overlay.close()
@@ -154,6 +224,7 @@ class WorkflowExecutor:
             results.append(result)
             if self.run_logger is not None:
                 self.run_logger.write_step(result)
+            self._emit_step_finished(result, step)
             self._emit(index, total, step, status, message)
 
             if status in {"failed", "cancelled"}:
@@ -165,8 +236,15 @@ class WorkflowExecutor:
             results=results,
             run_dir=getattr(self.run_logger, "run_dir", None),
         )
+        final_state = _final_run_state(
+            summary,
+            steps_total=total,
+            stop_requested=self.runtime_control.is_stopping(),
+        )
+        self._change_run_state(final_state, message=_run_finished_message(final_state))
         if self.run_logger is not None:
-            self.run_logger.finish(success=summary.success)
+            self._finish_run_logger(summary=summary, final_state=final_state)
+        self._emit_run_finished(summary, final_state)
         if self.strict and not summary.success:
             raise ExecutionStoppedError("workflow stopped before completion", results)
         return summary
@@ -192,12 +270,179 @@ class WorkflowExecutor:
             )
         )
 
-    def _heartbeat(self, step_id: int, step_name: str) -> None:
+    def _start_runtime_run(self, recipe: Recipe, steps_total: int) -> None:
+        self._run_id = self._runtime_run_id(recipe)
+        self._event_sequence = 0
+        self._run_started_at = _now()
+        self._run_state = RunState.RUNNING
+        self._emit_runtime_event(
+            RunStarted(
+                **self._runtime_event_fields(),
+                occurred_at=self._run_started_at,
+                recipe_id=recipe.id,
+                recipe_name=recipe.name,
+                steps_total=steps_total,
+                dry_run=self.dry_run,
+            )
+        )
+
+    def _runtime_run_id(self, recipe: Recipe) -> str:
+        run_dir = getattr(self.run_logger, "run_dir", None)
+        run_dir_name = getattr(run_dir, "name", None)
+        if run_dir_name:
+            return str(run_dir_name)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return f"{timestamp}_{recipe.id}_{uuid.uuid4().hex[:8]}"
+
+    def _checkpoint_control(self) -> None:
+        if self.stop_requested():
+            self.runtime_control.stop()
+        if self.runtime_control.is_paused() and not self.runtime_control.is_stopping():
+            self._change_run_state(RunState.PAUSED, message="run paused")
+        self.runtime_control.wait_if_paused()
+        if self._run_state == RunState.PAUSED:
+            self._change_run_state(RunState.RUNNING, message="run resumed")
+        if self.stop_requested():
+            self.runtime_control.stop()
+        self.runtime_control.raise_if_stopped()
+
+    def _start_step(self, index: int, step: ExecutableStep) -> None:
+        if self._run_state not in {RunState.RUNNING, RunState.CONFIRMING, RunState.WAITING}:
+            self._change_run_state(RunState.RUNNING)
+        record_step_state = getattr(self.run_logger, "record_step_state", None)
+        if record_step_state is not None:
+            record_step_state(
+                "running",
+                step_id=index,
+                step_name=step.display_name,
+                action=step.action,
+            )
+        self._emit_runtime_event(
+            StepStarted(
+                **self._runtime_event_fields(),
+                step_index=index,
+                step_name=step.display_name,
+                action=step.action,
+            )
+        )
+
+    def _emit_step_finished(self, result: StepResult, step: ExecutableStep) -> None:
+        self._emit_runtime_event(
+            StepFinished(
+                **self._runtime_event_fields(),
+                step_index=result.index,
+                step_name=result.step_name,
+                action=result.action,
+                state=_runtime_step_state(result.status),
+                message=_runtime_result_message(result),
+                duration_seconds=_duration_seconds(result.started_at, result.ended_at),
+            )
+        )
+
+    def _change_run_state(self, state: RunState, *, message: str | None = None) -> None:
+        if state == self._run_state:
+            return
+        previous_state = self._run_state
+        self._run_state = state
+        self._emit_runtime_event(
+            RunStateChanged(
+                **self._runtime_event_fields(),
+                previous_state=previous_state,
+                state=state,
+                message=message,
+            )
+        )
+
+    def _emit_run_finished(self, summary: RunSummary, final_state: RunState) -> None:
+        ended_at = _now()
+        self._emit_runtime_event(
+            RunFinished(
+                **self._runtime_event_fields(),
+                occurred_at=ended_at,
+                state=final_state,
+                success=summary.success,
+                message=_run_finished_message(final_state),
+                duration_seconds=_duration_seconds(self._run_started_at, ended_at),
+            )
+        )
+
+    def _emit_log_message(
+        self,
+        level: str,
+        message: str,
+        *,
+        step_index: int | None = None,
+    ) -> None:
+        self._emit_runtime_event(
+            LogMessage(
+                **self._runtime_event_fields(),
+                level=level,
+                message=message,
+                step_index=step_index,
+            )
+        )
+
+    def _heartbeat(
+        self,
+        step_id: int,
+        step_name: str,
+        *,
+        run_state: RunState | None = None,
+        step_state: StepState = StepState.RUNNING,
+    ) -> None:
         if self.run_logger is None:
+            self._emit_heartbeat(step_id, run_state=run_state, step_state=step_state)
             return
         heartbeat = getattr(self.run_logger, "heartbeat", None)
         if heartbeat is not None:
-            heartbeat(step_id=step_id, step_name=step_name)
+            try:
+                heartbeat(
+                    step_id=step_id,
+                    step_name=step_name,
+                    run_state=(run_state or self._run_state).value,
+                    step_state=step_state.value,
+                )
+            except TypeError:
+                heartbeat(step_id=step_id, step_name=step_name)
+        self._emit_heartbeat(step_id, run_state=run_state, step_state=step_state)
+
+    def _emit_heartbeat(
+        self,
+        step_id: int,
+        *,
+        run_state: RunState | None,
+        step_state: StepState,
+    ) -> None:
+        if self._run_id is None:
+            return
+        self._emit_runtime_event(
+            Heartbeat(
+                **self._runtime_event_fields(),
+                run_state=run_state or self._run_state,
+                step_index=step_id,
+                step_state=step_state,
+            )
+        )
+
+    def _runtime_event_fields(self) -> dict[str, Any]:
+        if self._run_id is None:
+            raise RuntimeError("runtime run id is not initialized")
+        sequence = self._event_sequence
+        self._event_sequence += 1
+        return {"run_id": self._run_id, "sequence": sequence}
+
+    def _emit_runtime_event(self, event: RuntimeEvent) -> None:
+        if self.runtime_event_callback is not None:
+            self.runtime_event_callback(event)
+
+    def _finish_run_logger(self, *, summary: RunSummary, final_state: RunState) -> None:
+        finish = getattr(self.run_logger, "finish", None)
+        if finish is None:
+            return
+        try:
+            finish(success=summary.success, final_state=final_state.value)
+        except TypeError:
+            finish(success=summary.success)
 
     def _start_wait_overlay(self, step: ExecutableStep) -> Any:
         if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):
@@ -281,12 +526,83 @@ class WorkflowExecutor:
         )
 
 
-def _deny_confirmation(prompt: str) -> bool:
+def _deny_confirmation(prompt: ConfirmationRequest | str) -> bool:
     return False
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _duration_seconds(started_at: datetime | None, ended_at: datetime) -> float | None:
+    if started_at is None:
+        return None
+    return max((ended_at - started_at).total_seconds(), 0.0)
+
+
+def _runtime_step_state(status: str) -> StepState:
+    return {
+        "dry-run": StepState.SUCCESS,
+        "success": StepState.SUCCESS,
+        "failed": StepState.FAILED,
+        "cancelled": StepState.CANCELLED,
+        "skipped": StepState.SKIPPED,
+    }.get(status, StepState.FAILED)
+
+
+def _active_run_state_for_step(step: ExecutableStep) -> RunState:
+    if _is_wait_step(step):
+        return RunState.WAITING
+    return RunState.RUNNING
+
+
+def _active_step_state_for_step(step: ExecutableStep) -> StepState:
+    if _is_wait_step(step):
+        return StepState.WAITING
+    return StepState.RUNNING
+
+
+def _is_wait_step(step: ExecutableStep) -> bool:
+    return step.action == "window.wait" or step.action.startswith("wait.")
+
+
+def _runtime_result_message(result: StepResult) -> str | None:
+    if result.action == "browser.open":
+        if result.dry_run:
+            return "would open URL"
+        if result.status == "success":
+            return "opened URL"
+        return "browser.open did not complete"
+    return result.message or None
+
+
+def _final_run_state(
+    summary: RunSummary,
+    *,
+    steps_total: int,
+    stop_requested: bool,
+) -> RunState:
+    if any(result.status == "failed" for result in summary.results):
+        return RunState.FAILED
+    if stop_requested or any(result.status == "cancelled" for result in summary.results):
+        return RunState.STOPPED
+    if len(summary.results) < steps_total:
+        return RunState.STOPPED
+    if summary.success:
+        return RunState.SUCCESS
+    return RunState.STOPPED
+
+
+def _run_finished_message(state: RunState) -> str:
+    if state == RunState.SUCCESS:
+        return "run completed"
+    if state == RunState.FAILED:
+        return "run failed"
+    if state == RunState.STOPPED:
+        return "run stopped"
+    if state == RunState.INTERRUPTED:
+        return "run interrupted"
+    return f"run ended with state {state.value}"
 
 
 def _preview_label(step: ExecutableStep) -> str | None:

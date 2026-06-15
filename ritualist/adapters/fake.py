@@ -18,6 +18,16 @@ class RecordingAdapter:
         if name in self.failures:
             raise self.failures[name]
 
+    def response(self, name: str, default: Any) -> Any:
+        value = self.responses.get(name, default)
+        if isinstance(value, list):
+            if len(value) > 1:
+                return value.pop(0)
+            if value:
+                return value[0]
+            return default
+        return value
+
 
 class FakeShellAdapter(RecordingAdapter):
     def launch(self, **kwargs: Any) -> None:
@@ -28,7 +38,7 @@ class FakeShellAdapter(RecordingAdapter):
 
     def process_running(self, process_name: str, *, timeout_seconds: float = 0) -> bool:
         self.record("process_running", process_name, timeout_seconds=timeout_seconds)
-        return bool(self.responses.get("process_running", True))
+        return bool(self.response("process_running", True))
 
 
 class FakeBrowserAdapter(RecordingAdapter):
@@ -55,13 +65,13 @@ class FakeBrowserAdapter(RecordingAdapter):
 
     def text_visible(self, **kwargs: Any) -> bool:
         self.record("text_visible", **kwargs)
-        return bool(self.responses.get("text_visible", True))
+        return bool(self.response("text_visible", True))
 
 
 class FakeWindowAdapter(RecordingAdapter):
     def window_exists(self, **kwargs: Any) -> bool:
         self.record("window_exists", **kwargs)
-        return bool(self.responses.get("window_exists", True))
+        return bool(self.response("window_exists", True))
 
     def find_window_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_window_region", **kwargs)
@@ -86,7 +96,7 @@ class FakeWindowAdapter(RecordingAdapter):
 class FakeDesktopAdapter(RecordingAdapter):
     def text_visible(self, **kwargs: Any) -> bool:
         self.record("text_visible", **kwargs)
-        return bool(self.responses.get("text_visible", True))
+        return bool(self.response("text_visible", True))
 
     def find_text_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_text_region", **kwargs)
