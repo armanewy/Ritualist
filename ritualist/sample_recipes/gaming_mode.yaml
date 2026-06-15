@@ -6,6 +6,24 @@ variables:
   youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
   battle_net_path: 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'
   battle_net_window: Battle.net
+environment:
+  os:
+    - windows
+  required_capabilities:
+    - playwright
+    - windows_uia
+    - app_launch
+    - browser_control
+    - window_management
+  expected_windows:
+    - title_contains: "{{ battle_net_window }}"
+  expected_labels:
+    - window_title_contains: "{{ battle_net_window }}"
+      text: Play
+  variable_hints:
+    youtube_url: Set this to the ambience video URL you want to keep open.
+    battle_net_path: Set this to your local Battle.net Launcher.exe path.
+    battle_net_window: Set this to the visible title text of the Battle.net window.
 steps:
   - name: Open ambience video
     action: browser.open

@@ -3,10 +3,22 @@ from __future__ import annotations
 from ritualist.models import WindowFocusStep, WindowMaximizeStep, WindowMinimizeStep, WindowWaitStep
 
 from .base import ActionContext
+from .metadata import ActionMetadata, WINDOWS_ONLY
 
 
 class WindowFocusHandler:
     action_type = "window.focus"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=(),
+        optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
+        required_capabilities=("windows_uia", "window_management"),
+        platform_support=WINDOWS_ONLY,
+        side_effect_level="controls_ui",
+        confirmation_policy="optional",
+        allowed_in_imported_packs=False,
+    )
 
     def run(self, step: WindowFocusStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
@@ -20,6 +32,17 @@ class WindowFocusHandler:
 
 class WindowMinimizeHandler:
     action_type = "window.minimize"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=(),
+        optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
+        required_capabilities=("windows_uia", "window_management"),
+        platform_support=WINDOWS_ONLY,
+        side_effect_level="controls_ui",
+        confirmation_policy="optional",
+        allowed_in_imported_packs=False,
+    )
 
     def run(self, step: WindowMinimizeStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
@@ -33,6 +56,17 @@ class WindowMinimizeHandler:
 
 class WindowMaximizeHandler:
     action_type = "window.maximize"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=(),
+        optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
+        required_capabilities=("windows_uia", "window_management"),
+        platform_support=WINDOWS_ONLY,
+        side_effect_level="controls_ui",
+        confirmation_policy="optional",
+        allowed_in_imported_packs=False,
+    )
 
     def run(self, step: WindowMaximizeStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
@@ -46,6 +80,17 @@ class WindowMaximizeHandler:
 
 class WindowWaitHandler:
     action_type = "window.wait"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=(),
+        optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
+        required_capabilities=("windows_uia", "window_management"),
+        platform_support=WINDOWS_ONLY,
+        side_effect_level="read_only",
+        confirmation_policy="never",
+        allowed_in_imported_packs=True,
+    )
 
     def run(self, step: WindowWaitStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 30.0

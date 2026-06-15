@@ -8,6 +8,7 @@
 - Improved risky-action confirmation prompts with step, action, window, and target details.
 - Added UI config options for action overlays, overlay duration, and desktop click previews.
 - Added read-only assertion actions and optional assertion-only `preflight`/`verify` recipe sections.
+- Added Capability Doctor v2 with action metadata, environment contracts, compatibility scoring, JSON output, capability checks, and missing-variable setup hints.
 
 ## v0.1.0-alpha.1
 

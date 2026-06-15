@@ -5,7 +5,7 @@ from textwrap import dedent
 import pytest
 
 from ritualist.errors import RecipeValidationError
-from ritualist.recipe_loader import load_recipe, load_recipe_reference
+from ritualist.recipe_loader import load_recipe, load_recipe_for_diagnostics, load_recipe_reference
 
 
 def test_load_recipe_renders_variables(tmp_path):
@@ -70,6 +70,71 @@ def test_load_recipe_supports_preflight_and_verify_assertions(tmp_path):
         "app.launch",
         "assert.window_text_visible",
     ]
+
+
+def test_load_recipe_supports_environment_contract(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            variables:
+              app_window: Vendor App
+            environment:
+              os:
+                - windows
+              required_capabilities:
+                - windows_uia
+              expected_windows:
+                - title_contains: "{{ app_window }}"
+              expected_labels:
+                - window_title_contains: "{{ app_window }}"
+                  text: Connected
+              variable_hints:
+                app_window: Use the visible app title.
+            steps:
+              - action: window.wait
+                title_contains: "{{ app_window }}"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.environment.os == ["windows"]
+    assert recipe.environment.required_capabilities == ["windows_uia"]
+    assert recipe.environment.expected_windows[0].title_contains == "Vendor App"
+    assert recipe.environment.expected_labels[0].text == "Connected"
+    assert recipe.environment.variable_hints["app_window"] == "Use the visible app title."
+
+
+def test_load_recipe_for_diagnostics_reports_missing_variables(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            environment:
+              variable_hints:
+                app_path: Set this to the local executable path.
+            steps:
+              - action: app.launch
+                command: "${app_path}"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe, _raw, missing = load_recipe_for_diagnostics(path)
+
+    assert missing == ["app_path"]
+    assert recipe.steps[0].command == "__MISSING_app_path__"
+    assert recipe.environment.variable_hints["app_path"] == "Set this to the local executable path."
 
 
 def test_preflight_rejects_mutating_actions(tmp_path):

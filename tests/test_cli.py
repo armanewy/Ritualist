@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from typer.testing import CliRunner
 
 from ritualist.adapters.fake import FakeAdapters
@@ -308,7 +310,10 @@ def test_doctor_reports_recipe_checks(tmp_path, monkeypatch):
         }
     )
 
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
     monkeypatch.setattr("ritualist.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
     monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
     monkeypatch.setattr(
@@ -344,7 +349,10 @@ def test_doctor_reports_assertion_checks(monkeypatch):
             ],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
     monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
     monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
 
@@ -366,7 +374,10 @@ def test_doctor_warns_when_browser_assertion_has_no_browser_open(monkeypatch):
             "verify": [{"action": "assert.browser_text_visible", "text": "Ready"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
     monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
@@ -408,6 +419,169 @@ def test_doctor_no_strict_prints_errors_but_exits_zero(monkeypatch):
 
     assert result.exit_code == 0
     assert "ritualist[browser]" in result.output
+
+
+def test_doctor_json_outputs_stable_shape(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "doctor.v2"
+    assert data["recipe"] == {"id": "runbook", "name": "Runbook"}
+    assert data["compatibility"]["status"] == "compatible"
+    assert isinstance(data["compatibility"]["score"], int)
+    assert isinstance(data["checks"], list)
+    assert data["action_metadata"][0]["action"] == "app.launch"
+
+
+def test_doctor_reports_missing_capability(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {"required_capabilities": ["windows_uia"]},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 1
+    assert "windows_uia" in result.output
+    assert "incompatible" in result.output
+
+
+def test_doctor_reports_platform_mismatch(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {"os": ["windows"]},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 1
+    assert "recipe expects OS windows" in result.output
+
+
+def test_doctor_reports_missing_variable_with_setup_hint(tmp_path, monkeypatch):
+    path = tmp_path / "runbook.yaml"
+    path.write_text(
+        """
+version: "0.1"
+id: runbook
+name: Runbook
+environment:
+  variable_hints:
+    app_path: Set this to your local executable path.
+steps:
+  - action: app.launch
+    command: "${app_path}"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+
+    result = CliRunner().invoke(app, ["doctor", str(path)])
+
+    assert result.exit_code == 1
+    assert "missing variable 'app_path'" in result.output
+    assert "Set this to your local executable path." in result.output
+
+
+def test_doctor_reports_missing_app_path(tmp_path, monkeypatch):
+    missing = tmp_path / "missing.exe"
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "steps": [{"action": "app.launch", "command": str(missing)}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 1
+    assert "path does not exist" in result.output
+    assert str(missing) in result.output
+
+
+def test_doctor_checks_expected_windows_and_labels(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {
+                "expected_windows": [{"title_contains": "Vendor App"}],
+                "expected_labels": [
+                    {"window_title_contains": "Vendor App", "text": "Connected"}
+                ],
+            },
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    window_calls = []
+    label_calls = []
+
+    def window_exists(self, **kwargs):
+        window_calls.append(kwargs)
+        return True
+
+    def text_visible(self, **kwargs):
+        label_calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr(
+        "ritualist.adapters.window_manager.WindowsWindowManager.window_exists",
+        window_exists,
+    )
+    monkeypatch.setattr(
+        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
+        text_visible,
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 0
+    assert "expected window found: Vendor App" in result.output
+    assert "expected label found: 'Connected' in 'Vendor App'" in result.output
+    assert window_calls[0]["title_contains"] == "Vendor App"
+    assert label_calls[0]["text"] == "Connected"
 
 
 def test_successful_run_with_keep_open_recipe_requests_keep_alive(monkeypatch):

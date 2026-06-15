@@ -199,6 +199,44 @@ WorkflowStep = Annotated[
 ExecutableStep = WorkflowStep | AssertionStep
 
 
+class ExpectedWindow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title_contains: str | None = None
+    process_name: str | None = None
+
+    @model_validator(mode="after")
+    def require_window_matcher(self) -> "ExpectedWindow":
+        if not self.title_contains and not self.process_name:
+            raise ValueError("provide title_contains or process_name")
+        return self
+
+
+class ExpectedLabel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    window_title_contains: str
+    text: str
+    control_type: str | None = None
+    exact: bool = True
+
+    @model_validator(mode="after")
+    def enforce_window_scope(self) -> "ExpectedLabel":
+        if not self.window_title_contains.strip():
+            raise SafetyError("expected_labels requires window_title_contains")
+        return self
+
+
+class EnvironmentContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    os: list[Literal["windows", "macos", "linux"]] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
+    expected_windows: list[ExpectedWindow] = Field(default_factory=list)
+    expected_labels: list[ExpectedLabel] = Field(default_factory=list)
+    variable_hints: dict[str, str] = Field(default_factory=dict)
+
+
 class Recipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -207,6 +245,7 @@ class Recipe(BaseModel):
     name: str
     description: str | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
+    environment: EnvironmentContract = Field(default_factory=EnvironmentContract)
     preflight: list[AssertionStep] = Field(default_factory=list)
     steps: list[WorkflowStep] = Field(min_length=1)
     verify: list[AssertionStep] = Field(default_factory=list)

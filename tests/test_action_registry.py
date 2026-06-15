@@ -26,3 +26,22 @@ def test_default_registry_contains_supported_actions():
         "window.minimize",
         "window.wait",
     ]
+
+
+def test_registered_actions_declare_metadata():
+    registry = create_default_registry()
+
+    for action_type in registry.action_types():
+        metadata = registry.metadata(action_type)
+        assert metadata.action == action_type
+        assert metadata.schema_version == "0.1"
+        assert metadata.side_effect_level in {
+            "read_only",
+            "launches_app",
+            "controls_ui",
+            "types_input",
+            "modifies_files",
+            "risky",
+        }
+        assert metadata.confirmation_policy in {"never", "optional", "required_for_play", "always"}
+        assert isinstance(metadata.allowed_in_imported_packs, bool)

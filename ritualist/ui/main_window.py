@@ -215,8 +215,12 @@ class MainWindow(QMainWindow):
             self.append_log(f"doctor error: {exc}")
             show_error(self, "Doctor Failed", str(exc))
             return
+        current_section = None
         for check in checks:
-            self.append_log(f"{check.status}: {check.name} - {check.message}")
+            if check.section != current_section:
+                current_section = check.section
+                self.append_log(f"{current_section}:")
+            self.append_log(f"  {check.status}: {check.name} - {check.message}")
 
     def populate_steps(self) -> None:
         self.steps_table.setRowCount(0)

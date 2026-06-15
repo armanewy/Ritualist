@@ -3,10 +3,22 @@ from __future__ import annotations
 from ritualist.models import AppLaunchStep, AppWaitProcessStep
 
 from .base import ActionContext
+from .metadata import ALL_PLATFORMS, ActionMetadata
 
 
 class AppLaunchHandler:
     action_type = "app.launch"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=("command",),
+        optional_params=("args", "cwd", "wait", "env", "name", "optional", "timeout_seconds"),
+        required_capabilities=("app_launch",),
+        platform_support=ALL_PLATFORMS,
+        side_effect_level="launches_app",
+        confirmation_policy="optional",
+        allowed_in_imported_packs=False,
+    )
 
     def run(self, step: AppLaunchStep, context: ActionContext) -> str:
         context.adapters.shell.launch(
@@ -21,6 +33,17 @@ class AppLaunchHandler:
 
 class AppWaitProcessHandler:
     action_type = "app.wait_process"
+    metadata = ActionMetadata(
+        action=action_type,
+        schema_version="0.1",
+        required_params=("process_name",),
+        optional_params=("timeout_seconds", "name", "optional"),
+        required_capabilities=("process_inspection",),
+        platform_support=ALL_PLATFORMS,
+        side_effect_level="read_only",
+        confirmation_policy="never",
+        allowed_in_imported_packs=True,
+    )
 
     def run(self, step: AppWaitProcessStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 30.0

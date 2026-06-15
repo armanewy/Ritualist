@@ -11,7 +11,7 @@ from rich.table import Table
 from .actions.registry import create_default_registry
 from .adapters import create_default_adapters
 from .app_setup import initialize_app
-from .doctor import diagnose_recipe
+from .doctor import build_doctor_report
 from .errors import RitualistError
 from .executor import WorkflowExecutor
 from .logging_setup import setup_logging
@@ -25,7 +25,7 @@ from .paths import (
     recipes_dir,
     runs_dir,
 )
-from .recipe_loader import discover_recipes, load_recipe_reference
+from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
 from .run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
@@ -268,26 +268,55 @@ def doctor(
         bool,
         typer.Option("--no-strict", help="Always exit 0 after printing doctor checks."),
     ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Doctor v2 JSON."),
+    ] = False,
 ) -> None:
     """Validate recipe health without launching apps, opening browsers, or clicking."""
     try:
-        parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
+        parsed, _raw, missing_variables = load_recipe_for_diagnostics(
+            recipe,
+            _parse_vars(var_values or []),
+        )
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
 
-    checks = diagnose_recipe(parsed)
-    table = Table(title=f"Doctor: {escape(parsed.name)} ({escape(parsed.id)})")
-    table.add_column("Status")
-    table.add_column("Check")
-    table.add_column("Message")
+    report = build_doctor_report(parsed, missing_variables=missing_variables)
+    if json_output:
+        console.print_json(data=report.to_dict())
+        if not no_strict and report.compatibility == "incompatible":
+            raise typer.Exit(1)
+        return
+
+    checks = report.checks
+    table = Table(
+        title=(
+            f"Doctor: {escape(parsed.name)} ({escape(parsed.id)}) - "
+            f"{escape(report.compatibility)} ({report.compatibility_score})"
+        )
+    )
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Section", no_wrap=True)
+    table.add_column("Check", no_wrap=True)
+    table.add_column("Message", overflow="fold")
     styles = {"ok": "green", "warn": "yellow", "error": "red", "info": "cyan"}
     for check in checks:
         style = styles.get(check.status, "")
         status = f"[{style}]{escape(check.status)}[/]" if style else escape(check.status)
-        table.add_row(status, escape(check.name), escape(check.message))
+        table.add_row(status, escape(check.section), escape(check.name), escape(check.message))
     console.print(table)
-    if not no_strict and any(check.status == "error" for check in checks):
+    console.print("[bold]Doctor details[/]")
+    for check in checks:
+        console.print(
+            f"{escape(check.status)} | "
+            f"{escape(check.section)} | "
+            f"{escape(check.name)} | "
+            f"{escape(check.message)}",
+            soft_wrap=True,
+        )
+    if not no_strict and report.compatibility == "incompatible":
         raise typer.Exit(1)
 
 

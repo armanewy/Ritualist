@@ -20,6 +20,25 @@ def render_template_data(data: Any, variables: Mapping[str, Any]) -> Any:
     return data
 
 
+def collect_template_variables(data: Any) -> set[str]:
+    if isinstance(data, str):
+        return {
+            *(match.group(1) for match in _PLACEHOLDER_RE.finditer(data)),
+            *(match.group(1) for match in _DOLLAR_PLACEHOLDER_RE.finditer(data)),
+        }
+    if isinstance(data, list):
+        variables: set[str] = set()
+        for item in data:
+            variables.update(collect_template_variables(item))
+        return variables
+    if isinstance(data, dict):
+        variables: set[str] = set()
+        for value in data.values():
+            variables.update(collect_template_variables(value))
+        return variables
+    return set()
+
+
 def render_string(value: str, variables: Mapping[str, Any]) -> Any:
     full_match = _PLACEHOLDER_RE.fullmatch(value)
     if full_match:

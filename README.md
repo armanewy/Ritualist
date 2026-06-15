@@ -41,6 +41,7 @@ ritualist init
 ritualist list
 ritualist validate gaming_mode
 ritualist doctor gaming_mode
+ritualist doctor gaming_mode --json
 ritualist dry-run gaming_mode
 ritualist run gaming_mode --var youtube_url=https://www.youtube.com/watch?v=...
 ```
@@ -103,6 +104,22 @@ variables:
   youtube_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
   battle_net_window: Battle.net
   battle_net_app: C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe
+environment:
+  os:
+    - windows
+  required_capabilities:
+    - playwright
+    - windows_uia
+    - app_launch
+    - browser_control
+    - window_management
+  expected_windows:
+    - title_contains: "{{ battle_net_window }}"
+  expected_labels:
+    - window_title_contains: "{{ battle_net_window }}"
+      text: Play
+  variable_hints:
+    battle_net_app: Set this to your local Battle.net Launcher.exe path.
 preflight:
   - name: Battle.net is installed
     action: assert.file_exists
@@ -132,6 +149,22 @@ verify:
 ```
 
 The recipe exposes only structured actions. It does not permit arbitrary Python or recipe-supplied JavaScript.
+
+`environment` is optional and lets a recipe describe the machine it expects. Doctor uses it to report OS compatibility, required capabilities, expected windows/labels, and setup hints for missing variables. Doctor summarizes compatibility as `compatible`, `compatible_with_warnings`, or `incompatible`, with machine-readable output available through `ritualist doctor <recipe> --json`.
+
+Supported capability names include:
+
+- `playwright`
+- `windows_uia`
+- `app_launch`
+- `browser_control`
+- `window_management`
+- `keyboard_input`
+- `file_read`
+- `file_write`
+- `registry_read`
+- `registry_write`
+- `process_inspection`
 
 `preflight` and `verify` are optional assertion-only sections. They run before and after `steps`, respectively, and are intended for read-only checks:
 
