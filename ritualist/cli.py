@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 import time
 from typing import Annotated
 
@@ -403,6 +404,22 @@ def show_run(
     table.add_column("Value")
     for key in ("recipe_id", "recipe_name", "status", "dry_run", "started_at", "ended_at"):
         table.add_row(escape(key), escape(str(metadata.get(key, ""))))
+    for key in ("current_run_state", "current_step_state", "final_state"):
+        if _metadata_has_value(metadata, key):
+            table.add_row(escape(key), escape(str(metadata.get(key, ""))))
+    if _metadata_has_value(metadata, "run_state_history"):
+        table.add_row(
+            "run_state_history",
+            escape(_format_state_history(metadata.get("run_state_history"))),
+        )
+    if _metadata_has_value(metadata, "event_summaries"):
+        table.add_row(
+            "event_summaries",
+            escape(_format_event_summaries(metadata.get("event_summaries"))),
+        )
+    for key in ("wait_metadata", "paused_metadata", "confirming_metadata"):
+        if _metadata_has_value(metadata, key):
+            table.add_row(escape(key), escape(_format_metadata_value(metadata.get(key))))
     if metadata.get("final_message"):
         table.add_row("final_message", escape(str(metadata.get("final_message", ""))))
     table.add_row("path", escape(str(record.path)))
@@ -710,6 +727,50 @@ def _print_paths(paths: dict[str, object]) -> None:
 def _print_reconciled_runs(repaired: list[object]) -> None:
     for repair in repaired:
         console.print(f"Marked {escape(repair.run_id)} as interrupted.")
+
+
+def _metadata_has_value(metadata: dict[str, object], key: str) -> bool:
+    value = metadata.get(key)
+    return value not in (None, "", [], {})
+
+
+def _format_state_history(value: object) -> str:
+    if not isinstance(value, list):
+        return _format_metadata_value(value)
+    states: list[str] = []
+    for entry in value:
+        if isinstance(entry, dict):
+            state = entry.get("state")
+            if state is not None:
+                states.append(str(state))
+        elif entry is not None:
+            states.append(str(entry))
+    return " -> ".join(states) if states else _format_metadata_value(value)
+
+
+def _format_event_summaries(value: object) -> str:
+    if not isinstance(value, list):
+        return _format_metadata_value(value)
+    labels: list[str] = []
+    for entry in value[-5:]:
+        if isinstance(entry, dict):
+            event = entry.get("event")
+            run_state = entry.get("run_state")
+            step_state = entry.get("step_state")
+            label = str(event) if event is not None else _format_metadata_value(entry)
+            states = [str(state) for state in (run_state, step_state) if state is not None]
+            if states:
+                label = f"{label} ({'/'.join(states)})"
+            labels.append(label)
+        elif entry is not None:
+            labels.append(str(entry))
+    return "; ".join(labels) if labels else _format_metadata_value(value)
+
+
+def _format_metadata_value(value: object) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
 
 
 def _performance_payload(report: PerformanceReport, **extra: object) -> dict[str, object]:

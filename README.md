@@ -96,7 +96,7 @@ Remove-Item Env:\RITUALIST_RUNTIME_SMOKE
 
 ## Performance
 
-See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract, runtime event rules, and performance budgets.
+See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract, runtime event rules, and performance budgets. See [RUNTIME.md](RUNTIME.md) for Runtime v2 run states, step states, events, controls, waits, and GUI/Home integration rules.
 
 ### Performance Non-Negotiables
 

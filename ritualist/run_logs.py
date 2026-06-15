@@ -14,6 +14,9 @@ from .models import Recipe
 from .paths import runs_dir
 
 
+RUN_LOG_SCHEMA_VERSION = 2
+
+
 @dataclass(frozen=True)
 class RunRecord:
     run_id: str
@@ -51,6 +54,7 @@ class RunLogWriter:
             "process_id": os.getpid(),
             "process_start_time": _current_process_start_time(),
             "run_writer_id": self._run_writer_id,
+            "run_log_schema_version": RUN_LOG_SCHEMA_VERSION,
             "pyinstaller_bundle": _is_pyinstaller_bundle(),
             "started_at": started_at,
             "ended_at": None,
@@ -58,6 +62,26 @@ class RunLogWriter:
             "last_step_id": None,
             "last_step_name": None,
             "final_message": None,
+            "current_run_state": "running",
+            "current_step_state": None,
+            "final_state": None,
+            "run_state_history": [
+                {
+                    "at": started_at,
+                    "state": "running",
+                    "event": "run.started",
+                }
+            ],
+            "event_summaries": [
+                {
+                    "at": started_at,
+                    "event": "run.started",
+                    "run_state": "running",
+                }
+            ],
+            "wait_metadata": None,
+            "paused_metadata": None,
+            "confirming_metadata": None,
             "steps_total": len(recipe.execution_steps),
             "steps_completed": 0,
         }
@@ -72,6 +96,17 @@ class RunLogWriter:
             self._metadata["last_step_id"] = step_id
         if step_name is not None:
             self._metadata["last_step_name"] = step_name
+        if step_id is not None or step_name is not None:
+            if self._metadata.get("current_step_state") != "running":
+                self._metadata["current_step_state"] = "running"
+            if self._metadata.get("current_run_state") != "running":
+                self._set_run_state("running", event="run.state_changed")
+            self._append_event_summary(
+                "heartbeat",
+                step_state="running",
+                step_id=step_id,
+                step_name=step_name,
+            )
         self._write_run_json()
 
     def write_step(self, result: StepResult) -> None:
@@ -94,16 +129,89 @@ class RunLogWriter:
         self._metadata["last_step_id"] = result.index
         self._metadata["last_step_name"] = result.step_name
         self._metadata["last_heartbeat_at"] = _now_iso()
+        step_state = _runtime_step_state(result.status)
+        self._metadata["current_step_state"] = step_state
+        self._append_event_summary(
+            "step.finished",
+            step_state=step_state,
+            step_id=result.index,
+            step_name=result.step_name,
+            action=result.action,
+            message=_safe_message(result),
+        )
         self._write_run_json()
 
     def finish(self, *, success: bool) -> None:
         if self._run_json is None:
             return
-        self._metadata["status"] = "success" if success else "stopped"
+        final_state = "success" if success else "stopped"
+        self._metadata["status"] = final_state
         self._metadata["ended_at"] = _now_iso()
         self._metadata["last_heartbeat_at"] = self._metadata["ended_at"]
         self._metadata["final_message"] = None
+        self._metadata["final_state"] = final_state
+        self._set_run_state(final_state, event="run.finished")
+        self._append_event_summary("run.finished", run_state=final_state)
+        self._clear_transient_metadata()
         self._write_run_json()
+
+    def record_run_state(
+        self,
+        state: str,
+        *,
+        event: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if self._run_json is None:
+            return
+        self._metadata["last_heartbeat_at"] = _now_iso()
+        self._set_run_state(state, event=event, message=message, metadata=metadata)
+        self._append_event_summary(
+            event or "run.state_changed",
+            run_state=state,
+            message=message,
+            metadata=metadata,
+        )
+        self._write_run_json()
+
+    def record_step_state(
+        self,
+        state: str,
+        *,
+        step_id: int | None = None,
+        step_name: str | None = None,
+        action: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if self._run_json is None:
+            return
+        self._metadata["last_heartbeat_at"] = _now_iso()
+        if step_id is not None:
+            self._metadata["last_step_id"] = step_id
+        if step_name is not None:
+            self._metadata["last_step_name"] = step_name
+        self._metadata["current_step_state"] = state
+        self._append_event_summary(
+            _event_for_step_state(state),
+            step_state=state,
+            step_id=step_id,
+            step_name=step_name,
+            action=action,
+            message=message,
+            metadata=metadata,
+        )
+        self._write_run_json()
+
+    def set_wait_metadata(self, metadata: dict[str, Any] | None) -> None:
+        self._set_transient_metadata("wait_metadata", metadata, event="step.waiting")
+
+    def set_paused_metadata(self, metadata: dict[str, Any] | None) -> None:
+        self._set_transient_metadata("paused_metadata", metadata, event="step.paused")
+
+    def set_confirming_metadata(self, metadata: dict[str, Any] | None) -> None:
+        self._set_transient_metadata("confirming_metadata", metadata, event="confirmation.requested")
 
     def _create_run_dir(self, recipe_id: str) -> Path:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -124,6 +232,77 @@ class RunLogWriter:
             encoding="utf-8",
         )
 
+    def _set_run_state(
+        self,
+        state: str,
+        *,
+        event: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        changed = self._metadata.get("current_run_state") != state
+        self._metadata["current_run_state"] = state
+        history = self._metadata.setdefault("run_state_history", [])
+        if changed or not history:
+            entry = {
+                "at": _now_iso(),
+                "state": state,
+                "event": event or "run.state_changed",
+            }
+            if message:
+                entry["message"] = message
+            if metadata:
+                entry["metadata"] = metadata
+            history.append(entry)
+
+    def _append_event_summary(
+        self,
+        event: str,
+        *,
+        run_state: str | None = None,
+        step_state: str | None = None,
+        step_id: int | None = None,
+        step_name: str | None = None,
+        action: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        entry: dict[str, Any] = {"at": _now_iso(), "event": event}
+        if run_state is not None:
+            entry["run_state"] = run_state
+        if step_state is not None:
+            entry["step_state"] = step_state
+        if step_id is not None:
+            entry["step_id"] = step_id
+        if step_name is not None:
+            entry["step_name"] = step_name
+        if action is not None:
+            entry["action"] = action
+        if message:
+            entry["message"] = message
+        if metadata:
+            entry["metadata"] = metadata
+        self._metadata.setdefault("event_summaries", []).append(entry)
+
+    def _set_transient_metadata(
+        self,
+        key: str,
+        metadata: dict[str, Any] | None,
+        *,
+        event: str,
+    ) -> None:
+        if self._run_json is None:
+            return
+        self._metadata["last_heartbeat_at"] = _now_iso()
+        self._metadata[key] = metadata
+        self._append_event_summary(event, metadata={key: metadata} if metadata else None)
+        self._write_run_json()
+
+    def _clear_transient_metadata(self) -> None:
+        self._metadata["wait_metadata"] = None
+        self._metadata["paused_metadata"] = None
+        self._metadata["confirming_metadata"] = None
+
 
 def _safe_message(result: StepResult) -> str:
     if result.action == "browser.open":
@@ -133,6 +312,26 @@ def _safe_message(result: StepResult) -> str:
             return "opened URL"
         return "browser.open did not complete"
     return result.message
+
+
+def _runtime_step_state(status: str) -> str:
+    if status == "dry-run":
+        return "success"
+    return status
+
+
+def _event_for_step_state(state: str) -> str:
+    if state == "running":
+        return "step.started"
+    if state == "waiting":
+        return "step.waiting"
+    if state == "paused":
+        return "step.paused"
+    if state == "confirming":
+        return "confirmation.requested"
+    if state in {"success", "failed", "cancelled", "skipped"}:
+        return "step.finished"
+    return "log.message"
 
 
 def _now_iso() -> str:
@@ -172,6 +371,22 @@ def reconcile_running_runs(
         metadata["interrupted_at"] = metadata["ended_at"]
         metadata["final_message"] = message
         metadata["interruption_reason"] = reason
+        metadata["current_run_state"] = "interrupted"
+        metadata["final_state"] = "interrupted"
+        _append_metadata_run_state(
+            metadata,
+            state="interrupted",
+            event="run.interrupted",
+            at=metadata["ended_at"],
+            message=message,
+        )
+        _append_metadata_event_summary(
+            metadata,
+            event="run.interrupted",
+            at=metadata["ended_at"],
+            run_state="interrupted",
+            message=message,
+        )
         _write_run_metadata(path, metadata)
         repaired.append(ReconciledRun(run_id=path.name, path=path, message=message))
     return repaired
@@ -239,6 +454,49 @@ def _write_run_metadata(path: Path, metadata: dict[str, Any]) -> None:
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+
+
+def _append_metadata_run_state(
+    metadata: dict[str, Any],
+    *,
+    state: str,
+    event: str,
+    at: str,
+    message: str | None = None,
+) -> None:
+    history = metadata.setdefault("run_state_history", [])
+    if not isinstance(history, list):
+        history = []
+        metadata["run_state_history"] = history
+    if history and history[-1].get("state") == state and history[-1].get("event") == event:
+        return
+    entry: dict[str, Any] = {"at": at, "state": state, "event": event}
+    if message:
+        entry["message"] = message
+    history.append(entry)
+
+
+def _append_metadata_event_summary(
+    metadata: dict[str, Any],
+    *,
+    event: str,
+    at: str,
+    run_state: str | None = None,
+    step_state: str | None = None,
+    message: str | None = None,
+) -> None:
+    summaries = metadata.setdefault("event_summaries", [])
+    if not isinstance(summaries, list):
+        summaries = []
+        metadata["event_summaries"] = summaries
+    entry: dict[str, Any] = {"at": at, "event": event}
+    if run_state is not None:
+        entry["run_state"] = run_state
+    if step_state is not None:
+        entry["step_state"] = step_state
+    if message:
+        entry["message"] = message
+    summaries.append(entry)
 
 
 def _interruption_reason(

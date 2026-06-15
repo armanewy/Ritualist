@@ -365,6 +365,67 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     assert "opened URL" in result.output
 
 
+def test_show_run_prints_runtime_v2_state_metadata(tmp_path, monkeypatch):
+    record = RunRecord(
+        run_id="20260615T120000Z_gaming_mode",
+        path=tmp_path / "20260615T120000Z_gaming_mode",
+        metadata={
+            "recipe_id": "gaming_mode",
+            "recipe_name": "Gaming Mode",
+            "status": "running",
+            "current_run_state": "confirming",
+            "current_step_state": "waiting",
+            "final_state": "interrupted",
+            "run_state_history": [
+                {"at": "2026-06-15T12:00:00+00:00", "state": "running"},
+                {"at": "2026-06-15T12:00:05+00:00", "state": "confirming"},
+            ],
+            "event_summaries": [
+                {"event": "run.started", "run_state": "running"},
+                {"event": "confirmation.requested", "run_state": "confirming"},
+            ],
+            "wait_metadata": {"reason": "window", "title_contains": "Battle.net"},
+            "paused_metadata": {"reason": "user"},
+            "confirming_metadata": {"action": "desktop.click_text", "target_text": "Play"},
+        },
+        steps=[],
+    )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+
+    result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
+
+    assert result.exit_code == 0
+    assert "current_run_state" in result.output
+    assert "confirming" in result.output
+    assert "current_step_state" in result.output
+    assert "waiting" in result.output
+    assert "final_state" in result.output
+    assert "interrupted" in result.output
+    assert "run_state_history" in result.output
+    assert "event_summaries" in result.output
+    assert "confirmation.requested" in result.output
+    assert "wait_metadata" in result.output
+    assert "confirming_metadata" in result.output
+
+
+def test_show_run_handles_missing_fields_gracefully(tmp_path, monkeypatch):
+    record = RunRecord(
+        run_id="20260615T120000Z_legacy",
+        path=tmp_path / "20260615T120000Z_legacy",
+        metadata={},
+        steps=[{}],
+    )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+
+    result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_legacy"])
+
+    assert result.exit_code == 0
+    assert "20260615T120000Z_legacy" in result.output
+    assert "Steps" in result.output
+
+
 def test_show_run_exits_one_for_unknown_run(monkeypatch):
     monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
     monkeypatch.setattr("ritualist.cli.load_run", lambda ref: None)
