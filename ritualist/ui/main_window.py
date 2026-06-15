@@ -27,6 +27,7 @@ from ritualist.doctor import diagnose_recipe
 from ritualist.errors import RitualistError
 from ritualist.executor import WorkflowExecutor
 from ritualist.logging_setup import setup_logging
+from ritualist.overlay import NullOverlayController
 from ritualist.paths import config_file, recipes_dir, runs_dir
 from ritualist.recipe_loader import discover_recipes, load_recipe
 from ritualist.run_logs import RunLogWriter, reconcile_running_runs
@@ -46,7 +47,7 @@ class MainWindow(QMainWindow):
         self.discovered_recipes: dict[str, Path] = {}
         self.runner: RunnerThread | None = None
         self._close_after_run_stops = False
-        self.overlay_controller = QtOverlayController()
+        self.overlay_controller, self._overlay_warning = self._create_overlay_controller()
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -121,6 +122,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.log)
 
         self.setCentralWidget(root)
+        if self._overlay_warning:
+            self.append_log(f"Action overlay unavailable: {self._overlay_warning}")
         self.reconcile_runs()
         self.refresh_recipes()
 
@@ -370,6 +373,12 @@ class MainWindow(QMainWindow):
 
     def append_log(self, message: str) -> None:
         self.log.appendPlainText(message)
+
+    def _create_overlay_controller(self):
+        try:
+            return QtOverlayController(), None
+        except Exception as exc:  # noqa: BLE001 - overlay must not prevent GUI startup.
+            return NullOverlayController(), str(exc)
 
     def _summary_requests_keep_open(self, summary) -> bool:
         for result in summary.results:

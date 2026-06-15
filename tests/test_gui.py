@@ -104,6 +104,25 @@ def test_main_window_marks_keep_open_active_on_reached_browser_step(tmp_path, mo
     window.close()
 
 
+def test_main_window_starts_when_overlay_controller_fails(monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    class BrokenOverlay:
+        def __init__(self) -> None:
+            raise RuntimeError("overlay unavailable")
+
+    monkeypatch.setattr(main_window, "reconcile_running_runs", lambda: [])
+    monkeypatch.setattr(main_window, "discover_recipes", lambda: [])
+    monkeypatch.setattr(main_window, "QtOverlayController", BrokenOverlay)
+
+    window = main_window.MainWindow()
+
+    assert app is not None
+    assert "Action overlay unavailable: overlay unavailable" in window.log.toPlainText()
+
+    window.close()
+
+
 class _FakeCloseEvent:
     def __init__(self) -> None:
         self.accepted = False

@@ -58,6 +58,7 @@ class WorkflowExecutor:
         self.stop_requested = stop_requested or (lambda: False)
         self.strict = strict
         self.config = config or load_app_config()
+        self._overlay_available = overlay is not None
         self.overlay = BestEffortOverlayController(overlay or NullOverlayController())
 
     def run(self, recipe: Recipe) -> RunSummary:
@@ -198,13 +199,13 @@ class WorkflowExecutor:
             heartbeat(step_id=step_id, step_name=step_name)
 
     def _start_wait_overlay(self, step: WorkflowStep) -> Any:
-        if not self.config.ui.show_action_overlay or not isinstance(step, WindowWaitStep):
+        if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):
             return None
         label = f"Waiting for {_window_match_label(step)}..."
         return self.overlay.start_wait(label)
 
     def _find_preview_region(self, step: WorkflowStep) -> TargetRegion | None:
-        if not self.config.ui.show_action_overlay:
+        if not self._visual_trust_enabled:
             return None
         try:
             if isinstance(step, DesktopClickTextStep):
@@ -243,7 +244,7 @@ class WorkflowExecutor:
         return None
 
     def _show_action_preview(self, step: WorkflowStep, region: TargetRegion | None) -> None:
-        if not self.config.ui.show_action_overlay:
+        if not self._visual_trust_enabled:
             return
         if isinstance(step, DesktopClickTextStep) and not self.config.ui.preview_desktop_clicks:
             return
@@ -259,6 +260,10 @@ class WorkflowExecutor:
             ),
             duration_ms=self.config.ui.overlay_duration_ms,
         )
+
+    @property
+    def _visual_trust_enabled(self) -> bool:
+        return self._overlay_available and self.config.ui.show_action_overlay
 
     def _confirmation_request(
         self,
