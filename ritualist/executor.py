@@ -28,6 +28,7 @@ class WorkflowExecutor:
         confirmer: ConfirmationCallback | None = None,
         status_callback: StatusCallback | None = None,
         logger: logging.Logger | None = None,
+        run_logger: object | None = None,
         strict: bool = False,
     ) -> None:
         if adapters is None:
@@ -40,11 +41,14 @@ class WorkflowExecutor:
         self.confirmer = confirmer or _deny_confirmation
         self.status_callback = status_callback
         self.logger = logger or logging.getLogger("ritualist")
+        self.run_logger = run_logger
         self.strict = strict
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
         total = len(recipe.steps)
+        if self.run_logger is not None:
+            self.run_logger.start(recipe, dry_run=self.dry_run)
         context = ActionContext(
             adapters=self.adapters,
             dry_run=self.dry_run,
@@ -101,12 +105,21 @@ class WorkflowExecutor:
                 dry_run=dry_run_step,
             )
             results.append(result)
+            if self.run_logger is not None:
+                self.run_logger.write_step(result)
             self._emit(index, total, step, status, message)
 
             if status in {"failed", "cancelled"}:
                 break
 
-        summary = RunSummary(recipe_name=recipe.name, results=results)
+        summary = RunSummary(
+            recipe_id=recipe.id,
+            recipe_name=recipe.name,
+            results=results,
+            run_dir=getattr(self.run_logger, "run_dir", None),
+        )
+        if self.run_logger is not None:
+            self.run_logger.finish(success=summary.success)
         if self.strict and not summary.success:
             raise ExecutionStoppedError("workflow stopped before completion", results)
         return summary

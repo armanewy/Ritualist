@@ -22,6 +22,7 @@ from ritualist.errors import RitualistError
 from ritualist.executor import WorkflowExecutor
 from ritualist.logging_setup import setup_logging
 from ritualist.recipe_loader import load_recipe
+from ritualist.run_logs import RunLogWriter
 
 from .dialogs import ask_confirmation, show_error
 from .runner_thread import RunnerThread
@@ -130,6 +131,7 @@ class MainWindow(QMainWindow):
             adapters=create_default_adapters(),
             dry_run=dry_run,
             logger=logger,
+            run_logger=RunLogWriter(),
         )
         self.runner = RunnerThread(executor, self.recipe)
         self.runner.log_message.connect(self.append_log)

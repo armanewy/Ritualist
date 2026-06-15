@@ -7,7 +7,8 @@ import yaml
 from pydantic import ValidationError
 
 from .errors import RecipeValidationError, SafetyError, TemplateError
-from .models import Recipe
+from .models import SAFE_ID_PATTERN, Recipe
+from .paths import recipes_dir
 from .templating import render_template_data
 
 
@@ -39,3 +40,36 @@ def load_recipe(path: str | Path, overrides: Mapping[str, Any] | None = None) ->
         raise RecipeValidationError(str(exc)) from exc
     except ValidationError as exc:
         raise RecipeValidationError(str(exc)) from exc
+
+
+def resolve_recipe_reference(recipe_id_or_path: str | Path) -> Path:
+    raw = Path(recipe_id_or_path)
+    if raw.exists() or raw.suffix in {".yaml", ".yml"} or raw.parent != Path("."):
+        return raw
+
+    recipe_id = str(recipe_id_or_path)
+    if not SAFE_ID_PATTERN.fullmatch(recipe_id):
+        raise RecipeValidationError(
+            "recipe id must be a safe filename-like identifier or a path to a YAML file"
+        )
+    candidate = recipes_dir() / f"{recipe_id}.yaml"
+    if not candidate.exists():
+        raise RecipeValidationError(f"recipe not found: {recipe_id}")
+    return candidate
+
+
+def load_recipe_reference(
+    recipe_id_or_path: str | Path,
+    overrides: Mapping[str, Any] | None = None,
+) -> Recipe:
+    return load_recipe(resolve_recipe_reference(recipe_id_or_path), overrides)
+
+
+def discover_recipes() -> list[tuple[Path, Recipe | None, str | None]]:
+    discovered: list[tuple[Path, Recipe | None, str | None]] = []
+    for path in sorted(recipes_dir().glob("*.y*ml")):
+        try:
+            discovered.append((path, load_recipe(path), None))
+        except RecipeValidationError as exc:
+            discovered.append((path, None, str(exc)))
+    return discovered

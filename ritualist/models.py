@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .errors import SafetyError
+
+SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 class StepBase(BaseModel):
@@ -24,6 +27,18 @@ class BrowserOpenStep(StepBase):
     action: Literal["browser.open"]
     url: str
     browser: Literal["chromium", "chrome", "msedge"] = "chromium"
+    profile: str = "default"
+    new_window: bool = False
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        if not SAFE_ID_PATTERN.fullmatch(value):
+            raise ValueError(
+                "profile must be a safe filename-like identifier "
+                "(letters, numbers, hyphen, underscore)"
+            )
+        return value
 
 
 class BrowserMediaStep(StepBase):
@@ -78,13 +93,15 @@ class WindowWaitStep(WindowMatchMixin, StepBase):
 class DesktopClickTextStep(StepBase):
     action: Literal["desktop.click_text"]
     text: str
-    window_title_contains: str | None = None
+    window_title_contains: str
     control_type: str | None = None
     exact: bool = True
     button: Literal["left", "right"] = "left"
 
     @model_validator(mode="after")
-    def require_confirmation_for_play(self) -> "DesktopClickTextStep":
+    def enforce_click_safety(self) -> "DesktopClickTextStep":
+        if not self.window_title_contains.strip():
+            raise SafetyError("desktop.click_text requires window_title_contains in v0.1")
         if self.text.strip().casefold() == "play" and not self.requires_confirmation:
             raise SafetyError("desktop.click_text with text 'Play' requires requires_confirmation: true")
         return self
@@ -125,6 +142,7 @@ class Recipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: str = "0.1"
+    id: str
     name: str
     description: str | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
@@ -135,4 +153,14 @@ class Recipe(BaseModel):
     def validate_version(cls, value: str) -> str:
         if value != "0.1":
             raise ValueError("only recipe version '0.1' is supported")
+        return value
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        if not SAFE_ID_PATTERN.fullmatch(value):
+            raise ValueError(
+                "id must be a safe filename-like identifier "
+                "(letters, numbers, hyphen, underscore)"
+            )
         return value

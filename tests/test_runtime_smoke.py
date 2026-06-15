@@ -34,6 +34,7 @@ def test_runtime_workflow_with_real_adapters() -> None:
     child_code = _native_button_window_code()
     recipe = Recipe.model_validate(
         {
+            "id": "runtime_e2e",
             "name": "Runtime E2E",
             "steps": [
                 {

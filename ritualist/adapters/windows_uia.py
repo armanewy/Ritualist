@@ -13,7 +13,7 @@ class WindowsUIAutomationAdapter:
         self,
         *,
         text: str,
-        window_title_contains: str | None,
+        window_title_contains: str,
         control_type: str | None,
         exact: bool,
         button: str,
@@ -30,18 +30,29 @@ class WindowsUIAutomationAdapter:
         desktop = Desktop(backend="uia")
         deadline = time.monotonic() + timeout_seconds
         matcher = _text_matcher(text, exact)
+        last_roots: list[Any] = []
 
         while time.monotonic() < deadline:
             roots = _candidate_roots(desktop, window_title_contains)
+            last_roots = roots
             for root in roots:
-                for element in _descendants(root, control_type):
+                for element in _preferred_descendants(root, control_type):
                     label = _element_text(element)
                     if matcher(label):
-                        element.click_input(button=button)
+                        _activate(element, button=button)
                         return
             time.sleep(0.25)
 
-        raise RitualistError(f"visible text not found within {timeout_seconds:g}s: {text}")
+        if not last_roots:
+            raise RitualistError(
+                f"target window not found within {timeout_seconds:g}s: {window_title_contains}"
+            )
+        candidates = _candidate_labels(last_roots, control_type)
+        suffix = f" Candidate labels: {', '.join(candidates)}" if candidates else " No visible labels found."
+        raise RitualistError(
+            f"visible text not found within {timeout_seconds:g}s in window "
+            f"'{window_title_contains}': {text}.{suffix}"
+        )
 
 
 class WindowsInputAdapter:
@@ -76,6 +87,58 @@ def _descendants(root: Any, control_type: str | None) -> list[Any]:
         return root.descendants()
     except Exception:  # noqa: BLE001
         return []
+
+
+def _preferred_descendants(root: Any, control_type: str | None) -> list[Any]:
+    descendants = _descendants(root, control_type)
+    return sorted(
+        descendants,
+        key=lambda element: (not _is_visible_enabled(element), _element_text(element).casefold()),
+    )
+
+
+def _is_visible_enabled(element: Any) -> bool:
+    try:
+        visible = bool(element.is_visible())
+    except Exception:  # noqa: BLE001
+        visible = True
+    try:
+        enabled = bool(element.is_enabled())
+    except Exception:  # noqa: BLE001
+        enabled = True
+    return visible and enabled
+
+
+def _activate(element: Any, *, button: str) -> None:
+    if button == "left":
+        try:
+            element.invoke()
+            return
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            element.iface_invoke.Invoke()
+            return
+        except Exception:  # noqa: BLE001
+            pass
+    element.click_input(button=button)
+
+
+def _candidate_labels(roots: list[Any], control_type: str | None, *, limit: int = 30) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for root in roots:
+        for element in _preferred_descendants(root, control_type):
+            if not _is_visible_enabled(element):
+                continue
+            label = _element_text(element).strip()
+            if not label or label in seen:
+                continue
+            labels.append(label)
+            seen.add(label)
+            if len(labels) >= limit:
+                return labels
+    return labels
 
 
 def _element_text(element: Any) -> str:

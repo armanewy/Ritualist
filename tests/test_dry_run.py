@@ -8,12 +8,14 @@ from ritualist.models import Recipe
 def test_dry_run_does_not_call_adapters_or_confirmation():
     recipe = Recipe.model_validate(
         {
+            "id": "dry",
             "name": "Dry",
             "steps": [
                 {"action": "browser.open", "url": "https://example.test"},
                 {
                     "action": "desktop.click_text",
                     "text": "Play",
+                    "window_title_contains": "Battle.net",
                     "requires_confirmation": True,
                 },
             ],

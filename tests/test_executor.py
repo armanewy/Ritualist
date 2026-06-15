@@ -8,6 +8,7 @@ from ritualist.models import Recipe
 def test_executor_runs_steps_in_order():
     recipe = Recipe.model_validate(
         {
+            "id": "run",
             "name": "Run",
             "steps": [
                 {"action": "browser.open", "url": "https://example.test"},
@@ -23,6 +24,8 @@ def test_executor_runs_steps_in_order():
     assert summary.success
     assert [result.status for result in summary.results] == ["success", "success", "success"]
     assert fakes.browser.calls[0][0] == "open_url"
+    assert fakes.browser.calls[0][2]["profile"] == "default"
+    assert fakes.browser.calls[0][2]["new_window"] is False
     assert fakes.browser.calls[1][0] == "configure_media"
     assert fakes.shell.calls[0][0] == "launch"
 
@@ -30,6 +33,7 @@ def test_executor_runs_steps_in_order():
 def test_executor_stops_on_required_failure():
     recipe = Recipe.model_validate(
         {
+            "id": "run",
             "name": "Run",
             "steps": [
                 {"action": "browser.open", "url": "https://example.test"},
@@ -51,9 +55,15 @@ def test_executor_stops_on_required_failure():
 def test_executor_continues_after_optional_failure():
     recipe = Recipe.model_validate(
         {
+            "id": "run",
             "name": "Run",
             "steps": [
-                {"action": "desktop.click_text", "text": "Diablo IV", "optional": True},
+                {
+                    "action": "desktop.click_text",
+                    "text": "Diablo IV",
+                    "window_title_contains": "Battle.net",
+                    "optional": True,
+                },
                 {"action": "app.launch", "command": "demo.exe"},
             ],
         }
@@ -71,11 +81,13 @@ def test_executor_continues_after_optional_failure():
 def test_executor_cancels_when_confirmation_declined():
     recipe = Recipe.model_validate(
         {
+            "id": "run",
             "name": "Run",
             "steps": [
                 {
                     "action": "desktop.click_text",
                     "text": "Play",
+                    "window_title_contains": "Battle.net",
                     "requires_confirmation": True,
                 }
             ],

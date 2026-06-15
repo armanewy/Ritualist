@@ -9,7 +9,12 @@ class BrowserOpenHandler:
     action_type = "browser.open"
 
     def run(self, step: BrowserOpenStep, context: ActionContext) -> str:
-        context.adapters.browser.open_url(step.url, browser=step.browser)
+        context.adapters.browser.open_url(
+            step.url,
+            browser=step.browser,
+            profile=step.profile,
+            new_window=step.new_window,
+        )
         return f"opened {step.url}"
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from logging import Logger
 from typing import Any, Protocol
 
@@ -47,8 +48,10 @@ class StepResult:
 
 @dataclass(frozen=True)
 class RunSummary:
+    recipe_id: str
     recipe_name: str
     results: list[StepResult]
+    run_dir: Path | None = None
 
     @property
     def success(self) -> bool:

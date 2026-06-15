@@ -5,12 +5,13 @@ Ritualist is a local-first Windows desktop workflow automation app for repeatabl
 This v0.1 implementation includes:
 
 - CLI runner: `ritualist run recipe.yaml`
+- Recipe initialization and discovery: `ritualist init`, `ritualist list`, `ritualist paths`
 - GUI launcher: `ritualist gui`
 - YAML recipe validation and variable templating
-- Browser URL/media automation through Playwright
+- Persistent browser profiles and URL/media automation through Playwright
 - Windows app/window/UI Automation adapters behind lazy imports
 - Dry-run execution
-- Step-by-step logging and status
+- Step-by-step logging, per-run logs, and status
 - Tests for the workflow engine using fake adapters
 
 ## Install
@@ -33,10 +34,14 @@ Windows-only actions raise clear errors if invoked on another OS or without the 
 ## Run A Ritual
 
 ```powershell
-ritualist validate ritualist\sample_recipes\gaming_mode.yaml
-ritualist run ritualist\sample_recipes\gaming_mode.yaml --dry-run
-ritualist run ritualist\sample_recipes\gaming_mode.yaml --var youtube_url=https://www.youtube.com/watch?v=...
+ritualist init
+ritualist list
+ritualist validate gaming_mode
+ritualist dry-run gaming_mode
+ritualist run gaming_mode --var youtube_url=https://www.youtube.com/watch?v=...
 ```
+
+Recipe arguments can be either a recipe id from the user recipes directory or a direct YAML path.
 
 Launch the GUI:
 
@@ -64,13 +69,16 @@ Remove-Item Env:\RITUALIST_RUNTIME_SMOKE
 
 ```yaml
 version: "0.1"
+id: gaming_mode
 name: Gaming Mode
 variables:
   youtube_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+  battle_net_window: Battle.net
 steps:
   - name: Open video
     action: browser.open
     url: "{{ youtube_url }}"
+    profile: gaming_mode
 
   - name: Loop and play video
     action: browser.media
@@ -81,6 +89,7 @@ steps:
   - name: Ask before Play
     action: desktop.click_text
     text: Play
+    window_title_contains: "{{ battle_net_window }}"
     requires_confirmation: true
 ```
 
@@ -89,6 +98,19 @@ The recipe exposes only structured actions. It does not permit arbitrary Python 
 ## Safety
 
 - Coordinate clicks are not implemented in v0.1.
+- `desktop.click_text` must be scoped with `window_title_contains`.
 - The workflow stops on the first failed step unless that step has `optional: true`.
 - Clicking visible text exactly equal to `Play` must include `requires_confirmation: true`.
 - No telemetry, accounts, cloud backend, or remote execution are present.
+
+## Local Data
+
+Use `ritualist paths` to inspect local directories. Ritualist creates:
+
+- `config`
+- `recipes`
+- `logs`
+- `runs`
+- `browser-profiles`
+
+Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
