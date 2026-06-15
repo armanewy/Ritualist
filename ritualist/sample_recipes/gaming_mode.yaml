@@ -12,6 +12,7 @@ steps:
     url: "{{ youtube_url }}"
     browser: chrome
     profile: gaming_mode
+    keep_open: true
 
   - name: Loop and play video
     action: browser.media

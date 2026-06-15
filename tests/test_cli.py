@@ -6,6 +6,7 @@ from ritualist.adapters.fake import FakeAdapters
 from ritualist.cli import app
 from ritualist.errors import DependencyMissingError
 from ritualist.models import Recipe
+from ritualist.adapters.windows_uia import WindowInspection
 
 
 class DummyRunLogWriter:
@@ -72,3 +73,137 @@ def test_exception_text_is_rich_escaped(monkeypatch):
 
     assert result.exit_code == 1
     assert "ritualist[gui]" in result.output
+
+
+def test_inspect_window_help_works():
+    result = CliRunner().invoke(app, ["inspect-window", "--help"])
+
+    assert result.exit_code == 0
+    assert "inspect-window" in result.output
+
+
+def test_doctor_help_works():
+    result = CliRunner().invoke(app, ["doctor", "--help"])
+
+    assert result.exit_code == 0
+    assert "recipe" in result.output
+
+
+def test_inspect_window_prints_labels(monkeypatch):
+    def inspect(self, *, title_contains: str, limit: int, control_type: str | None):
+        assert title_contains == "Battle.net"
+        assert limit == 2
+        assert control_type == "Button"
+        return [WindowInspection(title="Battle.net", labels=["Diablo IV", "Play"])]
+
+    monkeypatch.setattr(
+        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
+        inspect,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["inspect-window", "Battle.net", "--limit", "2", "--control-type", "Button"],
+    )
+
+    assert result.exit_code == 0
+    assert "Window:" in result.output
+    assert "Diablo IV" in result.output
+    assert "Play" in result.output
+
+
+def test_inspect_window_prints_json(monkeypatch):
+    monkeypatch.setattr(
+        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
+        lambda *_args, **_kwargs: [WindowInspection(title="Battle.net", labels=["Play"])],
+    )
+
+    result = CliRunner().invoke(app, ["inspect-window", "Battle.net", "--json"])
+
+    assert result.exit_code == 0
+    assert '"title": "Battle.net"' in result.output
+    assert '"Play"' in result.output
+
+
+def test_doctor_reports_recipe_checks(tmp_path, monkeypatch):
+    app_path = tmp_path / "Battle.net Launcher.exe"
+    app_path.write_text("", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "profile": "gaming_mode",
+                },
+                {"action": "app.launch", "command": str(app_path)},
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr(
+        "ritualist.doctor.importlib.util.find_spec",
+        lambda name: object(),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "gaming_mode"])
+
+    assert result.exit_code == 0
+    assert "Playwright import works" in result.output
+    assert "path exists" in result.output
+    assert "target window contains" in result.output
+
+
+def test_doctor_preserves_dependency_extras(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "steps": [{"action": "browser.open", "url": "https://example.test"}],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
+
+    result = CliRunner().invoke(app, ["doctor", "gaming_mode"])
+
+    assert result.exit_code == 0
+    assert "ritualist[browser]" in result.output
+
+
+def test_keep_open_recipe_requests_keep_alive(monkeypatch):
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                }
+            ],
+        }
+    )
+    called = []
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+
+    result = CliRunner().invoke(app, ["run", "demo"])
+
+    assert result.exit_code == 0
+    assert called == [True]

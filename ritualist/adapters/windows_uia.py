@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 import sys
 import time
@@ -8,7 +9,31 @@ from typing import Any
 from ritualist.errors import DependencyMissingError, PlatformUnsupportedError, RitualistError
 
 
+@dataclass(frozen=True)
+class WindowInspection:
+    title: str
+    labels: list[str]
+
+
 class WindowsUIAutomationAdapter:
+    def inspect_windows(
+        self,
+        *,
+        title_contains: str,
+        limit: int,
+        control_type: str | None,
+    ) -> list[WindowInspection]:
+        _ensure_windows()
+        desktop = _desktop()
+        roots = _candidate_roots(desktop, title_contains)
+        return [
+            WindowInspection(
+                title=_element_text(root),
+                labels=_candidate_labels([root], control_type, limit=limit),
+            )
+            for root in roots
+        ]
+
     def click_text(
         self,
         *,
@@ -20,14 +45,7 @@ class WindowsUIAutomationAdapter:
         timeout_seconds: float,
     ) -> None:
         _ensure_windows()
-        try:
-            from pywinauto import Desktop
-        except ImportError as exc:
-            raise DependencyMissingError(
-                "desktop.click_text requires pywinauto; install ritualist[windows]"
-            ) from exc
-
-        desktop = Desktop(backend="uia")
+        desktop = _desktop()
         deadline = time.monotonic() + timeout_seconds
         matcher = _text_matcher(text, exact)
         last_roots: list[Any] = []
@@ -71,6 +89,16 @@ class WindowsInputAdapter:
 def _ensure_windows() -> None:
     if sys.platform != "win32":
         raise PlatformUnsupportedError("Windows UI/input automation is only supported on Windows")
+
+
+def _desktop() -> Any:
+    try:
+        from pywinauto import Desktop
+    except ImportError as exc:
+        raise DependencyMissingError(
+            "Windows UI Automation requires pywinauto; install ritualist[windows]"
+        ) from exc
+    return Desktop(backend="uia")
 
 
 def _candidate_roots(desktop: Any, window_title_contains: str | None) -> list[Any]:

@@ -64,7 +64,7 @@ def test_browser_open_uses_persistent_profile_and_new_window(tmp_path, monkeypat
 
     adapter = PlaywrightBrowserAdapter()
     adapter.open_url("https://example.test/one", profile="gaming", new_window=False)
-    adapter.open_url("https://example.test/two", profile="gaming", new_window=True)
+    adapter.open_url("https://example.test/two", profile="gaming", new_window=True, keep_open=True)
 
     user_data_dir, options = fake_playwright.chromium.calls[0]
     assert Path(user_data_dir) == tmp_path / "chromium" / "gaming"
@@ -72,3 +72,4 @@ def test_browser_open_uses_persistent_profile_and_new_window(tmp_path, monkeypat
     assert len(fake_playwright.chromium.context.pages) == 2
     assert fake_playwright.chromium.context.pages[0].urls == ["https://example.test/one"]
     assert fake_playwright.chromium.context.pages[1].urls == ["https://example.test/two"]
+    assert adapter._keep_open_requested is True

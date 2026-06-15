@@ -6,6 +6,7 @@ This v0.1 implementation includes:
 
 - CLI runner: `ritualist run recipe.yaml`
 - Recipe initialization and discovery: `ritualist init`, `ritualist list`, `ritualist paths`
+- Desktop diagnostics: `ritualist doctor`, `ritualist inspect-window`
 - GUI launcher: `ritualist gui`
 - YAML recipe validation and variable templating
 - Persistent browser profiles and URL/media automation through Playwright
@@ -37,6 +38,7 @@ Windows-only actions raise clear errors if invoked on another OS or without the 
 ritualist init
 ritualist list
 ritualist validate gaming_mode
+ritualist doctor gaming_mode
 ritualist dry-run gaming_mode
 ritualist run gaming_mode --var youtube_url=https://www.youtube.com/watch?v=...
 ```
@@ -47,6 +49,12 @@ Launch the GUI:
 
 ```powershell
 ritualist gui
+```
+
+Inspect a real Windows UI Automation window before tuning click text:
+
+```powershell
+ritualist inspect-window "Battle.net" --control-type Button --limit 100
 ```
 
 ## Test
@@ -79,6 +87,7 @@ steps:
     action: browser.open
     url: "{{ youtube_url }}"
     profile: gaming_mode
+    keep_open: true
 
   - name: Loop and play video
     action: browser.media
@@ -114,3 +123,15 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 - `browser-profiles`
 
 Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
+
+## Browser Lifecycle
+
+Playwright owns the browser process it launches. When a CLI run exits, the browser it opened may close with the Playwright driver. For media workflows, set `keep_open: true` on `browser.open` or pass `ritualist run <recipe> --keep-alive`; Ritualist will keep the CLI process alive after a successful run until you press `Ctrl+C`.
+
+GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
+
+## Diagnostics
+
+`ritualist doctor <recipe-id-or-path>` validates a recipe without opening browsers, launching apps, or clicking. It checks optional dependency availability, OS support, browser profile creation, local app paths, and the window/text targets for `desktop.click_text`.
+
+`ritualist inspect-window <title-contains>` is Windows-only and prints matching window titles plus visible descendant labels. Use it to discover the exact labels exposed to UI Automation before editing `desktop.click_text` steps.

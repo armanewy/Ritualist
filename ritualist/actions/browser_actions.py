@@ -14,6 +14,7 @@ class BrowserOpenHandler:
             browser=step.browser,
             profile=step.profile,
             new_window=step.new_window,
+            keep_open=step.keep_open,
         )
         return f"opened {step.url}"
 

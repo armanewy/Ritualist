@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import time
 from typing import Annotated
 
 import typer
@@ -10,6 +12,7 @@ from rich.table import Table
 from .actions.registry import create_default_registry
 from .adapters import create_default_adapters
 from .app_setup import initialize_app
+from .doctor import diagnose_recipe
 from .errors import RitualistError
 from .executor import WorkflowExecutor
 from .logging_setup import setup_logging
@@ -103,13 +106,20 @@ def run(
         bool,
         typer.Option("--dry-run", help="Validate and show planned actions."),
     ] = False,
+    keep_alive: Annotated[
+        bool,
+        typer.Option(
+            "--keep-alive",
+            help="Keep the CLI process alive after a successful run so Playwright browser media stays open.",
+        ),
+    ] = False,
     var_values: Annotated[
         list[str] | None,
         typer.Option("--var", "-v", help="Template override in KEY=VALUE form."),
     ] = None,
 ) -> None:
     """Run a ritual recipe."""
-    _run_recipe(recipe, dry_run=dry_run, var_values=var_values)
+    _run_recipe(recipe, dry_run=dry_run, keep_alive=keep_alive, var_values=var_values)
 
 
 @app.command("dry-run")
@@ -121,7 +131,84 @@ def dry_run_command(
     ] = None,
 ) -> None:
     """Validate and show planned actions without touching the desktop."""
-    _run_recipe(recipe, dry_run=True, var_values=var_values)
+    _run_recipe(recipe, dry_run=True, keep_alive=False, var_values=var_values)
+
+
+@app.command("inspect-window")
+def inspect_window(
+    title_contains: Annotated[str, typer.Argument(help="Case-insensitive text from the window title.")],
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum labels per window.")] = 100,
+    control_type: Annotated[
+        str | None,
+        typer.Option("--control-type", help="Optional UI Automation control type, such as Button."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
+) -> None:
+    """Inspect visible labels in matching Windows UI Automation windows."""
+    try:
+        from .adapters.windows_uia import WindowsUIAutomationAdapter
+
+        inspections = WindowsUIAutomationAdapter().inspect_windows(
+            title_contains=title_contains,
+            limit=limit,
+            control_type=control_type,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        console.print_json(
+            data=[
+                {"title": inspection.title, "labels": inspection.labels}
+                for inspection in inspections
+            ]
+        )
+        return
+
+    if not inspections:
+        console.print(f"No windows found containing {escape(title_contains)!r}.")
+        return
+
+    for inspection in inspections:
+        console.print(f"[bold]Window:[/] {escape(inspection.title)}")
+        console.print("[bold]Visible labels:[/]")
+        if inspection.labels:
+            for label in inspection.labels:
+                console.print(f"- {escape(label)}")
+        else:
+            console.print("- [dim](none found)[/]")
+
+
+@app.command()
+def doctor(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    var_values: Annotated[
+        list[str] | None,
+        typer.Option("--var", "-v", help="Template override in KEY=VALUE form."),
+    ] = None,
+) -> None:
+    """Validate recipe health without launching apps, opening browsers, or clicking."""
+    try:
+        parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    checks = diagnose_recipe(parsed)
+    table = Table(title=f"Doctor: {escape(parsed.name)} ({escape(parsed.id)})")
+    table.add_column("Status")
+    table.add_column("Check")
+    table.add_column("Message")
+    styles = {"ok": "green", "warn": "yellow", "error": "red", "info": "cyan"}
+    for check in checks:
+        style = styles.get(check.status, "")
+        status = f"[{style}]{escape(check.status)}[/]" if style else escape(check.status)
+        table.add_row(status, escape(check.name), escape(check.message))
+    console.print(table)
 
 
 @app.command()
@@ -136,7 +223,13 @@ def gui() -> None:
         raise typer.Exit(1) from exc
 
 
-def _run_recipe(recipe: str, *, dry_run: bool, var_values: list[str] | None) -> None:
+def _run_recipe(
+    recipe: str,
+    *,
+    dry_run: bool,
+    keep_alive: bool,
+    var_values: list[str] | None,
+) -> None:
     logger = setup_logging()
     try:
         parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
@@ -160,6 +253,8 @@ def _run_recipe(recipe: str, *, dry_run: bool, var_values: list[str] | None) -> 
         raise typer.Exit(1) from exc
 
     _print_results(summary.results)
+    if summary.success and not dry_run and (keep_alive or _recipe_requests_keep_open(parsed)):
+        _keep_alive_until_interrupted()
     if not summary.success:
         raise typer.Exit(1)
 
@@ -225,3 +320,21 @@ def _print_paths(paths: dict[str, object]) -> None:
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
     console.print(table)
+
+
+def _recipe_requests_keep_open(recipe: object) -> bool:
+    return any(
+        getattr(step, "action", None) == "browser.open" and getattr(step, "keep_open", False)
+        for step in recipe.steps
+    )
+
+
+def _keep_alive_until_interrupted() -> None:
+    console.print(
+        "[yellow]Browser keep-open requested. Press Ctrl+C to let Ritualist exit.[/]"
+    )
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        console.print("Exiting.")

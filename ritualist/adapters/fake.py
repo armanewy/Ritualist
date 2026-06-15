@@ -33,8 +33,16 @@ class FakeBrowserAdapter(RecordingAdapter):
         browser: str = "chromium",
         profile: str = "default",
         new_window: bool = False,
+        keep_open: bool = False,
     ) -> None:
-        self.record("open_url", url, browser=browser, profile=profile, new_window=new_window)
+        self.record(
+            "open_url",
+            url,
+            browser=browser,
+            profile=profile,
+            new_window=new_window,
+            keep_open=keep_open,
+        )
 
     def configure_media(self, **kwargs: Any) -> None:
         self.record("configure_media", **kwargs)

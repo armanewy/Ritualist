@@ -15,6 +15,7 @@ class PlaywrightBrowserAdapter:
         self._page: Any = None
         self._browser_name: str | None = None
         self._profile: str | None = None
+        self._keep_open_requested: bool = False
 
     def open_url(
         self,
@@ -23,7 +24,9 @@ class PlaywrightBrowserAdapter:
         browser: str = "chromium",
         profile: str = "default",
         new_window: bool = False,
+        keep_open: bool = False,
     ) -> None:
+        self._keep_open_requested = keep_open
         page = self._ensure_page(browser=browser, profile=profile, new_window=new_window)
         page.goto(url, wait_until="domcontentloaded")
 

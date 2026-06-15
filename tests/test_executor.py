@@ -26,6 +26,7 @@ def test_executor_runs_steps_in_order():
     assert fakes.browser.calls[0][0] == "open_url"
     assert fakes.browser.calls[0][2]["profile"] == "default"
     assert fakes.browser.calls[0][2]["new_window"] is False
+    assert fakes.browser.calls[0][2]["keep_open"] is False
     assert fakes.browser.calls[1][0] == "configure_media"
     assert fakes.shell.calls[0][0] == "launch"
 

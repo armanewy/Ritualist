@@ -29,6 +29,7 @@ class BrowserOpenStep(StepBase):
     browser: Literal["chromium", "chrome", "msedge"] = "chromium"
     profile: str = "default"
     new_window: bool = False
+    keep_open: bool = False
 
     @field_validator("profile")
     @classmethod
