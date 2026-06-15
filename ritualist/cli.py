@@ -25,7 +25,7 @@ from .paths import (
     runs_dir,
 )
 from .recipe_loader import discover_recipes, load_recipe_reference
-from .run_logs import RunLogWriter
+from .run_logs import RunLogWriter, list_recent_runs, load_run
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 console = Console()
@@ -34,9 +34,10 @@ console = Console()
 @app.command()
 def init() -> None:
     """Create Ritualist app directories and install bundled sample recipes."""
-    paths = initialize_app()
+    report = initialize_app()
     console.print("[green]Ritualist initialized.[/]")
-    _print_paths(paths)
+    _print_init_report(report)
+    _print_paths(report.paths)
 
 
 @app.command("list")
@@ -77,6 +78,65 @@ def paths() -> None:
             "browser_profiles": browser_profiles_dir(),
         }
     )
+
+
+@app.command()
+def runs(
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum runs to list.")] = 10,
+) -> None:
+    """List recent run directories and final statuses."""
+    records = list_recent_runs(limit=limit)
+    if not records:
+        console.print("No runs found.")
+        return
+    console.print("[bold]Recent runs[/]")
+    for record in records:
+        metadata = record.metadata
+        console.print(
+            "- "
+            f"{escape(record.run_id)} | "
+            f"{escape(str(metadata.get('recipe_id', '')))} | "
+            f"{escape(str(metadata.get('status', '')))} | "
+            f"{escape(str(metadata.get('started_at', '')))} | "
+            f"{metadata.get('steps_completed', 0)}/{metadata.get('steps_total', 0)}"
+        )
+        console.print(f"  path: {escape(str(record.path))}")
+
+
+@app.command("show-run")
+def show_run(
+    run_id_or_path: Annotated[str, typer.Argument(help="Run id from 'ritualist runs' or run path.")],
+) -> None:
+    """Show a run summary and step results."""
+    record = load_run(run_id_or_path)
+    if record is None:
+        console.print(f"[red]Error:[/] run not found: {escape(run_id_or_path)}")
+        raise typer.Exit(1)
+
+    metadata = record.metadata
+    table = Table(title=f"Run: {escape(record.run_id)}")
+    table.add_column("Field")
+    table.add_column("Value")
+    for key in ("recipe_id", "recipe_name", "status", "dry_run", "started_at", "ended_at"):
+        table.add_row(escape(key), escape(str(metadata.get(key, ""))))
+    table.add_row("path", escape(str(record.path)))
+    console.print(table)
+
+    steps = Table(title="Steps")
+    steps.add_column("#", justify="right")
+    steps.add_column("Status")
+    steps.add_column("Step")
+    steps.add_column("Action")
+    steps.add_column("Message")
+    for step in record.steps:
+        steps.add_row(
+            str(step.get("index", "")),
+            escape(str(step.get("status", ""))),
+            escape(str(step.get("step_name", ""))),
+            escape(str(step.get("action", ""))),
+            escape(str(step.get("message", ""))),
+        )
+    console.print(steps)
 
 
 @app.command()
@@ -258,7 +318,9 @@ def _run_recipe(
         raise typer.Exit(1) from exc
 
     _print_results(summary.results)
-    if not dry_run and (keep_alive or _summary_requests_keep_open(parsed, summary)):
+    keep_open_active = not dry_run and (keep_alive or _summary_requests_keep_open(parsed, summary))
+    _print_post_run_summary(summary, keep_open_active=keep_open_active)
+    if keep_open_active:
         _keep_alive_until_interrupted()
     if not summary.success:
         raise typer.Exit(1)
@@ -325,6 +387,40 @@ def _print_paths(paths: dict[str, object]) -> None:
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
     console.print(table)
+
+
+def _print_init_report(report: object) -> None:
+    messages: list[str] = []
+    for name, path in report.created_dirs.items():
+        messages.append(f"Created {name} directory: {path}")
+    if report.config_created:
+        messages.append("Created config file.")
+    if report.sample_copied:
+        messages.append(f"Copied bundled gaming_mode sample: {report.migration.recipe_path}")
+
+    if not messages and not report.migration.changed:
+        console.print("Initialization is already up to date.")
+        return
+    for message in messages:
+        console.print(f"- {escape(message)}")
+    if report.migration.changed:
+        console.print(f"- Migrated {escape(str(report.migration.recipe_path))}:")
+        for change in report.migration.changes:
+            console.print(f"  - {escape(change)}")
+
+
+def _print_post_run_summary(summary: object, *, keep_open_active: bool) -> None:
+    counts: dict[str, int] = {}
+    for result in summary.results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    counts_text = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
+    console.print(f"Summary: {escape(counts_text or 'no steps recorded')}")
+    if any(
+        result.status == "cancelled" and "declined confirmation" in result.message
+        for result in summary.results
+    ):
+        console.print("Confirmation declined; no confirmed risky action was performed.")
+    console.print(f"Keep-open: {'active' if keep_open_active else 'inactive'}")
 
 
 def _summary_requests_keep_open(recipe: object, summary: object) -> bool:

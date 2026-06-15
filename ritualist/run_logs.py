@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,14 @@ from typing import Any
 from .actions.base import StepResult
 from .models import Recipe
 from .paths import runs_dir
+
+
+@dataclass(frozen=True)
+class RunRecord:
+    run_id: str
+    path: Path
+    metadata: dict[str, Any]
+    steps: list[dict[str, Any]]
 
 
 class RunLogWriter:
@@ -94,3 +103,50 @@ def _safe_message(result: StepResult) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def list_recent_runs(*, limit: int = 10, base_dir: Path | None = None) -> list[RunRecord]:
+    root = base_dir or runs_dir()
+    if not root.exists():
+        return []
+    records: list[RunRecord] = []
+    for path in sorted(
+        (candidate for candidate in root.iterdir() if candidate.is_dir()),
+        key=lambda candidate: candidate.stat().st_mtime,
+        reverse=True,
+    ):
+        record = load_run(path)
+        if record is not None:
+            records.append(record)
+        if len(records) >= limit:
+            break
+    return records
+
+
+def resolve_run_reference(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> Path:
+    raw = Path(run_id_or_path)
+    if raw.exists() or raw.parent != Path("."):
+        return raw
+    return (base_dir or runs_dir()) / str(run_id_or_path)
+
+
+def load_run(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> RunRecord | None:
+    path = resolve_run_reference(run_id_or_path, base_dir=base_dir)
+    run_json = path / "run.json"
+    steps_jsonl = path / "steps.jsonl"
+    if not run_json.exists():
+        return None
+    try:
+        metadata = json.loads(run_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    steps: list[dict[str, Any]] = []
+    if steps_jsonl.exists():
+        try:
+            for line in steps_jsonl.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    steps.append(json.loads(line))
+        except (OSError, json.JSONDecodeError):
+            steps = []
+    return RunRecord(run_id=path.name, path=path, metadata=metadata, steps=steps)

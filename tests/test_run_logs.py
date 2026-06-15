@@ -5,7 +5,7 @@ import json
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
-from ritualist.run_logs import RunLogWriter
+from ritualist.run_logs import RunLogWriter, list_recent_runs, load_run
 
 
 def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):
@@ -38,6 +38,15 @@ def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):
     assert run_json["status"] == "success"
     assert steps[0]["message"] == "opened URL"
     assert "token=secret" not in (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8")
+
+    loaded = load_run(summary.run_dir)
+    assert loaded is not None
+    assert loaded.run_id == summary.run_dir.name
+    assert loaded.metadata["recipe_id"] == "log_test"
+    assert loaded.steps[0]["message"] == "opened URL"
+
+    recent = list_recent_runs(base_dir=tmp_path)
+    assert [record.run_id for record in recent] == [summary.run_dir.name]
 
 
 def test_run_log_writer_redacts_failed_browser_url(tmp_path):

@@ -29,6 +29,7 @@ class WorkflowExecutor:
         status_callback: StatusCallback | None = None,
         logger: logging.Logger | None = None,
         run_logger: object | None = None,
+        stop_requested: Callable[[], bool] | None = None,
         strict: bool = False,
     ) -> None:
         if adapters is None:
@@ -42,6 +43,7 @@ class WorkflowExecutor:
         self.status_callback = status_callback
         self.logger = logger or logging.getLogger("ritualist")
         self.run_logger = run_logger
+        self.stop_requested = stop_requested or (lambda: False)
         self.strict = strict
 
     def run(self, recipe: Recipe) -> RunSummary:
@@ -58,6 +60,23 @@ class WorkflowExecutor:
         )
 
         for index, step in enumerate(recipe.steps, start=1):
+            if self.stop_requested():
+                result = StepResult(
+                    index=index,
+                    step_name=step.display_name,
+                    action=step.action,
+                    status="cancelled",
+                    message="run stopped by user before step",
+                    started_at=_now(),
+                    ended_at=_now(),
+                    optional=step.optional,
+                    dry_run=self.dry_run,
+                )
+                results.append(result)
+                if self.run_logger is not None:
+                    self.run_logger.write_step(result)
+                self._emit(index, total, step, "cancelled", result.message)
+                break
             self._emit(index, total, step, "running")
             started_at = _now()
             status = "success"

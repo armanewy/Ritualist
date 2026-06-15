@@ -9,43 +9,71 @@ APP_AUTHOR = "Ritualist"
 
 
 def app_data_dir() -> Path:
-    path = Path(user_data_dir(APP_NAME, APP_AUTHOR))
+    path = app_data_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def app_data_path() -> Path:
+    return Path(user_data_dir(APP_NAME, APP_AUTHOR))
 
 
 def config_dir() -> Path:
-    path = app_data_dir() / "config"
+    path = config_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def config_path() -> Path:
+    return app_data_path() / "config"
 
 
 def config_file() -> Path:
     return config_dir() / "config.yaml"
 
 
+def config_file_path() -> Path:
+    return config_path() / "config.yaml"
+
+
 def recipes_dir() -> Path:
-    path = app_data_dir() / "recipes"
+    path = recipes_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def recipes_path() -> Path:
+    return app_data_path() / "recipes"
 
 
 def logs_dir() -> Path:
-    path = Path(user_log_dir(APP_NAME, APP_AUTHOR))
+    path = logs_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def logs_path() -> Path:
+    return Path(user_log_dir(APP_NAME, APP_AUTHOR))
 
 
 def runs_dir() -> Path:
-    path = app_data_dir() / "runs"
+    path = runs_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def runs_path() -> Path:
+    return app_data_path() / "runs"
 
 
 def browser_profiles_dir() -> Path:
-    path = app_data_dir() / "browser-profiles"
+    path = browser_profiles_path()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def browser_profiles_path() -> Path:
+    return app_data_path() / "browser-profiles"
 
 
 def default_log_file() -> Path:
