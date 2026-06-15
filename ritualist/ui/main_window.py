@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QPlainTextEdit,
     QTableWidget,
@@ -27,7 +28,7 @@ from ritualist.executor import WorkflowExecutor
 from ritualist.logging_setup import setup_logging
 from ritualist.paths import config_file, recipes_dir, runs_dir
 from ritualist.recipe_loader import discover_recipes, load_recipe
-from ritualist.run_logs import RunLogWriter
+from ritualist.run_logs import RunLogWriter, reconcile_running_runs
 
 from .dialogs import ask_confirmation, show_error
 from .diagnostics_dialog import DiagnosticsDialog
@@ -42,6 +43,7 @@ class MainWindow(QMainWindow):
         self.recipe = None
         self.discovered_recipes: dict[str, Path] = {}
         self.runner: RunnerThread | None = None
+        self._close_after_run_stops = False
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -114,6 +116,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.log)
 
         self.setCentralWidget(root)
+        self.reconcile_runs()
         self.refresh_recipes()
 
     def choose_file(self) -> None:
@@ -152,6 +155,7 @@ class MainWindow(QMainWindow):
         self.refresh_recipes()
 
     def refresh_recipes(self) -> None:
+        self.reconcile_runs()
         current = self.recipe_combo.currentData()
         self.recipe_combo.blockSignals(True)
         self.recipe_combo.clear()
@@ -259,6 +263,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Run failed")
         show_error(self, "Run Failed", message)
         self.set_run_controls_enabled(True)
+        if self._close_after_run_stops:
+            self._close_after_run_stops = False
+            self.close()
 
     def on_finished(self, summary) -> None:
         for result in summary.results:
@@ -271,6 +278,9 @@ class MainWindow(QMainWindow):
         self.append_log(f"{final_text}: {summary_text}")
         self.status_label.setText(final_text)
         self.set_run_controls_enabled(True)
+        if self._close_after_run_stops:
+            self._close_after_run_stops = False
+            self.close()
 
     def stop_run(self) -> None:
         if self.runner is None or not self.runner.isRunning():
@@ -296,6 +306,42 @@ class MainWindow(QMainWindow):
     def show_diagnostics(self) -> None:
         dialog = DiagnosticsDialog(self)
         dialog.exec()
+
+    def reconcile_runs(self) -> None:
+        for repaired in reconcile_running_runs():
+            self.append_log(f"Marked {repaired.run_id} as interrupted.")
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt override.
+        if self.runner is None or not self.runner.isRunning():
+            event.accept()
+            return
+        choice = self.confirm_close_while_running()
+        if choice == "stop":
+            self._close_after_run_stops = True
+            self.stop_run()
+            event.ignore()
+        elif choice == "exit":
+            event.accept()
+        else:
+            event.ignore()
+
+    def confirm_close_while_running(self) -> str:
+        box = QMessageBox(self)
+        box.setWindowTitle("Ritual Running")
+        box.setText("A ritual is currently running. Stop it before exiting?")
+        stop_button = box.addButton("Stop and Exit", QMessageBox.ButtonRole.AcceptRole)
+        exit_button = box.addButton("Exit Anyway", QMessageBox.ButtonRole.DestructiveRole)
+        cancel_button = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(stop_button)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == stop_button:
+            return "stop"
+        if clicked == exit_button:
+            return "exit"
+        if clicked == cancel_button:
+            return "cancel"
+        return "cancel"
 
     def append_log(self, message: str) -> None:
         self.log.appendPlainText(message)

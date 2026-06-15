@@ -25,7 +25,7 @@ from .paths import (
     runs_dir,
 )
 from .recipe_loader import discover_recipes, load_recipe_reference
-from .run_logs import RunLogWriter, list_recent_runs, load_run
+from .run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 console = Console()
@@ -83,8 +83,14 @@ def paths() -> None:
 @app.command()
 def runs(
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum runs to list.")] = 10,
+    repair: Annotated[
+        bool,
+        typer.Option("--repair/--no-repair", help="Repair stale running runs before listing."),
+    ] = True,
 ) -> None:
     """List recent run directories and final statuses."""
+    if repair:
+        _print_reconciled_runs(reconcile_running_runs(limit=max(limit, 100)))
     records = list_recent_runs(limit=limit)
     if not records:
         console.print("No runs found.")
@@ -106,8 +112,14 @@ def runs(
 @app.command("show-run")
 def show_run(
     run_id_or_path: Annotated[str, typer.Argument(help="Run id from 'ritualist runs' or run path.")],
+    repair: Annotated[
+        bool,
+        typer.Option("--repair/--no-repair", help="Repair stale running runs before showing."),
+    ] = True,
 ) -> None:
     """Show a run summary and step results."""
+    if repair:
+        _print_reconciled_runs(reconcile_running_runs())
     record = load_run(run_id_or_path)
     if record is None:
         console.print(f"[red]Error:[/] run not found: {escape(run_id_or_path)}")
@@ -119,6 +131,8 @@ def show_run(
     table.add_column("Value")
     for key in ("recipe_id", "recipe_name", "status", "dry_run", "started_at", "ended_at"):
         table.add_row(escape(key), escape(str(metadata.get(key, ""))))
+    if metadata.get("final_message"):
+        table.add_row("final_message", escape(str(metadata.get("final_message", ""))))
     table.add_row("path", escape(str(record.path)))
     console.print(table)
 
@@ -387,6 +401,11 @@ def _print_paths(paths: dict[str, object]) -> None:
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
     console.print(table)
+
+
+def _print_reconciled_runs(repaired: list[object]) -> None:
+    for repair in repaired:
+        console.print(f"Marked {escape(repair.run_id)} as interrupted.")
 
 
 def _print_init_report(report: object) -> None:

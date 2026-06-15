@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -36,6 +37,8 @@ def collect_diagnostics() -> list[DiagnosticItem]:
         DiagnosticItem("Playwright import", _availability("playwright.sync_api")),
         DiagnosticItem("PySide6 import", _availability("PySide6")),
         DiagnosticItem("Windows UI Automation dependencies", _windows_uia_status()),
+        DiagnosticItem("Running run records", str(_count_runs_with_status("running"))),
+        DiagnosticItem("Interrupted run records", str(_count_runs_with_status("interrupted"))),
     ]
 
 
@@ -67,3 +70,18 @@ def _module_available(module: str) -> bool:
         return importlib.util.find_spec(module) is not None
     except (ImportError, ModuleNotFoundError, ValueError):
         return False
+
+
+def _count_runs_with_status(status: str) -> int:
+    root = runs_path()
+    if not root.exists():
+        return 0
+    count = 0
+    for run_json in root.glob("*/run.json"):
+        try:
+            metadata = json.loads(run_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if metadata.get("status") == status:
+            count += 1
+    return count

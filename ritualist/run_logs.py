@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
+import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +22,13 @@ class RunRecord:
     steps: list[dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class ReconciledRun:
+    run_id: str
+    path: Path
+    message: str
+
+
 class RunLogWriter:
     def __init__(self, *, base_dir: Path | None = None) -> None:
         self.base_dir = base_dir or runs_dir()
@@ -26,6 +36,7 @@ class RunLogWriter:
         self._run_json: Path | None = None
         self._steps_jsonl: Path | None = None
         self._metadata: dict[str, Any] = {}
+        self._run_writer_id = str(uuid.uuid4())
 
     def start(self, recipe: Recipe, *, dry_run: bool) -> None:
         started_at = _now_iso()
@@ -37,13 +48,31 @@ class RunLogWriter:
             "recipe_name": recipe.name,
             "dry_run": dry_run,
             "status": "running",
+            "process_id": os.getpid(),
+            "process_start_time": _current_process_start_time(),
+            "run_writer_id": self._run_writer_id,
+            "pyinstaller_bundle": _is_pyinstaller_bundle(),
             "started_at": started_at,
             "ended_at": None,
+            "last_heartbeat_at": started_at,
+            "last_step_id": None,
+            "last_step_name": None,
+            "final_message": None,
             "steps_total": len(recipe.steps),
             "steps_completed": 0,
         }
         self._write_run_json()
         self._steps_jsonl.write_text("", encoding="utf-8")
+
+    def heartbeat(self, step_id: int | None = None, step_name: str | None = None) -> None:
+        if self._run_json is None:
+            return
+        self._metadata["last_heartbeat_at"] = _now_iso()
+        if step_id is not None:
+            self._metadata["last_step_id"] = step_id
+        if step_name is not None:
+            self._metadata["last_step_name"] = step_name
+        self._write_run_json()
 
     def write_step(self, result: StepResult) -> None:
         if self._steps_jsonl is None:
@@ -62,6 +91,9 @@ class RunLogWriter:
         with self._steps_jsonl.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self._metadata["steps_completed"] = result.index
+        self._metadata["last_step_id"] = result.index
+        self._metadata["last_step_name"] = result.step_name
+        self._metadata["last_heartbeat_at"] = _now_iso()
         self._write_run_json()
 
     def finish(self, *, success: bool) -> None:
@@ -69,6 +101,8 @@ class RunLogWriter:
             return
         self._metadata["status"] = "success" if success else "stopped"
         self._metadata["ended_at"] = _now_iso()
+        self._metadata["last_heartbeat_at"] = self._metadata["ended_at"]
+        self._metadata["final_message"] = None
         self._write_run_json()
 
     def _create_run_dir(self, recipe_id: str) -> Path:
@@ -103,6 +137,44 @@ def _safe_message(result: StepResult) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def reconcile_running_runs(
+    *,
+    limit: int = 100,
+    base_dir: Path | None = None,
+    stale_after: timedelta = timedelta(hours=1),
+    process_checker: Any | None = None,
+) -> list[ReconciledRun]:
+    root = base_dir or runs_dir()
+    if not root.exists():
+        return []
+
+    repaired: list[ReconciledRun] = []
+    candidates = sorted(
+        (candidate for candidate in root.iterdir() if candidate.is_dir()),
+        key=lambda candidate: candidate.stat().st_mtime,
+        reverse=True,
+    )[:limit]
+    checker = process_checker or _process_status
+    for path in candidates:
+        metadata = _read_run_metadata(path)
+        if metadata is None or metadata.get("status") != "running":
+            continue
+
+        reason = _interruption_reason(metadata, checker=checker, stale_after=stale_after)
+        if reason is None:
+            continue
+
+        message = _interrupted_message(metadata, path)
+        metadata["status"] = "interrupted"
+        metadata["ended_at"] = _now_iso()
+        metadata["interrupted_at"] = metadata["ended_at"]
+        metadata["final_message"] = message
+        metadata["interruption_reason"] = reason
+        _write_run_metadata(path, metadata)
+        repaired.append(ReconciledRun(run_id=path.name, path=path, message=message))
+    return repaired
 
 
 def list_recent_runs(*, limit: int = 10, base_dir: Path | None = None) -> list[RunRecord]:
@@ -150,3 +222,165 @@ def load_run(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> Run
         except (OSError, json.JSONDecodeError):
             steps = []
     return RunRecord(run_id=path.name, path=path, metadata=metadata, steps=steps)
+
+
+def _read_run_metadata(path: Path) -> dict[str, Any] | None:
+    run_json = path / "run.json"
+    if not run_json.exists():
+        return None
+    try:
+        return json.loads(run_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _write_run_metadata(path: Path, metadata: dict[str, Any]) -> None:
+    (path / "run.json").write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _interruption_reason(
+    metadata: dict[str, Any],
+    *,
+    checker: Any,
+    stale_after: timedelta,
+) -> str | None:
+    raw_pid = metadata.get("process_id")
+    if raw_pid is None:
+        return "missing run ownership metadata"
+    try:
+        pid = int(raw_pid)
+    except (TypeError, ValueError):
+        return "invalid process_id"
+
+    process_exists, process_start_time = checker(pid)
+    if process_exists is False:
+        return f"recorded process {pid} is not running"
+
+    recorded_start_time = metadata.get("process_start_time")
+    if (
+        process_exists is True
+        and recorded_start_time is not None
+        and process_start_time is not None
+        and abs(float(recorded_start_time) - float(process_start_time)) > 1
+    ):
+        return f"recorded process {pid} belongs to a different process start time"
+
+    heartbeat = _parse_iso_datetime(metadata.get("last_heartbeat_at"))
+    if process_exists is False and _is_stale(heartbeat, stale_after):
+        return f"heartbeat is older than {stale_after}"
+    return None
+
+
+def _interrupted_message(metadata: dict[str, Any], path: Path) -> str:
+    last_step = metadata.get("last_step_name") or _last_logged_step_name(path)
+    if last_step:
+        return (
+            "Ritualist exited before finalizing this run. "
+            f"Last recorded step: {last_step}."
+        )
+    return "Ritualist exited before finalizing this run."
+
+
+def _last_logged_step_name(path: Path) -> str | None:
+    steps_jsonl = path / "steps.jsonl"
+    if not steps_jsonl.exists():
+        return None
+    last_step_name = None
+    try:
+        for line in steps_jsonl.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            if payload.get("step_name"):
+                last_step_name = str(payload["step_name"])
+    except (OSError, json.JSONDecodeError):
+        return None
+    return last_step_name
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _is_stale(value: datetime | None, stale_after: timedelta) -> bool:
+    if value is None:
+        return True
+    return datetime.now(timezone.utc) - value > stale_after
+
+
+def _process_status(pid: int) -> tuple[bool | None, float | None]:
+    try:
+        import psutil
+    except ImportError:
+        if pid == os.getpid():
+            return True, _current_process_start_time()
+        return _pid_exists_without_psutil(pid), None
+
+    try:
+        process = psutil.Process(pid)
+        return process.is_running(), float(process.create_time())
+    except psutil.NoSuchProcess:
+        return False, None
+    except psutil.AccessDenied:
+        return True, None
+
+
+def _current_process_start_time() -> float | None:
+    try:
+        import psutil
+    except ImportError:
+        return None
+    try:
+        return float(psutil.Process(os.getpid()).create_time())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pid_exists_without_psutil(pid: int) -> bool | None:
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        return _pid_exists_windows(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def _pid_exists_windows(pid: int) -> bool | None:
+    try:
+        import ctypes
+    except ImportError:
+        return None
+    kernel32 = ctypes.windll.kernel32
+    process_query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    error = kernel32.GetLastError()
+    if error == 87:  # ERROR_INVALID_PARAMETER
+        return False
+    if error == 5:  # ERROR_ACCESS_DENIED
+        return True
+    return None
+
+
+def _is_pyinstaller_bundle() -> bool:
+    return bool(getattr(sys, "frozen", False)) and hasattr(sys, "_MEIPASS")

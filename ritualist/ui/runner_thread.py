@@ -42,5 +42,8 @@ class RunnerThread(QThread):
     def _confirm(self, prompt: str) -> bool:
         self._confirmation_event.clear()
         self.confirmation_requested.emit(prompt)
-        self._confirmation_event.wait()
+        while not self._confirmation_event.wait(timeout=5):
+            heartbeat = getattr(self.executor.run_logger, "heartbeat", None)
+            if heartbeat is not None:
+                heartbeat()
         return self._confirmation_result

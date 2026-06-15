@@ -61,6 +61,7 @@ class WorkflowExecutor:
 
         for index, step in enumerate(recipe.steps, start=1):
             if self.stop_requested():
+                self._heartbeat(index, step.display_name)
                 result = StepResult(
                     index=index,
                     step_name=step.display_name,
@@ -77,6 +78,7 @@ class WorkflowExecutor:
                     self.run_logger.write_step(result)
                 self._emit(index, total, step, "cancelled", result.message)
                 break
+            self._heartbeat(index, step.display_name)
             self._emit(index, total, step, "running")
             started_at = _now()
             status = "success"
@@ -92,6 +94,7 @@ class WorkflowExecutor:
                 try:
                     if step.requires_confirmation:
                         prompt = f"Run '{step.display_name}' ({step.action})?"
+                        self._heartbeat(index, step.display_name)
                         if not self.confirmer(prompt):
                             raise UserCancelledError("user declined confirmation")
 
@@ -163,6 +166,13 @@ class WorkflowExecutor:
                 message=message,
             )
         )
+
+    def _heartbeat(self, step_id: int, step_name: str) -> None:
+        if self.run_logger is None:
+            return
+        heartbeat = getattr(self.run_logger, "heartbeat", None)
+        if heartbeat is not None:
+            heartbeat(step_id=step_id, step_name=step_name)
 
 
 def _deny_confirmation(prompt: str) -> bool:

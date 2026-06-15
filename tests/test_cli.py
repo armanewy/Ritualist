@@ -7,7 +7,7 @@ from ritualist.app_setup import InitReport, MigrationResult
 from ritualist.cli import app
 from ritualist.errors import DependencyMissingError
 from ritualist.models import Recipe
-from ritualist.run_logs import RunRecord
+from ritualist.run_logs import ReconciledRun, RunRecord
 from ritualist.adapters.windows_uia import WindowInspection
 
 
@@ -158,6 +158,7 @@ def test_runs_lists_recent_run_records(tmp_path, monkeypatch):
         },
         steps=[],
     )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
     monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
 
     result = CliRunner().invoke(app, ["runs", "--limit", "1"])
@@ -168,6 +169,39 @@ def test_runs_lists_recent_run_records(tmp_path, monkeypatch):
     assert "stopped" in result.output
 
 
+def test_runs_repairs_and_reports_interrupted_records(tmp_path, monkeypatch):
+    run_path = tmp_path / "20260615T175148Z_gaming_mode"
+    record = RunRecord(
+        run_id="20260615T175148Z_gaming_mode",
+        path=run_path,
+        metadata={
+            "recipe_id": "gaming_mode",
+            "status": "interrupted",
+            "started_at": "2026-06-15T17:51:48+00:00",
+            "steps_completed": 6,
+            "steps_total": 7,
+        },
+        steps=[],
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.reconcile_running_runs",
+        lambda **_kwargs: [
+            ReconciledRun(
+                run_id="20260615T175148Z_gaming_mode",
+                path=run_path,
+                message="Ritualist exited before finalizing this run.",
+            )
+        ],
+    )
+    monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
+
+    result = CliRunner().invoke(app, ["runs"])
+
+    assert result.exit_code == 0
+    assert "Marked 20260615T175148Z_gaming_mode as interrupted." in result.output
+    assert "interrupted" in result.output
+
+
 def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     record = RunRecord(
         run_id="20260615T120000Z_gaming_mode",
@@ -175,10 +209,11 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
         metadata={
             "recipe_id": "gaming_mode",
             "recipe_name": "Gaming Mode",
-            "status": "success",
+            "status": "interrupted",
             "dry_run": False,
             "started_at": "2026-06-15T12:00:00+00:00",
             "ended_at": "2026-06-15T12:01:00+00:00",
+            "final_message": "Ritualist exited before finalizing this run.",
         },
         steps=[
             {
@@ -190,17 +225,21 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
             }
         ],
     )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
     monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
 
     assert result.exit_code == 0
     assert "Gaming Mode" in result.output
+    assert "interrupted" in result.output
+    assert "Ritualist exited before finalizing this run." in result.output
     assert "Open music" in result.output
     assert "opened URL" in result.output
 
 
 def test_show_run_exits_one_for_unknown_run(monkeypatch):
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
     monkeypatch.setattr("ritualist.cli.load_run", lambda ref: None)
 
     result = CliRunner().invoke(app, ["show-run", "missing-run"])

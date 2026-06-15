@@ -142,6 +142,8 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 
 Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
 
+Run history uses `success` for completed runs, `stopped` for cleanly cancelled or failed workflows, and `interrupted` when a previous Ritualist process exited before finalizing `run.json`. `ritualist runs` repairs stale `running` records automatically; use `ritualist runs --no-repair` to inspect raw statuses without reconciliation.
+
 ## Browser Lifecycle
 
 Playwright owns the browser process it launches. When a CLI run exits, the browser it opened may close with the Playwright driver. For media workflows, set `keep_open: true` on `browser.open` or pass `ritualist run <recipe> --keep-alive`; Ritualist will keep the CLI process alive after execution until you press `Ctrl+C`. Recipe-level `keep_open: true` activates only after that browser step succeeds. The `--keep-alive` option keeps the CLI alive after execution regardless of workflow success, unless the run is a dry-run.
