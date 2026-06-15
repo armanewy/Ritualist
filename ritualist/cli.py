@@ -82,6 +82,36 @@ def paths() -> None:
 
 
 @app.command()
+def actions(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable action metadata."),
+    ] = False,
+) -> None:
+    """List registered action metadata."""
+    metadata_items = create_default_registry().metadata_items()
+    if json_output:
+        console.print_json(data=[metadata.to_dict() for metadata in metadata_items])
+        return
+
+    table = Table(title="Registered Actions")
+    table.add_column("Action", no_wrap=True)
+    table.add_column("Category")
+    table.add_column("Side Effect", no_wrap=True)
+    table.add_column("Confirmation", no_wrap=True)
+    table.add_column("Imported", no_wrap=True)
+    for metadata in metadata_items:
+        table.add_row(
+            escape(metadata.action_name),
+            escape(metadata.category),
+            escape(metadata.side_effect_level),
+            escape(metadata.confirmation_policy),
+            "yes" if metadata.allowed_in_imported_packs else "no",
+        )
+    console.print(table)
+
+
+@app.command()
 def runs(
     limit: Annotated[int, typer.Option("--limit", min=1, help="Maximum runs to list.")] = 10,
     repair: Annotated[

@@ -11,9 +11,12 @@ class ActionRegistry:
     _handlers: dict[str, ActionHandler] = field(default_factory=dict)
 
     def register(self, handler: ActionHandler) -> None:
-        if handler.metadata.action != handler.action_type:
+        metadata = getattr(handler, "metadata", None)
+        if not isinstance(metadata, ActionMetadata):
+            raise ValueError(f"handler '{handler.action_type}' must declare ActionMetadata")
+        if metadata.action_name != handler.action_type:
             raise ValueError(
-                f"metadata action '{handler.metadata.action}' does not match "
+                f"metadata action '{metadata.action_name}' does not match "
                 f"handler action '{handler.action_type}'"
             )
         self._handlers[handler.action_type] = handler

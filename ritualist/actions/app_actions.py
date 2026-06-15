@@ -9,12 +9,13 @@ from .metadata import ALL_PLATFORMS, ActionMetadata
 class AppLaunchHandler:
     action_type = "app.launch"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="app",
         required_params=("command",),
         optional_params=("args", "cwd", "wait", "env", "name", "optional", "timeout_seconds"),
         required_capabilities=("app_launch",),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="launches_app",
         confirmation_policy="optional",
         allowed_in_imported_packs=False,
@@ -34,12 +35,13 @@ class AppLaunchHandler:
 class AppWaitProcessHandler:
     action_type = "app.wait_process"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="app",
         required_params=("process_name",),
         optional_params=("timeout_seconds", "name", "optional"),
         required_capabilities=("process_inspection",),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,

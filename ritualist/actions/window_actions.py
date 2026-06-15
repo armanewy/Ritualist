@@ -9,12 +9,13 @@ from .metadata import ActionMetadata, WINDOWS_ONLY
 class WindowFocusHandler:
     action_type = "window.focus"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="window",
         required_params=(),
         optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia", "window_management"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="controls_ui",
         confirmation_policy="optional",
         allowed_in_imported_packs=False,
@@ -33,12 +34,13 @@ class WindowFocusHandler:
 class WindowMinimizeHandler:
     action_type = "window.minimize"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="window",
         required_params=(),
         optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia", "window_management"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="controls_ui",
         confirmation_policy="optional",
         allowed_in_imported_packs=False,
@@ -57,12 +59,13 @@ class WindowMinimizeHandler:
 class WindowMaximizeHandler:
     action_type = "window.maximize"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="window",
         required_params=(),
         optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia", "window_management"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="controls_ui",
         confirmation_policy="optional",
         allowed_in_imported_packs=False,
@@ -81,12 +84,13 @@ class WindowMaximizeHandler:
 class WindowWaitHandler:
     action_type = "window.wait"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="window",
         required_params=(),
         optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia", "window_management"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,

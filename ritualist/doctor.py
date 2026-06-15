@@ -23,9 +23,9 @@ class DoctorCheck:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "section": self.section,
-            "status": self.status,
-            "name": self.name,
+            "id": self.name,
+            "category": self.section,
+            "status": _json_status(self.status),
             "message": self.message,
             "details": self.details,
         }
@@ -38,39 +38,112 @@ class DoctorReport:
     current_os: str
     checks: list[DoctorCheck]
     action_metadata: list[ActionMetadata]
+    recipe: Recipe
+    missing_variables: list[str] = field(default_factory=list)
+    required_capabilities: list[str] = field(default_factory=list)
     schema_version: str = "doctor.v2"
 
     @property
+    def errors_count(self) -> int:
+        return sum(1 for check in self.checks if check.status == "error")
+
+    @property
+    def warnings_count(self) -> int:
+        return sum(1 for check in self.checks if check.status == "warn")
+
+    @property
     def compatibility(self) -> str:
-        if any(check.status == "error" for check in self.checks):
+        if self.errors_count:
             return "incompatible"
-        if any(check.status == "warn" for check in self.checks):
+        if self.warnings_count:
             return "compatible_with_warnings"
         return "compatible"
 
     @property
     def compatibility_score(self) -> int:
-        errors = sum(1 for check in self.checks if check.status == "error")
-        warnings = sum(1 for check in self.checks if check.status == "warn")
-        return max(0, 100 - errors * 25 - warnings * 10)
+        return max(0, 100 - self.errors_count * 25 - self.warnings_count * 10)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
-            "recipe": {
-                "id": self.recipe_id,
-                "name": self.recipe_name,
-            },
-            "machine": {
-                "os": self.current_os,
-            },
+            "recipe_id": self.recipe_id,
+            "recipe_name": self.recipe_name,
             "compatibility": {
                 "status": self.compatibility,
-                "score": self.compatibility_score,
+                "errors_count": self.errors_count,
+                "warnings_count": self.warnings_count,
             },
             "checks": [check.to_dict() for check in self.checks],
-            "action_metadata": [metadata.to_dict() for metadata in self.action_metadata],
+            "capabilities": self._capabilities_to_dict(),
+            "variables": self._variables_to_dict(),
+            "actions": [metadata.to_dict() for metadata in self.action_metadata],
+            "environment": self._environment_to_dict(),
         }
+
+    def _capabilities_to_dict(self) -> list[dict[str, Any]]:
+        capability_checks = {
+            check.details.get("capability", check.name): check
+            for check in self.checks
+            if check.section == "Capabilities"
+        }
+        rows: list[dict[str, Any]] = []
+        for capability in self.required_capabilities:
+            check = capability_checks.get(capability)
+            rows.append(
+                {
+                    "id": capability,
+                    "status": _json_status(check.status) if check else "ok",
+                    "message": check.message if check else "capability is declared",
+                    "details": check.details if check else {"capability": capability},
+                }
+            )
+        return rows
+
+    def _variables_to_dict(self) -> list[dict[str, Any]]:
+        missing_roots = {item.split(".", 1)[0] for item in self.missing_variables}
+        names = sorted(set(self.recipe.variables) | set(self.missing_variables) | missing_roots)
+        rows: list[dict[str, Any]] = []
+        for name in names:
+            hint = self.recipe.environment.variable_hints.get(name)
+            status = (
+                "missing"
+                if name in self.missing_variables or name in missing_roots
+                else "configured"
+            )
+            rows.append(
+                {
+                    "name": name,
+                    "status": status,
+                    "details": {
+                        "has_recipe_default": name in self.recipe.variables,
+                        "hint": hint,
+                    },
+                }
+            )
+        return rows
+
+    def _environment_to_dict(self) -> dict[str, Any]:
+        environment = self.recipe.environment
+        return {
+            "current_os": self.current_os,
+            "expected_os": list(environment.os),
+            "required_capabilities": list(environment.required_capabilities),
+            "expected_windows": [
+                expected.model_dump(mode="json") for expected in environment.expected_windows
+            ],
+            "expected_labels": [
+                expected.model_dump(mode="json") for expected in environment.expected_labels
+            ],
+            "variable_hints": dict(sorted(environment.variable_hints.items())),
+        }
+
+
+def _json_status(status: str) -> str:
+    if status == "warn":
+        return "warning"
+    if status == "info":
+        return "ok"
+    return status
 
 
 def diagnose_recipe(
@@ -127,6 +200,9 @@ def build_doctor_report(
         current_os=current_os,
         checks=checks,
         action_metadata=[registry.metadata(action_type) for action_type in action_types],
+        recipe=recipe,
+        missing_variables=sorted(missing_variables or []),
+        required_capabilities=required_capabilities,
     )
 
 

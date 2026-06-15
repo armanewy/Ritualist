@@ -93,6 +93,29 @@ def test_doctor_help_works():
     assert "recipe" in result.output
 
 
+def test_actions_lists_registered_metadata():
+    result = CliRunner().invoke(app, ["actions"])
+
+    assert result.exit_code == 0
+    assert "Registered Actions" in result.output
+    assert "desktop.click_text" in result.output
+    assert "required_for_play" in result.output
+
+
+def test_actions_prints_json_metadata():
+    result = CliRunner().invoke(app, ["actions", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    click_text = next(item for item in data if item["action_name"] == "desktop.click_text")
+    assert click_text["schema_version"] == "0.1"
+    assert click_text["category"] == "desktop"
+    assert click_text["supported_platforms"] == ["windows"]
+    assert click_text["side_effect_level"] == "risky"
+    assert click_text["confirmation_policy"] == "required_for_play"
+    assert click_text["allowed_in_imported_packs"] is False
+
+
 def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
     report = InitReport(
         paths={
@@ -426,6 +449,8 @@ def test_doctor_json_outputs_stable_shape(monkeypatch):
         {
             "id": "runbook",
             "name": "Runbook",
+            "variables": {"app_path": "demo.exe"},
+            "environment": {"required_capabilities": ["app_launch"]},
             "steps": [{"action": "app.launch", "command": "demo.exe"}],
         }
     )
@@ -438,12 +463,91 @@ def test_doctor_json_outputs_stable_shape(monkeypatch):
 
     assert result.exit_code == 0
     data = json.loads(result.output)
+    assert set(data) == {
+        "schema_version",
+        "recipe_id",
+        "recipe_name",
+        "compatibility",
+        "checks",
+        "capabilities",
+        "variables",
+        "actions",
+        "environment",
+    }
     assert data["schema_version"] == "doctor.v2"
-    assert data["recipe"] == {"id": "runbook", "name": "Runbook"}
+    assert data["recipe_id"] == "runbook"
+    assert data["recipe_name"] == "Runbook"
     assert data["compatibility"]["status"] == "compatible"
-    assert isinstance(data["compatibility"]["score"], int)
-    assert isinstance(data["checks"], list)
-    assert data["action_metadata"][0]["action"] == "app.launch"
+    assert data["compatibility"]["errors_count"] == 0
+    assert data["compatibility"]["warnings_count"] == 0
+    assert {check["status"] for check in data["checks"]} == {"ok"}
+    assert {"id", "category", "status", "message", "details"} <= set(data["checks"][0])
+    assert data["capabilities"] == [
+        {
+            "id": "app_launch",
+            "status": "ok",
+            "message": "local app launch is available through the OS",
+            "details": {"capability": "app_launch"},
+        }
+    ]
+    assert data["variables"] == [
+        {
+            "name": "app_path",
+            "status": "configured",
+            "details": {"has_recipe_default": True, "hint": None},
+        }
+    ]
+    assert data["actions"][0]["action"] == "app.launch"
+    assert data["environment"]["current_os"] in {"windows", "macos", "linux"}
+    assert data["environment"]["required_capabilities"] == ["app_launch"]
+
+
+def test_doctor_json_reports_warning_status_and_counts(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+            "verify": [{"action": "assert.browser_text_visible", "text": "Ready"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+
+    result = CliRunner().invoke(app, ["doctor", "runbook", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["compatibility"] == {
+        "status": "compatible_with_warnings",
+        "errors_count": 0,
+        "warnings_count": 1,
+    }
+    assert "warning" in {check["status"] for check in data["checks"]}
+
+
+def test_doctor_reports_supported_environment_os(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {"os": ["linux"]},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 0
+    assert "current OS linux is allowed" in result.output
 
 
 def test_doctor_reports_missing_capability(monkeypatch):
@@ -466,6 +570,31 @@ def test_doctor_reports_missing_capability(monkeypatch):
     assert result.exit_code == 1
     assert "windows_uia" in result.output
     assert "incompatible" in result.output
+
+
+def test_doctor_reports_environment_required_capability(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {"required_capabilities": ["playwright"]},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr(
+        "ritualist.doctor.importlib.util.find_spec",
+        lambda name: None if name == "playwright.sync_api" else object(),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 1
+    assert "Playwright import failed" in result.output
+    assert "ritualist[browser]" in result.output
 
 
 def test_doctor_reports_platform_mismatch(monkeypatch):
@@ -582,6 +711,58 @@ def test_doctor_checks_expected_windows_and_labels(monkeypatch):
     assert "expected label found: 'Connected' in 'Vendor App'" in result.output
     assert window_calls[0]["title_contains"] == "Vendor App"
     assert label_calls[0]["text"] == "Connected"
+
+
+def test_doctor_expected_label_check_is_side_effect_free(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "environment": {
+                "expected_labels": [
+                    {"window_title_contains": "Battle.net", "text": "Play"}
+                ],
+            },
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    label_calls = []
+
+    def text_visible(self, **kwargs):
+        label_calls.append(kwargs)
+        return False
+
+    def click_text(self, **kwargs):
+        raise AssertionError("doctor must not click expected labels")
+
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr(
+        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
+        text_visible,
+    )
+    monkeypatch.setattr(
+        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.click_text",
+        click_text,
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 0
+    assert "expected label not currently visible: 'Play' in 'Battle.net'" in result.output
+    assert label_calls == [
+        {
+            "text": "Play",
+            "window_title_contains": "Battle.net",
+            "control_type": None,
+            "exact": True,
+            "timeout_seconds": 1.0,
+        }
+    ]
 
 
 def test_successful_run_with_keep_open_recipe_requests_keep_alive(monkeypatch):

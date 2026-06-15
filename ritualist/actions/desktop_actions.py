@@ -9,8 +9,9 @@ from .metadata import ActionMetadata, WINDOWS_ONLY
 class DesktopClickTextHandler:
     action_type = "desktop.click_text"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="desktop",
         required_params=("text", "window_title_contains"),
         optional_params=(
             "control_type",
@@ -22,7 +23,7 @@ class DesktopClickTextHandler:
             "optional",
         ),
         required_capabilities=("windows_uia",),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="risky",
         confirmation_policy="required_for_play",
         allowed_in_imported_packs=False,

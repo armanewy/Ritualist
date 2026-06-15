@@ -111,6 +111,30 @@ def test_load_recipe_supports_environment_contract(tmp_path):
     assert recipe.environment.variable_hints["app_window"] == "Use the visible app title."
 
 
+def test_load_recipe_without_environment_uses_empty_contract(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            steps:
+              - action: app.launch
+                command: demo.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.environment.os == []
+    assert recipe.environment.required_capabilities == []
+    assert recipe.environment.expected_windows == []
+    assert recipe.environment.expected_labels == []
+
+
 def test_load_recipe_for_diagnostics_reports_missing_variables(tmp_path):
     path = tmp_path / "recipe.yaml"
     path.write_text(

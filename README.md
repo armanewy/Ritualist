@@ -150,7 +150,7 @@ verify:
 
 The recipe exposes only structured actions. It does not permit arbitrary Python or recipe-supplied JavaScript.
 
-`environment` is optional and lets a recipe describe the machine it expects. Doctor uses it to report OS compatibility, required capabilities, expected windows/labels, and setup hints for missing variables. Doctor summarizes compatibility as `compatible`, `compatible_with_warnings`, or `incompatible`, with machine-readable output available through `ritualist doctor <recipe> --json`.
+`environment` is optional and lets a recipe describe the machine it expects. Recipes without an `environment` section remain valid. Doctor uses environment contracts to report OS compatibility, required capabilities, expected windows/labels, and setup hints for missing variables. These contracts are portability metadata: they do not launch apps, open browsers, click controls, type input, or run recipe actions. Expected window and label checks are best-effort, read-only probes so a shared recipe can explain what should be visible on the target machine. Doctor summarizes compatibility as `compatible`, `compatible_with_warnings`, or `incompatible`, with machine-readable output available through `ritualist doctor <recipe> --json`.
 
 Supported capability names include:
 
@@ -279,6 +279,43 @@ Packaged startup failures are written to `startup-error.log` under the logs dire
 
 ## Diagnostics
 
-`ritualist doctor <recipe-id-or-path>` validates a recipe without opening browsers, launching apps, or clicking. It checks optional dependency availability, OS support, browser profile creation, local app paths, and the window/text targets for `desktop.click_text`.
+`ritualist doctor <recipe-id-or-path>` validates a recipe without opening browsers, launching apps, clicking, typing, or running workflow actions. It checks optional dependency availability, OS support, browser profile creation, local app paths, `environment` contracts, and the window/text targets for `desktop.click_text`. Environment expected-window and expected-label checks use read-only inspection only; they are portability hints, not automation steps.
+
+Machine-readable Doctor output is available with `--json` and keeps stable top-level fields for UI badges:
+
+```json
+{
+  "schema_version": "doctor.v2",
+  "recipe_id": "gaming_mode",
+  "recipe_name": "Gaming Mode",
+  "compatibility": {
+    "status": "compatible_with_warnings",
+    "errors_count": 0,
+    "warnings_count": 1
+  },
+  "checks": [
+    {
+      "id": "expected_window",
+      "category": "Windows/UI labels",
+      "status": "warning",
+      "message": "expected window not currently visible: Battle.net",
+      "details": {
+        "target": "Battle.net"
+      }
+    }
+  ],
+  "capabilities": [],
+  "variables": [],
+  "actions": [],
+  "environment": {
+    "current_os": "windows",
+    "expected_os": ["windows"],
+    "required_capabilities": ["playwright", "windows_uia"],
+    "expected_windows": [],
+    "expected_labels": [],
+    "variable_hints": {}
+  }
+}
+```
 
 `ritualist inspect-window <title-contains>` is Windows-only and prints matching window titles plus visible descendant labels. Use it to discover the exact labels exposed to UI Automation before editing `desktop.click_text` steps.

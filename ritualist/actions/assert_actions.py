@@ -25,12 +25,13 @@ from .metadata import ALL_PLATFORMS, ActionMetadata, WINDOWS_ONLY
 class AssertFileExistsHandler:
     action_type = "assert.file_exists"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("path",),
         optional_params=("timeout_seconds", "name", "optional"),
         required_capabilities=("file_read",),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -48,12 +49,13 @@ class AssertFileExistsHandler:
 class AssertPathExistsHandler:
     action_type = "assert.path_exists"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("path",),
         optional_params=("timeout_seconds", "name", "optional"),
         required_capabilities=("file_read",),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -69,12 +71,13 @@ class AssertPathExistsHandler:
 class AssertProcessRunningHandler:
     action_type = "assert.process_running"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("process_name",),
         optional_params=("timeout_seconds", "name", "optional"),
         required_capabilities=("process_inspection",),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -95,12 +98,13 @@ class AssertProcessRunningHandler:
 class AssertWindowExistsHandler:
     action_type = "assert.window_exists"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=(),
         optional_params=("title_contains", "process_name", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia", "window_management"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -121,12 +125,13 @@ class AssertWindowExistsHandler:
 class AssertWindowTextVisibleHandler:
     action_type = "assert.window_text_visible"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("window_title_contains", "text"),
         optional_params=("control_type", "exact", "timeout_seconds", "name", "optional"),
         required_capabilities=("windows_uia",),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -151,12 +156,13 @@ class AssertWindowTextVisibleHandler:
 class AssertBrowserTextVisibleHandler:
     action_type = "assert.browser_text_visible"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("text",),
         optional_params=("exact", "timeout_seconds", "name", "optional"),
         required_capabilities=("playwright", "browser_control"),
-        platform_support=ALL_PLATFORMS,
+        supported_platforms=ALL_PLATFORMS,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,
@@ -178,12 +184,13 @@ class AssertBrowserTextVisibleHandler:
 class AssertRegistryValueHandler:
     action_type = "assert.registry_value"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="assert",
         required_params=("key",),
         optional_params=("value_name", "expected_value", "timeout_seconds", "name", "optional"),
         required_capabilities=("registry_read",),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="read_only",
         confirmation_policy="never",
         allowed_in_imported_packs=True,

@@ -9,12 +9,13 @@ from .metadata import ActionMetadata, WINDOWS_ONLY
 class InputHotkeyHandler:
     action_type = "input.hotkey"
     metadata = ActionMetadata(
-        action=action_type,
+        action_name=action_type,
         schema_version="0.1",
+        category="input",
         required_params=("keys",),
         optional_params=("name", "optional", "timeout_seconds"),
         required_capabilities=("windows_uia", "keyboard_input"),
-        platform_support=WINDOWS_ONLY,
+        supported_platforms=WINDOWS_ONLY,
         side_effect_level="types_input",
         confirmation_policy="optional",
         allowed_in_imported_packs=False,
