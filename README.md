@@ -57,6 +57,22 @@ Inspect a real Windows UI Automation window before tuning click text:
 ritualist inspect-window "Battle.net" --control-type Button --limit 100
 ```
 
+## First Real Trace
+
+Use this sequence for the first Windows desktop trace of `gaming_mode`:
+
+```powershell
+python -m pip install -e ".[all,dev]"
+python -m playwright install chromium
+python -m ritualist init
+python -m ritualist doctor gaming_mode
+python -m ritualist dry-run gaming_mode
+python -m ritualist inspect-window "Battle.net"
+python -m ritualist run gaming_mode
+```
+
+The sample recipe sets `keep_open: true` on `browser.open`, so after the workflow reaches the browser step, the Ritualist CLI stays alive even if a later desktop step fails or the final Play confirmation is cancelled. Press `Ctrl+C` to exit the Ritualist CLI and let Playwright close its browser process.
+
 ## Test
 
 Core tests do not require a desktop session:
@@ -126,7 +142,7 @@ Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.j
 
 ## Browser Lifecycle
 
-Playwright owns the browser process it launches. When a CLI run exits, the browser it opened may close with the Playwright driver. For media workflows, set `keep_open: true` on `browser.open` or pass `ritualist run <recipe> --keep-alive`; Ritualist will keep the CLI process alive after a successful run until you press `Ctrl+C`.
+Playwright owns the browser process it launches. When a CLI run exits, the browser it opened may close with the Playwright driver. For media workflows, set `keep_open: true` on `browser.open` or pass `ritualist run <recipe> --keep-alive`; Ritualist will keep the CLI process alive after execution until you press `Ctrl+C`. Recipe-level `keep_open: true` activates only after that browser step succeeds. The `--keep-alive` option keeps the CLI alive after execution regardless of workflow success, unless the run is a dry-run.
 
 GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
 

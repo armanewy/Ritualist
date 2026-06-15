@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from typing import Annotated
 
@@ -190,6 +189,10 @@ def doctor(
         list[str] | None,
         typer.Option("--var", "-v", help="Template override in KEY=VALUE form."),
     ] = None,
+    no_strict: Annotated[
+        bool,
+        typer.Option("--no-strict", help="Always exit 0 after printing doctor checks."),
+    ] = False,
 ) -> None:
     """Validate recipe health without launching apps, opening browsers, or clicking."""
     try:
@@ -209,6 +212,8 @@ def doctor(
         status = f"[{style}]{escape(check.status)}[/]" if style else escape(check.status)
         table.add_row(status, escape(check.name), escape(check.message))
     console.print(table)
+    if not no_strict and any(check.status == "error" for check in checks):
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -253,7 +258,7 @@ def _run_recipe(
         raise typer.Exit(1) from exc
 
     _print_results(summary.results)
-    if summary.success and not dry_run and (keep_alive or _recipe_requests_keep_open(parsed)):
+    if not dry_run and (keep_alive or _summary_requests_keep_open(parsed, summary)):
         _keep_alive_until_interrupted()
     if not summary.success:
         raise typer.Exit(1)
@@ -322,11 +327,17 @@ def _print_paths(paths: dict[str, object]) -> None:
     console.print(table)
 
 
-def _recipe_requests_keep_open(recipe: object) -> bool:
-    return any(
-        getattr(step, "action", None) == "browser.open" and getattr(step, "keep_open", False)
-        for step in recipe.steps
-    )
+def _summary_requests_keep_open(recipe: object, summary: object) -> bool:
+    steps_by_index = {index: step for index, step in enumerate(recipe.steps, start=1)}
+    for result in summary.results:
+        step = steps_by_index.get(result.index)
+        if (
+            result.action == "browser.open"
+            and result.status == "success"
+            and getattr(step, "keep_open", False)
+        ):
+            return True
+    return False
 
 
 def _keep_alive_until_interrupted() -> None:

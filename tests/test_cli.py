@@ -165,7 +165,7 @@ def test_doctor_reports_recipe_checks(tmp_path, monkeypatch):
     assert "target window contains" in result.output
 
 
-def test_doctor_preserves_dependency_extras(monkeypatch):
+def test_doctor_fails_on_error_and_preserves_dependency_extras(monkeypatch):
     recipe = Recipe.model_validate(
         {
             "id": "gaming_mode",
@@ -178,11 +178,28 @@ def test_doctor_preserves_dependency_extras(monkeypatch):
 
     result = CliRunner().invoke(app, ["doctor", "gaming_mode"])
 
+    assert result.exit_code == 1
+    assert "ritualist[browser]" in result.output
+
+
+def test_doctor_no_strict_prints_errors_but_exits_zero(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "steps": [{"action": "browser.open", "url": "https://example.test"}],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
+
+    result = CliRunner().invoke(app, ["doctor", "gaming_mode", "--no-strict"])
+
     assert result.exit_code == 0
     assert "ritualist[browser]" in result.output
 
 
-def test_keep_open_recipe_requests_keep_alive(monkeypatch):
+def test_successful_run_with_keep_open_recipe_requests_keep_alive(monkeypatch):
     fakes = FakeAdapters()
     recipe = Recipe.model_validate(
         {
@@ -206,4 +223,116 @@ def test_keep_open_recipe_requests_keep_alive(monkeypatch):
     result = CliRunner().invoke(app, ["run", "demo"])
 
     assert result.exit_code == 0
+    assert called == [True]
+
+
+def test_failed_later_step_after_keep_open_browser_keeps_alive(monkeypatch):
+    fakes = FakeAdapters()
+    fakes.shell.failures["launch"] = RuntimeError("boom")
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                },
+                {"action": "app.launch", "command": "demo.exe"},
+            ],
+        }
+    )
+    called = []
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+
+    result = CliRunner().invoke(app, ["run", "demo"])
+
+    assert result.exit_code == 1
+    assert called == [True]
+
+
+def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkeypatch):
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                },
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    called = []
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+
+    result = CliRunner().invoke(app, ["run", "demo"], input="n\n")
+
+    assert result.exit_code == 1
+    assert called == [True]
+    assert fakes.desktop.calls == []
+
+
+def test_dry_run_never_keeps_alive(monkeypatch):
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                }
+            ],
+        }
+    )
+    called = []
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+
+    result = CliRunner().invoke(app, ["dry-run", "demo"])
+
+    assert result.exit_code == 0
+    assert called == []
+
+
+def test_keep_alive_option_runs_even_after_failure(monkeypatch):
+    fakes = FakeAdapters()
+    fakes.shell.failures["launch"] = RuntimeError("boom")
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    called = []
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+
+    result = CliRunner().invoke(app, ["run", "demo", "--keep-alive"])
+
+    assert result.exit_code == 1
     assert called == [True]
