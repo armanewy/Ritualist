@@ -1,0 +1,71 @@
+version: "0.1"
+id: collect_basic_diagnostics
+name: Collect Basic Diagnostics
+description: Open safe local and browser-based diagnostic references for manual collection without running scripts.
+home:
+  category: Helpdesk
+  card:
+    title: Collect Basic Diagnostics
+    subtitle: System info + status + notes
+    image: ""
+    accent: "#5c7a32"
+variables:
+  diagnostics_folder_path: '%USERPROFILE%\Documents'
+  system_info_app_path: msinfo32.exe
+  os_info_help_url: "https://support.example.invalid/os-info"
+  network_status_url: "https://status.example.invalid/network"
+  device_inventory_url: "https://support.example.invalid/device-inventory"
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+  variable_hints:
+    diagnostics_folder_path: Set this to the local folder used for diagnostic notes.
+    system_info_app_path: Set this to the system information app command or executable path.
+    os_info_help_url: Set this to the approved operating system information guide.
+    network_status_url: Set this to the relevant network status page.
+    device_inventory_url: Set this to the approved device inventory page.
+preflight:
+  - name: Diagnostics folder exists
+    action: assert.path_exists
+    path: "{{ diagnostics_folder_path }}"
+    optional: true
+
+steps:
+  - name: Confirm diagnostics workspace
+    action: confirm.ask
+    prompt: Open system information and diagnostic reference pages for manual collection?
+
+  - name: Launch system information
+    action: app.launch
+    command: "{{ system_info_app_path }}"
+    optional: true
+    requires_confirmation: true
+
+  - name: Open operating system info guide
+    action: browser.open
+    url: "{{ os_info_help_url }}"
+    browser: chrome
+    profile: basic_diagnostics
+    keep_open: true
+
+  - name: Open network status
+    action: browser.open
+    url: "{{ network_status_url }}"
+    browser: chrome
+    profile: basic_diagnostics
+    keep_open: true
+
+  - name: Open device inventory
+    action: browser.open
+    url: "{{ device_inventory_url }}"
+    browser: chrome
+    profile: basic_diagnostics
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Wait for manual diagnostic notes
+    action: wait.for_user
+    prompt: Continue after device name, operating system version, network state, and issue time are recorded manually.

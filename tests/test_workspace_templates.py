@@ -15,9 +15,16 @@ WORKSPACE_TEMPLATE_IDS = {
     "research_mode",
     "streaming_mode",
 }
-WORKSPACE_TEMPLATE_PATHS = [
-    SAMPLE_DIR / f"{template_id}.yaml" for template_id in sorted(WORKSPACE_TEMPLATE_IDS)
-]
+HELPDESK_TEMPLATE_IDS = {
+    "browser_admin_console_workspace",
+    "collect_basic_diagnostics",
+    "lab_classroom_setup",
+    "meeting_audio_troubleshooting",
+    "support_triage_workspace",
+    "vendor_app_configuration_placeholder",
+}
+TEMPLATE_IDS = WORKSPACE_TEMPLATE_IDS | HELPDESK_TEMPLATE_IDS
+TEMPLATE_PATHS = [SAMPLE_DIR / f"{template_id}.yaml" for template_id in sorted(TEMPLATE_IDS)]
 SAMPLE_RECIPE_PATHS = sorted(SAMPLE_DIR.glob("*.yaml"))
 TEMPLATE_REF_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
 ALLOWED_TEMPLATE_ACTIONS = {
@@ -70,13 +77,24 @@ FORBIDDEN_DEFAULT_EVIDENCE_TERMS = (
 
 
 def test_workspace_templates_are_bundled() -> None:
-    assert {path.stem for path in WORKSPACE_TEMPLATE_PATHS} == WORKSPACE_TEMPLATE_IDS
-    for path in WORKSPACE_TEMPLATE_PATHS:
+    assert {path.stem for path in TEMPLATE_PATHS} == TEMPLATE_IDS
+    for path in TEMPLATE_PATHS:
         assert path.exists()
 
 
+def test_helpdesk_template_set_is_complete() -> None:
+    assert HELPDESK_TEMPLATE_IDS == {
+        "browser_admin_console_workspace",
+        "collect_basic_diagnostics",
+        "lab_classroom_setup",
+        "meeting_audio_troubleshooting",
+        "support_triage_workspace",
+        "vendor_app_configuration_placeholder",
+    }
+
+
 def test_workspace_templates_validate_and_dry_run_without_side_effects() -> None:
-    for path in WORKSPACE_TEMPLATE_PATHS:
+    for path in TEMPLATE_PATHS:
         recipe = load_recipe(path)
         fakes = FakeAdapters()
         confirmations: list[str] = []
@@ -102,7 +120,7 @@ def test_workspace_templates_validate_and_dry_run_without_side_effects() -> None
 
 
 def test_workspace_templates_use_variables_for_paths_and_urls() -> None:
-    for path in WORKSPACE_TEMPLATE_PATHS:
+    for path in TEMPLATE_PATHS:
         raw = read_recipe_document(path)
         variables = raw["variables"]
 
@@ -122,15 +140,29 @@ def test_workspace_templates_use_variables_for_paths_and_urls() -> None:
                 assert _template_reference(step["path"]) in variables
 
 
+def test_templates_provide_doctor_friendly_variable_hints() -> None:
+    for path in TEMPLATE_PATHS:
+        raw = read_recipe_document(path)
+        variables = raw["variables"]
+        environment = raw.get("environment") or {}
+        hints = environment.get("variable_hints") or {}
+
+        assert environment.get("required_capabilities")
+        assert set(variables) <= set(hints)
+
+
 def test_workspace_templates_keep_risky_actions_behind_confirmation() -> None:
-    for path in WORKSPACE_TEMPLATE_PATHS:
+    for path in TEMPLATE_PATHS:
         recipe = load_recipe(path)
 
         assert recipe.steps[0].action == "confirm.ask"
+        for step in recipe.steps[1:]:
+            if step.requires_confirmation:
+                assert step.action in {"app.launch", "browser.open"}
 
 
 def test_workspace_templates_avoid_disallowed_content() -> None:
-    for path in WORKSPACE_TEMPLATE_PATHS:
+    for path in TEMPLATE_PATHS:
         raw = read_recipe_document(path)
         text = path.read_text(encoding="utf-8").casefold()
         actions = {step["action"] for step in _all_steps(raw)}
@@ -140,6 +172,7 @@ def test_workspace_templates_avoid_disallowed_content() -> None:
         assert "token" not in text
         for term in FORBIDDEN_DEFAULT_EVIDENCE_TERMS:
             assert term not in text
+        assert "desktop.click_text" not in text
         assert "desktop.click_text" not in actions
 
 

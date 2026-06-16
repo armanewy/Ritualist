@@ -1,0 +1,70 @@
+version: "0.1"
+id: lab_classroom_setup
+name: Lab/Classroom Setup
+description: Open classroom setup references, roster, and local materials without changing student devices automatically.
+home:
+  category: Helpdesk
+  card:
+    title: Lab/Classroom Setup
+    subtitle: Schedule + roster + materials
+    image: ""
+    accent: "#b0645f"
+variables:
+  class_schedule_url: "https://school.example.invalid/schedule"
+  roster_url: "https://school.example.invalid/roster"
+  learning_platform_url: "https://school.example.invalid/course"
+  classroom_materials_path: '%USERPROFILE%\Documents\Classroom'
+  presentation_app_path: powerpnt.exe
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+  variable_hints:
+    class_schedule_url: Set this to the classroom schedule URL.
+    roster_url: Set this to the roster or attendance URL.
+    learning_platform_url: Set this to the learning platform course URL.
+    classroom_materials_path: Set this to the local classroom materials folder.
+    presentation_app_path: Set this to the local presentation app command or executable path.
+preflight:
+  - name: Classroom materials folder exists
+    action: assert.path_exists
+    path: "{{ classroom_materials_path }}"
+    optional: true
+
+steps:
+  - name: Confirm lab classroom workspace
+    action: confirm.ask
+    prompt: Open schedule, roster, learning platform, and local classroom materials for manual setup?
+
+  - name: Open class schedule
+    action: browser.open
+    url: "{{ class_schedule_url }}"
+    browser: chrome
+    profile: classroom_setup
+    keep_open: true
+
+  - name: Open roster
+    action: browser.open
+    url: "{{ roster_url }}"
+    browser: chrome
+    profile: classroom_setup
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Open learning platform
+    action: browser.open
+    url: "{{ learning_platform_url }}"
+    browser: chrome
+    profile: classroom_setup
+    keep_open: true
+
+  - name: Launch presentation app
+    action: app.launch
+    command: "{{ presentation_app_path }}"
+    optional: true
+
+  - name: Wait for room readiness check
+    action: wait.for_user
+    prompt: Continue after displays, audio, roster, and classroom materials are checked manually.

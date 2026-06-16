@@ -123,8 +123,16 @@ Bundled starter templates live under `ritualist\sample_recipes` for local editin
 - `meeting_mode.yaml`: calendar, notes, meeting app, and meeting lobby.
 - `research_mode.yaml`: notes app, research workspace, and source URLs.
 - `streaming_mode.yaml`: streaming app, dashboard, and chat without starting a broadcast.
+- `support_triage_workspace.yaml`: ticket queue, knowledge base, service status, and local notes.
+- `meeting_audio_troubleshooting.yaml`: audio checklist, meeting service status, device help, and meeting app.
+- `vendor_app_configuration_placeholder.yaml`: vendor app, approved runbook, change record, and status page.
+- `collect_basic_diagnostics.yaml`: system information, operating system guide, network status, and device inventory.
+- `lab_classroom_setup.yaml`: class schedule, roster, learning platform, and classroom materials.
+- `browser_admin_console_workspace.yaml`: admin console, monitoring console, audit page, and runbook.
 
-These templates are samples only. `ritualist init` still installs only `gaming_mode.yaml`; the workspace templates are not run or imported automatically. Each template uses variables for local app paths and URLs, includes confirmation before opening its workspace, avoids passwords and destructive actions, and uses only structured recipe actions.
+These templates are samples only. `ritualist init` still installs only `gaming_mode.yaml`; the workspace and helpdesk templates are not run or imported automatically. Each template uses variables for local app paths and URLs, includes confirmation before opening its workspace or runbook surfaces, avoids passwords and destructive actions, and uses only structured recipe actions.
+
+See `docs\helpdesk_templates.md` for helpdesk/runbook template notes.
 
 Validate and dry-run a template before using it:
 

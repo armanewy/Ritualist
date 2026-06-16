@@ -1,0 +1,64 @@
+version: "0.1"
+id: meeting_audio_troubleshooting
+name: Meeting Audio Troubleshooting
+description: Open meeting audio troubleshooting references and the local meeting app without joining audio or video automatically.
+home:
+  category: Helpdesk
+  card:
+    title: Meeting Audio Troubleshooting
+    subtitle: Checklist + status + meeting app
+    image: ""
+    accent: "#6f7bd9"
+variables:
+  audio_checklist_url: "https://support.example.invalid/audio-checklist"
+  meeting_status_url: "https://status.example.invalid/meetings"
+  device_help_url: "https://support.example.invalid/audio-devices"
+  meeting_app_path: '%LOCALAPPDATA%\Microsoft\Teams\current\Teams.exe'
+  meeting_app_window: Teams
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - playwright
+  expected_windows:
+    - title_contains: "{{ meeting_app_window }}"
+  variable_hints:
+    audio_checklist_url: Set this to the audio troubleshooting checklist URL.
+    meeting_status_url: Set this to the meeting service status URL.
+    device_help_url: Set this to the device setup help URL.
+    meeting_app_path: Set this to the local meeting app executable path.
+    meeting_app_window: Set this to visible meeting app window title text.
+steps:
+  - name: Confirm meeting audio workspace
+    action: confirm.ask
+    prompt: Open the meeting app and audio troubleshooting references for manual checks?
+
+  - name: Open audio checklist
+    action: browser.open
+    url: "{{ audio_checklist_url }}"
+    browser: chrome
+    profile: meeting_audio
+    keep_open: true
+
+  - name: Open meeting service status
+    action: browser.open
+    url: "{{ meeting_status_url }}"
+    browser: chrome
+    profile: meeting_audio
+    keep_open: true
+
+  - name: Open device help
+    action: browser.open
+    url: "{{ device_help_url }}"
+    browser: chrome
+    profile: meeting_audio
+    keep_open: true
+
+  - name: Launch meeting app
+    action: app.launch
+    command: "{{ meeting_app_path }}"
+    optional: true
+
+  - name: Wait for manual audio test
+    action: wait.for_user
+    prompt: Continue after the speaker, microphone, and meeting app settings have been checked manually.
