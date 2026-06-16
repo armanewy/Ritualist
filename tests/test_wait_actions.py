@@ -176,7 +176,11 @@ def test_wait_seconds_records_waiting_state_while_active(tmp_path) -> None:
         deadline = time.monotonic() + 1.0
         while time.monotonic() < deadline:
             if writer.run_dir is not None:
-                metadata = json.loads((writer.run_dir / "run.json").read_text(encoding="utf-8"))
+                try:
+                    metadata = json.loads((writer.run_dir / "run.json").read_text(encoding="utf-8"))
+                except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+                    time.sleep(0.01)
+                    continue
                 observed_waiting = (
                     metadata.get("current_run_state") == "waiting"
                     and metadata.get("current_step_state") == "waiting"
