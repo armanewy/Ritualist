@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -31,6 +32,7 @@ from ritualist.logging_setup import setup_logging
 from ritualist.overlay import NullOverlayController
 from ritualist.paths import config_file, recipes_dir, runs_dir
 from ritualist.recipe_loader import discover_recipes, load_recipe
+from ritualist.recipe_step_builder import RecipeStepAppendController
 from ritualist.run_logs import RunLogWriter, reconcile_running_runs
 from ritualist.runtime_control import RuntimeControl
 
@@ -38,6 +40,7 @@ from .dialogs import ask_confirmation, show_error
 from .diagnostics_dialog import DiagnosticsDialog
 from .overlay import QtOverlayController
 from .runner_thread import RunnerThread
+from .step_wizard import AddStepDialog
 
 
 class MainWindow(QMainWindow):
@@ -50,6 +53,7 @@ class MainWindow(QMainWindow):
         self.runner: RunnerThread | None = None
         self._close_after_run_stops = False
         self._wait_status: dict[str, object] | None = None
+        self.step_append_controller = RecipeStepAppendController()
         self.overlay_controller, self._overlay_warning = self._create_overlay_controller()
 
         root = QWidget()
@@ -64,6 +68,8 @@ class MainWindow(QMainWindow):
         browse_button.clicked.connect(self.choose_file)
         load_button = QPushButton("Load")
         load_button.clicked.connect(self.load_current_recipe)
+        new_recipe_button = QPushButton("New Recipe")
+        new_recipe_button.clicked.connect(self.new_recipe)
         self.init_button = QPushButton("Initialize App")
         self.init_button.clicked.connect(self.initialize_app)
         self.refresh_button = QPushButton("Refresh Recipes")
@@ -73,6 +79,7 @@ class MainWindow(QMainWindow):
         file_row.addWidget(self.path_edit)
         file_row.addWidget(browse_button)
         file_row.addWidget(load_button)
+        file_row.addWidget(new_recipe_button)
         file_row.addWidget(self.init_button)
         file_row.addWidget(self.refresh_button)
         layout.addLayout(file_row)
@@ -89,6 +96,8 @@ class MainWindow(QMainWindow):
         self.dry_run_button.clicked.connect(lambda: self.run_recipe(dry_run=True))
         self.doctor_button = QPushButton("Doctor")
         self.doctor_button.clicked.connect(self.doctor_recipe)
+        self.add_step_button = QPushButton("Add Step")
+        self.add_step_button.clicked.connect(self.add_step)
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop_run)
         self.stop_button.setEnabled(False)
@@ -101,6 +110,7 @@ class MainWindow(QMainWindow):
         button_row.addWidget(self.run_button)
         button_row.addWidget(self.dry_run_button)
         button_row.addWidget(self.doctor_button)
+        button_row.addWidget(self.add_step_button)
         button_row.addWidget(self.pause_button)
         button_row.addWidget(self.resume_button)
         button_row.addWidget(self.stop_button)
@@ -220,6 +230,64 @@ class MainWindow(QMainWindow):
         self.populate_steps()
         self.status_label.setText(f"Loaded {self.recipe.id}")
         self.append_log(f"Loaded {self.recipe.name}")
+
+    def new_recipe(self) -> None:
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Create Ritual Recipe",
+            str(recipes_dir() / "new_recipe.yaml"),
+            "YAML files (*.yaml *.yml);;All files (*.*)",
+        )
+        if not filename:
+            return
+        dialog = AddStepDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.step_data is None:
+            return
+        try:
+            self.recipe = self.step_append_controller.create_recipe_with_step(
+                filename,
+                dialog.step_data,
+                variable_updates=dialog.variable_updates,
+            )
+            self.recipe_path = Path(filename)
+            self.path_edit.setText(str(self.recipe_path))
+        except RitualistError as exc:
+            show_error(self, "Could Not Create Recipe", str(exc))
+            return
+        self.populate_steps()
+        self.status_label.setText(f"Created {self.recipe.id}")
+        self.append_log(f"Created {self.recipe.name}")
+        self.discovered_recipes[self.recipe.id] = self.recipe_path
+        combo_label = f"{self.recipe.id} - {self.recipe.name}"
+        combo_index = self.recipe_combo.findData(self.recipe.id)
+        if combo_index < 0:
+            self.recipe_combo.addItem(combo_label, self.recipe.id)
+            combo_index = self.recipe_combo.findData(self.recipe.id)
+        self.recipe_combo.blockSignals(True)
+        self.recipe_combo.setCurrentIndex(combo_index)
+        self.recipe_combo.blockSignals(False)
+
+    def add_step(self) -> None:
+        if self.recipe is None:
+            self.load_current_recipe()
+        if self.recipe is None or self.recipe_path is None:
+            show_error(self, "No Recipe Loaded", "Load or create a recipe before adding a step.")
+            return
+        dialog = AddStepDialog(self, recipe=self.recipe)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.step_data is None:
+            return
+        try:
+            self.recipe = self.step_append_controller.append_step(
+                self.recipe_path,
+                dialog.step_data,
+                variable_updates=dialog.variable_updates,
+            )
+        except RitualistError as exc:
+            show_error(self, "Could Not Add Step", str(exc))
+            return
+        self.populate_steps()
+        self.status_label.setText(f"Updated {self.recipe.id}")
+        self.append_log(f"Added {dialog.step_data['action']} to {self.recipe.name}")
 
     def doctor_recipe(self) -> None:
         if self.recipe is None:
@@ -416,6 +484,7 @@ class MainWindow(QMainWindow):
         self.run_button.setEnabled(enabled)
         self.dry_run_button.setEnabled(enabled)
         self.doctor_button.setEnabled(enabled)
+        self.add_step_button.setEnabled(enabled)
         self.stop_button.setEnabled(not enabled)
         self.pause_button.setEnabled(not enabled)
         self.resume_button.setEnabled(False)

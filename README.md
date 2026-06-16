@@ -203,6 +203,8 @@ verify:
 
 The recipe exposes only structured actions. It does not permit arbitrary Python or recipe-supplied JavaScript.
 
+Recipes can still be edited directly as YAML. The backend recipe builder uses the same validation path before saving GUI-authored edits, then writes YAML with the current YAML library. That rewrite may not preserve comments or original formatting, so keep notes outside edited recipes if they must survive a GUI save.
+
 `environment` is optional and lets a recipe describe the machine it expects. Recipes without an `environment` section remain valid. Doctor uses environment contracts to report OS compatibility, required capabilities, expected windows/labels, and setup hints for missing variables. These contracts are portability metadata: they do not launch apps, open browsers, click controls, type input, or run recipe actions. Expected window and label checks are best-effort, read-only probes so a shared recipe can explain what should be visible on the target machine. Doctor summarizes compatibility as `compatible`, `compatible_with_warnings`, or `incompatible`, with machine-readable output available through `ritualist doctor <recipe> --json`.
 
 Supported capability names include:

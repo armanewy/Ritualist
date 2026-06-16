@@ -10,6 +10,21 @@ from ritualist.overlay import ScreenRect, TargetRegion
 
 
 class WindowsWindowManager:
+    def foreground_window_title(self) -> str:
+        _ensure_windows()
+        try:
+            import win32gui
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "foreground window capture requires pywin32; install ritualist[windows]"
+            ) from exc
+
+        handle = win32gui.GetForegroundWindow()
+        title = str(win32gui.GetWindowText(handle) or "").strip()
+        if not title:
+            raise RitualistError("foreground window title unavailable")
+        return title
+
     def window_exists(
         self,
         *,

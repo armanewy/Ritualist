@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 from ritualist.actions.base import AdapterBundle
@@ -69,6 +70,10 @@ class FakeBrowserAdapter(RecordingAdapter):
 
 
 class FakeWindowAdapter(RecordingAdapter):
+    def foreground_window_title(self) -> str:
+        self.record("foreground_window_title")
+        return str(self.response("foreground_window_title", "Active Window"))
+
     def window_exists(self, **kwargs: Any) -> bool:
         self.record("window_exists", **kwargs)
         return bool(self.response("window_exists", True))
@@ -174,6 +179,13 @@ def _fake_snap_region(kwargs: dict[str, Any], edge: str) -> TargetRegion:
 
 
 class FakeDesktopAdapter(RecordingAdapter):
+    def inspect_windows(self, **kwargs: Any):
+        self.record("inspect_windows", **kwargs)
+        return self.responses.get(
+            "inspect_windows",
+            [SimpleNamespace(title=kwargs.get("title_contains") or "Window", labels=["Play"])],
+        )
+
     def text_visible(self, **kwargs: Any) -> bool:
         self.record("text_visible", **kwargs)
         return bool(self.response("text_visible", True))
