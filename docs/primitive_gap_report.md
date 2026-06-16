@@ -158,11 +158,18 @@ Impact: acceptable today. Future work should continue tightening boundaries so
 Doctor, pack review, and dry-run never accidentally probe real desktop or
 browser state.
 
-Recommended hardening:
+Hardening status:
 
-- Keep fake adapter coverage for every read-only primitive.
-- Add golden JSON fixtures for `primitives --json`, `policy show --json`, and
-  representative primitive execution dry-runs.
+- Semantic golden JSON fixtures now cover `primitives --json`,
+  `policy show --json`, `actions --json`, representative `gaming_mode` Doctor
+  JSON, representative `PrimitivePlan` policy reporting, and read-only
+  primitive dry-run/execution reports.
+- Fake-adapter coverage now exercises every implemented read-only primitive
+  family and asserts those reads do not call app launch, UI click, browser
+  click/open/media, keyboard input, or window mutation adapter methods.
+- Diagnostics bundle primitives are still allowed to write explicit redacted
+  artifact output under the requested diagnostics output directory; tests verify
+  forbidden secret classes remain excluded.
 
 ## Missing
 
@@ -201,11 +208,12 @@ though policy were missing. Policy and pack governance exist.
 
 The next phase should be:
 
-1. Read-only primitive pack audit/hardening.
-2. Golden JSON fixtures for primitive/policy/Doctor outputs.
-3. Additional fake-adapter coverage around read-only primitive runtime edges.
-4. Reuse the new generic `PrimitivePlan` policy reporting from future
+1. Reuse the hardened read-only primitive contracts from future
    target/intent import paths.
+2. Add targeted fixtures only when future primitive schemas intentionally
+   change.
+3. Keep expanding fake-adapter coverage for any newly introduced read-only
+   primitive family before adding target/intent dependencies.
 
 This phase should start with: inspect first, harden missing/partial pieces, do
 not duplicate existing models, registries, policy engines, or CLI commands.

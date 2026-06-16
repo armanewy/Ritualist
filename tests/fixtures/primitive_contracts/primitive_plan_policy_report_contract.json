@@ -1,0 +1,46 @@
+{
+  "schema": "ritualist.golden_contract.v1",
+  "output": "representative PrimitivePlan policy report",
+  "required_top_level_fields": [
+    "schema_version",
+    "target",
+    "profile",
+    "imported",
+    "private_or_local",
+    "managed_policy",
+    "allowed",
+    "blocked_count",
+    "disclosure_count",
+    "findings"
+  ],
+  "schema_version": "primitive.policy.v1",
+  "profile": "consumer_safe",
+  "required_finding_fields": [
+    "primitive_id",
+    "category",
+    "decision",
+    "reason",
+    "source",
+    "action_name",
+    "predicate_type",
+    "risk",
+    "profile",
+    "blocked",
+    "disclosure_required",
+    "details"
+  ],
+  "representative_findings": {
+    "diagnostics.bundle.collect_minimal": {
+      "category": "importable_without_warning",
+      "decision": "allowed",
+      "risk": "read_only",
+      "blocked": false
+    },
+    "uia.element.click_text": {
+      "category": "blocked_by_default",
+      "decision": "blocked",
+      "risk": "risky",
+      "blocked": true
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "ritualist.golden_contract.v1",
+  "output": "representative read-only primitive dry-run/execution reports",
+  "required_result_fields": [
+    "status",
+    "message",
+    "verification",
+    "artifacts",
+    "details"
+  ],
+  "required_verification_fields": [
+    "name",
+    "status",
+    "message",
+    "details"
+  ],
+  "dry_run": {
+    "status": "dry-run",
+    "verification_status": "dry-run",
+    "details_fields": [
+      "primitive_id",
+      "parameters"
+    ]
+  },
+  "execution": {
+    "allowed_statuses": [
+      "success",
+      "failed"
+    ],
+    "verification_statuses": [
+      "success",
+      "failed"
+    ]
+  },
+  "diagnostics_artifact_fields": [
+    "artifact_type",
+    "name",
+    "path",
+    "redacted",
+    "details"
+  ],
+  "forbidden_secret_classes": [
+    "cookies",
+    "browser_history",
+    "passwords",
+    "tokens",
+    "private_keys",
+    "screenshots",
+    "clipboard_contents"
+  ]
+}

@@ -117,6 +117,40 @@ def test_process_primitive_uses_process_name_metadata_alias(monkeypatch) -> None
     assert result.details["matched"] is True
 
 
+def test_process_read_only_verbs_use_fake_psutil(monkeypatch) -> None:
+    class FakeProcess:
+        def __init__(self, pid: int, name: str, status: str = "running") -> None:
+            self.info = {"pid": pid, "name": name, "status": status}
+
+    class FakePsutil:
+        class NoSuchProcess(Exception):
+            pass
+
+        class AccessDenied(Exception):
+            pass
+
+        @staticmethod
+        def process_iter(_attrs):
+            return [FakeProcess(1, "Ritualist.exe"), FakeProcess(2, "Other.exe")]
+
+    monkeypatch.setattr("ritualist.primitive_runtime._psutil", lambda: FakePsutil)
+
+    results = [
+        run_read_only_primitive("app.process.list"),
+        run_read_only_primitive("app.process.find", parameters={"contains": "ritual"}),
+        run_read_only_primitive("app.process.is_running", parameters={"name": "Ritualist.exe"}),
+        run_read_only_primitive("app.process.wait_running", parameters={"name": "Ritualist.exe"}),
+        run_read_only_primitive("app.process.wait_exit", parameters={"name": "Missing.exe"}),
+    ]
+
+    assert [result.status for result in results] == ["success"] * 5
+    assert results[0].details["count"] == 2
+    assert results[1].details["processes"][0]["name"] == "Ritualist.exe"
+    assert results[2].details["matched"] is True
+    assert results[3].details["waited_for"] == "wait_running"
+    assert results[4].details["waited_for"] == "wait_exit"
+
+
 def test_process_primitive_requires_specific_target(monkeypatch) -> None:
     class FakePsutil:
         class NoSuchProcess(Exception):
@@ -153,6 +187,45 @@ def test_window_topology_primitive_uses_fake_window_adapter() -> None:
     assert fakes.window.calls[0][2]["title_contains"] == "Battle"
 
 
+def test_window_topology_read_only_verbs_do_not_call_mutating_window_methods() -> None:
+    fakes = FakeAdapters()
+    fakes.window.responses["list_windows"] = [
+        {"title": "Battle.net", "process_id": 42, "bounds": {"x": 1, "y": 2, "width": 3, "height": 4}}
+    ]
+    fakes.window.responses["foreground_window_title"] = "Battle.net"
+    fakes.window.responses["list_monitors"] = [ScreenRect(0, 0, 1920, 1080)]
+
+    results = [
+        run_read_only_primitive(
+            "window.topology.list_windows",
+            parameters={"title_contains": "Battle"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "window.topology.find_window",
+            parameters={"title_contains": "Battle"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "window.topology.get_bounds",
+            parameters={"title_contains": "Battle"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive("window.topology.get_foreground", adapters=fakes.bundle()),
+        run_read_only_primitive("window.topology.monitor_list", adapters=fakes.bundle()),
+    ]
+
+    assert [result.status for result in results] == ["success"] * 5
+    _assert_no_mutating_adapter_calls(fakes)
+    assert [call[0] for call in fakes.window.calls] == [
+        "list_windows",
+        "list_windows",
+        "list_windows",
+        "foreground_window_title",
+        "list_monitors",
+    ]
+
+
 def test_uia_element_primitive_lists_labels_with_fake_adapter() -> None:
     fakes = FakeAdapters()
     fakes.desktop.responses["inspect_windows"] = [
@@ -170,6 +243,50 @@ def test_uia_element_primitive_lists_labels_with_fake_adapter() -> None:
     assert fakes.desktop.calls[0][0] == "inspect_windows"
 
 
+def test_uia_element_read_only_verbs_do_not_click() -> None:
+    fakes = FakeAdapters()
+    fakes.desktop.responses["inspect_windows"] = [
+        SimpleNamespace(title="Battle.net", labels=["Diablo IV", "Play"])
+    ]
+
+    results = [
+        run_read_only_primitive(
+            "uia.element.list_labels",
+            parameters={"window_title_contains": "Battle.net"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "uia.element.find_text",
+            parameters={"window_title_contains": "Battle.net", "text": "Play"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "uia.element.find_control",
+            parameters={
+                "window_title_contains": "Battle.net",
+                "text": "Play",
+                "control_type": "Button",
+            },
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "uia.element.candidate_dump",
+            parameters={"window_title_contains": "Battle.net"},
+            adapters=fakes.bundle(),
+        ),
+    ]
+
+    assert [result.status for result in results] == ["success"] * 4
+    _assert_no_mutating_adapter_calls(fakes)
+    assert "click_text" not in [call[0] for call in fakes.desktop.calls]
+    assert [call[0] for call in fakes.desktop.calls] == [
+        "inspect_windows",
+        "find_text_region",
+        "find_text_region",
+        "inspect_windows",
+    ]
+
+
 def test_browser_assert_primitive_uses_fake_browser_adapter() -> None:
     fakes = FakeAdapters()
 
@@ -185,6 +302,42 @@ def test_browser_assert_primitive_uses_fake_browser_adapter() -> None:
     assert fakes.browser.calls[0][2]["role"] == "button"
 
 
+def test_browser_assert_read_only_verbs_do_not_click_or_open() -> None:
+    fakes = FakeAdapters()
+
+    results = [
+        run_read_only_primitive(
+            "browser.assert.text_visible",
+            parameters={"text": "Ready"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "browser.assert.title_matches",
+            parameters={"title_contains": "Example"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "browser.assert.url_matches",
+            parameters={"url_contains": "example.test"},
+            adapters=fakes.bundle(),
+        ),
+        run_read_only_primitive(
+            "browser.assert.element_visible",
+            parameters={"role": "button", "accessible_name": "Continue"},
+            adapters=fakes.bundle(),
+        ),
+    ]
+
+    assert [result.status for result in results] == ["success"] * 4
+    _assert_no_mutating_adapter_calls(fakes)
+    assert [call[0] for call in fakes.browser.calls] == [
+        "text_visible",
+        "title_matches",
+        "url_matches",
+        "element_visible",
+    ]
+
+
 def test_primitive_run_rejects_non_read_only_primitives() -> None:
     with pytest.raises(RitualistError, match="only supports read-only primitives"):
         run_read_only_primitive("uia.element.click_text", dry_run=True)
@@ -195,6 +348,116 @@ def test_hardware_inventory_unsupported_platform_is_friendly(monkeypatch) -> Non
 
     with pytest.raises(PlatformUnsupportedError, match="only supported on Windows"):
         run_read_only_primitive("hardware.inventory.snapshot")
+
+
+def test_hardware_inventory_component_verbs_use_fake_psutil(monkeypatch) -> None:
+    class FakeUsage:
+        total = 1000
+        free = 250
+
+    class FakePsutil:
+        @staticmethod
+        def cpu_count(logical=True):
+            return 8 if logical else 4
+
+        @staticmethod
+        def disk_partitions(all=False):
+            return [SimpleNamespace(device="C:", mountpoint="C:\\", fstype="NTFS")]
+
+        @staticmethod
+        def disk_usage(_mountpoint):
+            return FakeUsage()
+
+        @staticmethod
+        def net_if_addrs():
+            return {
+                "Ethernet": [
+                    SimpleNamespace(family=SimpleNamespace(__str__=lambda self: "AF_INET"))
+                ]
+            }
+
+    monkeypatch.setattr("ritualist.primitive_runtime.sys.platform", "win32")
+    monkeypatch.setattr("ritualist.primitive_runtime._optional_psutil", lambda: FakePsutil)
+
+    primitive_ids = [
+        "hardware.inventory.snapshot",
+        "hardware.inventory.bios",
+        "hardware.inventory.cpu",
+        "hardware.inventory.gpu",
+        "hardware.inventory.motherboard",
+        "hardware.inventory.disks",
+        "hardware.inventory.network_adapters",
+        "hardware.inventory.pnp_devices",
+    ]
+    results = [run_read_only_primitive(primitive_id) for primitive_id in primitive_ids]
+
+    assert [result.status for result in results] == ["success"] * len(primitive_ids)
+    assert results[0].details["cpu"]["logical_count"] == 8
+    assert results[5].details["disks"][0]["device"] == "C:"
+
+
+def test_network_connectivity_verbs_use_socket_fakes(monkeypatch) -> None:
+    calls: list[tuple[str, object]] = []
+
+    class FakeConnection:
+        def __enter__(self):
+            calls.append(("tcp_enter", None))
+            return self
+
+        def __exit__(self, *_args):
+            calls.append(("tcp_exit", None))
+
+    class FakeSocket:
+        def __init__(self, *_args, **_kwargs):
+            calls.append(("socket", None))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            calls.append(("socket_exit", None))
+
+        def connect(self, target):
+            calls.append(("route_connect", target))
+
+        def getsockname(self):
+            return ("192.0.2.10", 50000)
+
+    monkeypatch.setattr("ritualist.primitive_runtime.socket.gethostname", lambda: "host")
+    monkeypatch.setattr("ritualist.primitive_runtime.socket.getfqdn", lambda: "host.example")
+    monkeypatch.setattr(
+        "ritualist.primitive_runtime.socket.getaddrinfo",
+        lambda host, _port: calls.append(("dns", host)) or [(2, None, None, None, None)],
+    )
+    monkeypatch.setattr(
+        "ritualist.primitive_runtime.socket.create_connection",
+        lambda target, timeout=None: calls.append(("tcp", target)) or FakeConnection(),
+    )
+    monkeypatch.setattr("ritualist.primitive_runtime.socket.socket", FakeSocket)
+
+    results = [
+        run_read_only_primitive("network.connectivity.profile"),
+        run_read_only_primitive("network.connectivity.dns", parameters={"host": "example.test"}),
+        run_read_only_primitive(
+            "network.connectivity.tcp",
+            parameters={"host": "example.test", "port": 443},
+        ),
+        run_read_only_primitive(
+            "network.connectivity.route_hint",
+            parameters={"host": "example.test", "port": 443},
+        ),
+        run_read_only_primitive(
+            "network.connectivity.snapshot",
+            parameters={"host": "example.test"},
+        ),
+    ]
+
+    assert [result.status for result in results] == ["success"] * 5
+    assert results[1].details["resolved"] is True
+    assert results[2].details["connected"] is True
+    assert results[3].details["local_address"] == "192.0.2.10"
+    assert ("tcp", ("example.test", 443)) in calls
+    assert ("route_connect", ("example.test", 443)) in calls
 
 
 def test_doctor_knows_new_capability_names(monkeypatch) -> None:
@@ -247,6 +510,25 @@ def test_diagnostics_bundle_excludes_forbidden_secret_classes(tmp_path: Path) ->
     with ZipFile(archive) as zip_file:
         assert "diagnostics.json" in zip_file.namelist()
         assert "redaction_summary.json" in zip_file.namelist()
+
+
+def test_diagnostics_bundle_only_writes_redacted_artifacts_under_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "diagnostics"
+
+    result = run_read_only_primitive(
+        "diagnostics.bundle.collect_support",
+        parameters={"output_dir": str(output_dir)},
+    )
+
+    assert result.status == "success"
+    bundle_dir = Path(result.details["bundle_dir"])
+    archive = Path(result.details["archive"])
+    assert bundle_dir.is_relative_to(output_dir)
+    assert archive.parent == output_dir
+    assert {artifact.redacted for artifact in result.artifacts} == {True}
+    assert all(Path(artifact.path or "").is_relative_to(output_dir) for artifact in result.artifacts)
+    manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert set(FORBIDDEN_DIAGNOSTIC_CLASSES) <= set(manifest["forbidden_classes_excluded"])
 
 
 def test_primitive_run_cli_dry_run_outputs_json() -> None:
@@ -322,3 +604,32 @@ def test_window_monitor_result_serializes_bounds() -> None:
 
     assert result.status == "success"
     assert result.details["monitors"] == [{"x": 0, "y": 0, "width": 1920, "height": 1080}]
+
+
+def _assert_no_mutating_adapter_calls(fakes: FakeAdapters) -> None:
+    assert _called_names(fakes.shell.calls).isdisjoint({"launch", "wait_process"})
+    assert _called_names(fakes.browser.calls).isdisjoint(
+        {"open_url", "close", "configure_media", "click_text", "click_role", "click_test_id"}
+    )
+    assert _called_names(fakes.window.calls).isdisjoint(
+        {
+            "focus",
+            "minimize",
+            "move_window",
+            "resize_window",
+            "maximize",
+            "maximize_window",
+            "restore_window",
+            "snap_left",
+            "snap_right",
+            "snap_top",
+            "snap_bottom",
+            "wait",
+        }
+    )
+    assert _called_names(fakes.desktop.calls).isdisjoint({"click_text"})
+    assert _called_names(fakes.input.calls).isdisjoint({"hotkey"})
+
+
+def _called_names(calls: list[tuple[str, tuple[object, ...], dict[str, object]]]) -> set[str]:
+    return {name for name, _args, _kwargs in calls}

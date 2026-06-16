@@ -1,0 +1,60 @@
+{
+  "schema": "ritualist.golden_contract.v1",
+  "output": "ritualist actions --json",
+  "ordering": "action_name ascending by registry metadata order",
+  "required_top_level_fields": [
+    "action_name",
+    "schema_version",
+    "category",
+    "required_params",
+    "optional_params",
+    "required_capabilities",
+    "supported_platforms",
+    "side_effect_level",
+    "confirmation_policy",
+    "allowed_in_imported_packs",
+    "action",
+    "platform_support"
+  ],
+  "known_side_effect_values": [
+    "read_only",
+    "launches_app",
+    "controls_ui",
+    "types_input",
+    "modifies_files",
+    "risky"
+  ],
+  "required_present_side_effect_values": [
+    "read_only",
+    "launches_app",
+    "controls_ui",
+    "types_input",
+    "risky"
+  ],
+  "representative_actions": {
+    "assert.path_exists": {
+      "side_effect_level": "read_only",
+      "confirmation_policy": "never",
+      "allowed_in_imported_packs": true,
+      "required_capabilities": [
+        "file_read"
+      ]
+    },
+    "browser.open": {
+      "side_effect_level": "launches_app",
+      "allowed_in_imported_packs": false,
+      "required_capabilities": [
+        "playwright",
+        "browser_control"
+      ]
+    },
+    "desktop.click_text": {
+      "side_effect_level": "risky",
+      "confirmation_policy": "required_for_play",
+      "allowed_in_imported_packs": false,
+      "required_capabilities": [
+        "windows_uia"
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "ritualist.golden_contract.v1",
+  "output": "ritualist primitives --json",
+  "ordering": "primitive_id ascending",
+  "required_top_level_fields": [
+    "schema_version",
+    "primitive_id",
+    "family",
+    "verb",
+    "display_name",
+    "description",
+    "required_capabilities",
+    "supported_platforms",
+    "risk",
+    "confirmation_policy",
+    "allowed_in_imported_packs",
+    "adapter_binding",
+    "parameters",
+    "action_name",
+    "dry_run_behavior",
+    "artifact_behavior",
+    "verification_behavior"
+  ],
+  "adapter_binding_fields": [
+    "adapter_id",
+    "binding_type",
+    "description"
+  ],
+  "parameter_fields": [
+    "name",
+    "required",
+    "description",
+    "sensitive"
+  ],
+  "known_risk_values": [
+    "read_only",
+    "launches_app",
+    "controls_ui",
+    "modifies_files",
+    "risky"
+  ],
+  "required_present_risk_values": [
+    "read_only",
+    "launches_app",
+    "controls_ui",
+    "risky"
+  ],
+  "required_read_only_primitive_ids": [
+    "app.process.list",
+    "app.process.find",
+    "app.process.is_running",
+    "app.process.wait_running",
+    "app.process.wait_exit",
+    "window.topology.list_windows",
+    "window.topology.find_window",
+    "window.topology.get_bounds",
+    "window.topology.get_foreground",
+    "window.topology.monitor_list",
+    "uia.element.list_labels",
+    "uia.element.find_text",
+    "uia.element.find_control",
+    "uia.element.candidate_dump",
+    "browser.assert.text_visible",
+    "browser.assert.title_matches",
+    "browser.assert.url_matches",
+    "browser.assert.element_visible",
+    "hardware.inventory.snapshot",
+    "network.connectivity.snapshot",
+    "diagnostics.bundle.collect_minimal"
+  ],
+  "representative_primitives": {
+    "diagnostics.bundle.collect_minimal": {
+      "risk": "read_only",
+      "confirmation_policy": "never",
+      "allowed_in_imported_packs": true,
+      "required_capabilities": [
+        "diagnostics_collect"
+      ],
+      "adapter_id": "diagnostics"
+    },
+    "hardware.inventory.snapshot": {
+      "risk": "read_only",
+      "supported_platforms": [
+        "windows"
+      ],
+      "required_capabilities": [
+        "hardware_inventory"
+      ],
+      "adapter_id": "local_inventory"
+    },
+    "uia.element.click_text": {
+      "risk": "risky",
+      "confirmation_policy": "required_for_play",
+      "allowed_in_imported_packs": false,
+      "adapter_id": "windows_uia"
+    }
+  }
+}

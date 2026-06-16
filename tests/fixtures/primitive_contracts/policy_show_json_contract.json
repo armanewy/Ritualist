@@ -1,0 +1,55 @@
+{
+  "schema": "ritualist.golden_contract.v1",
+  "output": "ritualist policy show --json",
+  "required_top_level_fields": [
+    "schema_version",
+    "default_profile",
+    "categories",
+    "decisions",
+    "profiles",
+    "risk_defaults",
+    "never_importable_classes"
+  ],
+  "schema_version": "primitive.policy.v1",
+  "default_profile": "consumer_safe",
+  "categories": [
+    "importable_without_warning",
+    "importable_with_disclosure",
+    "blocked_by_default",
+    "private_pack_only",
+    "never_importable"
+  ],
+  "decisions": [
+    "allowed",
+    "requires_disclosure",
+    "requires_confirmation",
+    "requires_double_confirmation",
+    "blocked",
+    "blocked_unless_private",
+    "blocked_unless_managed"
+  ],
+  "profiles": [
+    "consumer_safe",
+    "power_user",
+    "lab_only",
+    "enterprise_managed"
+  ],
+  "risk_defaults": {
+    "read_only": "importable_without_warning",
+    "launches_app": "importable_without_warning",
+    "controls_ui": "importable_without_warning",
+    "modifies_files": "importable_with_disclosure",
+    "risky": "blocked_by_default"
+  },
+  "never_importable_classes": [
+    "embedded_credentials",
+    "arbitrary_unsigned_executables_launched_elevated",
+    "opaque_binary_helper_dlls",
+    "unsupported_flash_tools",
+    "raw_firmware_payloads",
+    "force_bios_downgrade",
+    "delete_all_restore_points",
+    "force_registry_cleanup",
+    "destructive_storage_actions_without_local_author_approval"
+  ]
+}
