@@ -583,7 +583,13 @@ class _SummaryStep:
 
 
 ASSERTION_ACTION_PREFIX = "assert."
-HUMAN_PROMPT_ACTIONS = {"confirm.ask", "wait.for_user"}
+HUMAN_PROMPT_ACTIONS = {
+    "confirm.ask",
+    "human.checklist",
+    "human.confirm_evidence",
+    "human.prompt",
+    "wait.for_user",
+}
 
 
 def _preflight_steps(steps: list[_SummaryStep]) -> list[_SummaryStep]:

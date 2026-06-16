@@ -25,9 +25,19 @@ BOOL_FIELDS = {
 }
 FLOAT_FIELDS = {"seconds", "timeout_seconds"}
 INT_FIELDS = {"height", "width", "x", "y"}
-LIST_FIELDS = {"args", "keys"}
+LIST_FIELDS = {"args", "evidence", "items", "keys"}
 DICT_FIELDS = {"env"}
-WORKFLOW_PREFIXES = ("app.", "browser.", "confirm.", "desktop.", "input.", "wait.", "window.")
+WORKFLOW_PREFIXES = (
+    "app.",
+    "browser.",
+    "confirm.",
+    "desktop.",
+    "human.",
+    "input.",
+    "note.",
+    "wait.",
+    "window.",
+)
 
 
 @dataclass(frozen=True)
