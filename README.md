@@ -91,6 +91,21 @@ ritualist home --mock
 
 The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
 
+## Home Alpha Dogfood
+
+Before a Home-focused alpha build, use the packaged app and development checkout to verify:
+
+- Launch `dist\Ritualist\Ritualist.exe`.
+- Open Home.
+- Run mock Home with `python -m ritualist home --mock`.
+- Run `gaming_mode` from Home.
+- Pause and resume a visible `window.wait` action.
+- Stop an active ritual from Home.
+- Confirm interrupted recovery after hard-killing the packaged app during a run.
+- Inspect logs from Home and confirm `run.json` and `steps.jsonl` are present.
+
+During this pass, confirm Home stays responsive while cards, run history, thumbnails, runtime status, Pause/Resume, Stop, logs, and diagnostics update. Slow recipe, filesystem, adapter, thumbnail, and run-history work must stay off the GUI thread. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the complete Home dogfood and performance checklist.
+
 Inspect a real Windows UI Automation window before tuning click text:
 
 ```powershell
