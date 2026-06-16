@@ -605,6 +605,7 @@ def show_run(
     steps.add_column("Step")
     steps.add_column("Action")
     steps.add_column("Message")
+    steps.add_column("Details")
     for step in record.steps:
         steps.add_row(
             str(step.get("index", "")),
@@ -612,8 +613,10 @@ def show_run(
             escape(str(step.get("step_name", ""))),
             escape(str(step.get("action", ""))),
             escape(str(step.get("message", ""))),
+            escape(_format_step_run_details(step.get("metadata"))),
         )
     console.print(steps)
+    _print_step_run_details(record.steps)
 
 
 @app.command("note-run")
@@ -1000,6 +1003,22 @@ def _print_reconciled_runs(repaired: list[object]) -> None:
         console.print(f"Marked {escape(repair.run_id)} as interrupted.")
 
 
+def _print_step_run_details(steps: list[dict[str, object]]) -> None:
+    rows: list[str] = []
+    for step in steps:
+        detail = _format_step_run_details(step.get("metadata"))
+        if not detail:
+            continue
+        index = str(step.get("index", "")).strip() or "?"
+        action = str(step.get("action", "")).strip() or "step"
+        rows.append(f"#{index} {action}: {detail}")
+    if not rows:
+        return
+    console.print("[bold]Condition/branch details[/]")
+    for row in rows:
+        console.print(f"- {escape(row)}")
+
+
 def _metadata_has_value(metadata: dict[str, object], key: str) -> bool:
     value = metadata.get(key)
     return value not in (None, "", [], {})
@@ -1036,6 +1055,45 @@ def _format_event_summaries(value: object) -> str:
         elif entry is not None:
             labels.append(str(entry))
     return "; ".join(labels) if labels else _format_metadata_value(value)
+
+
+def _format_step_run_details(metadata: object) -> str:
+    if not isinstance(metadata, dict):
+        return ""
+    details: list[str] = []
+    condition = metadata.get("condition")
+    if isinstance(condition, dict):
+        details.append(_format_condition_run_detail(condition))
+    branch = metadata.get("branch")
+    if branch:
+        details.append(f"branch: {branch}")
+    return "; ".join(detail for detail in details if detail)
+
+
+def _format_condition_run_detail(condition: dict[str, object]) -> str:
+    label = _condition_run_label(condition.get("details"))
+    matched = condition.get("matched")
+    if matched is True:
+        state = "matched"
+    elif matched is False:
+        state = "not matched"
+    elif condition.get("evaluated") is False:
+        state = "not evaluated"
+    else:
+        state = "unknown"
+    return f"condition: {label} {state}".strip()
+
+
+def _condition_run_label(details: object) -> str:
+    if not isinstance(details, dict):
+        return "condition"
+    predicate_type = details.get("type")
+    if predicate_type:
+        return str(predicate_type)
+    operator = details.get("operator")
+    if operator:
+        return str(operator)
+    return "condition"
 
 
 def _format_metadata_value(value: object) -> str:

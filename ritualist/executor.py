@@ -291,6 +291,8 @@ class WorkflowExecutor:
                     message = "would evaluate condition and dry-run possible branches"
                 else:
                     message = _dry_run_message(step)
+                    if condition is not None:
+                        message = f"{message} if condition matches"
                     if _is_wait_step(step):
                         timeout_steps = list(getattr(step, "on_timeout", []) or [])
                 status = "dry-run"

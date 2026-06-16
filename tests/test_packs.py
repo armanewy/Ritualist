@@ -362,6 +362,29 @@ steps:
     assert pack.manifest.supported_os == ["windows"]
 
 
+def test_validate_pack_requires_capabilities_for_nested_conditions(tmp_path):
+    manifest = _manifest(
+        required_actions=["flow.if", "notify.toast"],
+        required_capabilities=[],
+    )
+    recipe = {
+        "version": "0.1",
+        "id": "demo_recipe",
+        "name": "Demo",
+        "steps": [
+            {
+                "action": "flow.if",
+                "condition": {"type": "path.exists", "path": "marker.txt"},
+                "then": [{"action": "notify.toast", "title": "Ready", "message": "Ready"}],
+            }
+        ],
+    }
+    pack_path = _write_pack(tmp_path, manifest=manifest, recipe=recipe)
+
+    with pytest.raises(PackValidationError, match="condition capabilities: file_read"):
+        validate_pack(pack_path)
+
+
 def test_validate_pack_rejects_nested_coordinate_click_actions(tmp_path):
     manifest = _manifest(
         required_actions=["flow.if", "desktop.click_coordinates"],
@@ -475,6 +498,50 @@ def test_enable_import_rejects_browser_click_actions_blocked_by_import_policy(
             "id": "demo_recipe",
             "name": "Demo",
             "steps": [{"action": "browser.click_text", "text": "Continue"}],
+        },
+    )
+
+    record = import_pack(pack_path)
+
+    with pytest.raises(PackImportError, match="blocked action\\(s\\): browser.click_text"):
+        enable_import(record.import_id)
+
+    assert record.status == "disabled"
+    assert not (recipes_root / "demo_recipe.yaml").exists()
+
+
+def test_enable_import_rejects_nested_branch_actions_blocked_by_import_policy(
+    tmp_path,
+    monkeypatch,
+):
+    imported_root = tmp_path / "imported-packs"
+    recipes_root = tmp_path / "recipes"
+    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr(
+        "ritualist.packs.imported_packs_dir",
+        lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
+    )
+    monkeypatch.setattr(
+        "ritualist.packs.recipes_dir",
+        lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
+    )
+    pack_path = _write_pack(
+        tmp_path,
+        manifest=_manifest(
+            required_actions=["flow.if", "browser.click_text"],
+            required_capabilities=["file_read", "playwright", "browser_control"],
+        ),
+        recipe={
+            "version": "0.1",
+            "id": "demo_recipe",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "flow.if",
+                    "condition": {"type": "path.exists", "path": "marker.txt"},
+                    "then": [{"action": "browser.click_text", "text": "Continue"}],
+                }
+            ],
         },
     )
 

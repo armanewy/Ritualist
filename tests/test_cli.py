@@ -536,6 +536,50 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     assert "opened URL" in result.output
 
 
+def test_show_run_prints_condition_and_branch_details(tmp_path, monkeypatch):
+    record = RunRecord(
+        run_id="20260615T120000Z_flow",
+        path=tmp_path / "20260615T120000Z_flow",
+        metadata={
+            "recipe_id": "flow",
+            "recipe_name": "Flow",
+            "status": "success",
+        },
+        steps=[
+            {
+                "index": 1,
+                "status": "success",
+                "step_name": "Choose branch",
+                "action": "flow.if",
+                "message": "condition did not match; running else branch",
+                "metadata": {
+                    "condition": {
+                        "matched": False,
+                        "message": "visible window text not found in 'Battle.net': Play",
+                        "details": {
+                            "type": "window.text_visible",
+                            "window_title_contains": "Battle.net",
+                            "text": "Play",
+                        },
+                    },
+                    "branch": "else",
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+
+    result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_flow"])
+
+    assert result.exit_code == 0
+    assert "Details" in result.output
+    assert "condition:" in result.output
+    assert "window.text_visible" in result.output
+    assert "not matched" in result.output
+    assert "branch: else" in result.output
+
+
 def test_show_run_prints_user_entered_operator_notes(tmp_path, monkeypatch):
     record = RunRecord(
         run_id="20260615T120000Z_gaming_mode",

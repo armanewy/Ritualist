@@ -140,6 +140,30 @@ def test_step_when_condition_result_is_written_to_run_log(tmp_path):
     assert "path does not exist" in skipped_step["metadata"]["condition"]["message"]
 
 
+def test_step_when_dry_run_message_shows_condition(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "notify.toast",
+                    "title": "Ready",
+                    "message": "Ready.",
+                    "when": {"type": "path.exists", "path": str(tmp_path / "marker.txt")},
+                }
+            ],
+        }
+    )
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), dry_run=True).run(recipe)
+
+    assert summary.success
+    assert summary.results[0].status == "dry-run"
+    assert "if condition matches" in summary.results[0].message
+    assert summary.results[0].metadata["condition"]["evaluated"] is False
+
+
 def test_flow_if_runs_then_branch(tmp_path):
     marker = tmp_path / "ready.txt"
     marker.write_text("ok", encoding="utf-8")
@@ -283,6 +307,11 @@ def test_notify_actions_are_local_and_cross_platform(tmp_path):
 def test_condition_rejects_arbitrary_expression_shape():
     with pytest.raises(ValueError, match="extra"):
         Condition.model_validate({"expr": "window.text_visible('Play')"})
+
+
+def test_condition_rejects_invalid_predicate_type():
+    with pytest.raises(ValueError):
+        Condition.model_validate({"type": "shell.exec", "command": "demo"})
 
 
 def test_condition_rejects_unsupported_predicate_fields():

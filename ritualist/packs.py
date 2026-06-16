@@ -571,6 +571,7 @@ def _build_validated_pack(
     _validate_recipe_action_policy(raw_recipe_actions, registry)
     _validate_required_action_declarations(manifest, raw_recipe_actions)
     _validate_required_capabilities(manifest, registry)
+    _validate_required_condition_capabilities(manifest, recipe_raw)
     _validate_supported_os(manifest, registry)
 
     recipe = _parse_recipe(recipe_raw, manifest)
@@ -738,6 +739,20 @@ def _validate_required_capabilities(
     if missing:
         raise PackValidationError(
             "manifest required_capabilities must include action capabilities: "
+            + ", ".join(missing)
+        )
+
+
+def _validate_required_condition_capabilities(
+    manifest: PackManifest,
+    recipe_raw: Mapping[str, Any],
+) -> None:
+    declared = set(manifest.required_capabilities)
+    required = set(_collect_condition_capabilities(recipe_raw))
+    missing = sorted(required - declared)
+    if missing:
+        raise PackValidationError(
+            "manifest required_capabilities must include condition capabilities: "
             + ", ".join(missing)
         )
 
