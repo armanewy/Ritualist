@@ -116,6 +116,13 @@ Do not put secrets, cookies, page contents, screenshots, full URLs with tokens,
 or broad environment dumps in runtime events. Event handlers must not execute
 recipes or trigger adapter actions as side effects.
 
+Helpdesk evidence follows the same local-first boundary. Runtime events and
+runbook summaries may include timestamps, action names, statuses, scoped window
+titles, and operator notes, but default helpdesk flows must not include
+passwords, cookies, page contents, screenshots, or clipboard contents. See
+`docs/helpdesk_privacy_evidence.md` for the policy used by bundled templates and
+lint checks.
+
 ## RuntimeControl
 
 `RuntimeControl` is the control plane for one active run. It is owned by the
