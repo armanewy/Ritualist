@@ -33,9 +33,12 @@ Supported v1 fixture references:
 - `diagnostics.collect:minimal`
 - `workspace.prepare:basic`
 - `target.start:placeholder`
+- `target.start:<target-id-or-alias>`
 
 The fixture syntax is intentionally small. It is a stable developer-facing
 entry point for Home and CLI plan previews while richer intent input evolves.
+Concrete `target.start:<target>` references are routed through the
+[Target Resolution Engine](target_resolution.md) and remain side-effect free.
 
 ## PrimitivePlan
 

@@ -21,6 +21,8 @@ artifact, and test contracts are clear.
 - Use fake adapters and golden JSON fixtures for all new primitive families.
 - Keep intent planning deterministic and inspectable; see
   [Intents And Primitive Plans](intents_and_plans.md).
+- Keep target discovery generic, read-only, and primitive-backed; see
+  [Target Resolution Engine](target_resolution.md).
 
 ## Future Mutating And Risky Primitives
 

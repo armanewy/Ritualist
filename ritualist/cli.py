@@ -1257,6 +1257,10 @@ def doctor(
     ] = False,
 ) -> None:
     """Validate recipe health without launching apps, opening browsers, or clicking."""
+    if recipe.startswith("target:"):
+        _doctor_target(recipe.removeprefix("target:"), no_strict=no_strict, json_output=json_output)
+        return
+
     try:
         parsed, _raw, missing_variables = load_recipe_for_diagnostics(
             recipe,
@@ -1299,6 +1303,31 @@ def doctor(
             f"{escape(check.message)}",
             soft_wrap=True,
         )
+    if not no_strict and report.compatibility == "incompatible":
+        raise typer.Exit(1)
+
+
+def _doctor_target(target: str, *, no_strict: bool, json_output: bool) -> None:
+    target_ref = target.strip()
+    if not target_ref:
+        console.print("[red]Error:[/] target doctor reference must include a target id or alias")
+        raise typer.Exit(1)
+    try:
+        resolution = resolve_target(target_ref)
+        plan = compile_target_start_plan(target_ref, resolution=resolution)
+        report = build_plan_doctor_report(plan)
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        console.print_json(data=target_plan_payload(resolution, plan, report))
+        if not no_strict and report.compatibility == "incompatible":
+            raise typer.Exit(1)
+        return
+
+    _print_target_resolution(resolution)
+    _print_plan_preview(plan, report)
     if not no_strict and report.compatibility == "incompatible":
         raise typer.Exit(1)
 

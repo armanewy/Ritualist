@@ -869,6 +869,26 @@ def _intent_fixture_from_reference(reference: str) -> IntentSpec | None:
             risk_budget=PrimitiveRisk.CONTROLS_UI.value,
             user_visible_summary="Choose a target before compiling a concrete start plan.",
         )
+    if kind == "target.start" and fixture:
+        display_target = fixture.replace("_", " ")
+        try:
+            from .target_resolution import builtin_target_catalog
+
+            target, _matched = builtin_target_catalog().resolve(fixture)
+            if target is not None:
+                display_target = target.display_name
+        except Exception:  # noqa: BLE001 - fixture display should never block planning.
+            pass
+        return IntentSpec(
+            intent_id=_intent_id_from_parts(kind, fixture),
+            kind=kind,
+            display_name=f"Start {display_target}",
+            description="Built-in deterministic target start preview.",
+            target=fixture,
+            requested_outcome=f"Resolve and prepare to start {display_target}.",
+            risk_budget=PrimitiveRisk.CONTROLS_UI.value,
+            user_visible_summary=f"Resolve local ways to start {display_target}.",
+        )
     return None
 
 

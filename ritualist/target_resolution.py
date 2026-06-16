@@ -26,6 +26,7 @@ from .primitives import (
 
 TARGET_RESOLUTION_SCHEMA_VERSION = "target.resolution.v1"
 TARGET_PLAN_SCHEMA_VERSION = "target.plan.v1"
+TARGET_PLAN_SUMMARY_SCHEMA_VERSION = "target.plan_summary.v1"
 
 
 class TargetState(str, Enum):
@@ -74,6 +75,7 @@ class TargetHint(BaseModel):
     shortcut_names: tuple[str, ...] = ()
     media_volume_labels: tuple[str, ...] = ()
     installed_app_names: tuple[str, ...] = ()
+    launcher_hints: tuple[str, ...] = ()
 
     @field_validator(
         "executable_names",
@@ -84,6 +86,7 @@ class TargetHint(BaseModel):
         "shortcut_names",
         "media_volume_labels",
         "installed_app_names",
+        "launcher_hints",
         mode="before",
     )
     @classmethod
@@ -241,6 +244,8 @@ class TargetCandidate(BaseModel):
     window_title: str | None = None
     volume_label: str | None = None
     transition: TargetTransition | None = None
+    possible_transitions: tuple[TargetTransition, ...] = ()
+    evidence: tuple[str, ...] = ()
     details: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("candidate_id", "target_id")
@@ -278,6 +283,10 @@ class TargetCandidate(BaseModel):
             "window_title": self.window_title,
             "volume_label": self.volume_label,
             "transition": self.transition.to_dict() if self.transition else None,
+            "possible_transitions": [
+                transition.to_dict() for transition in self.possible_transitions
+            ],
+            "evidence": list(self.evidence),
             "details": self.details,
         }
 
@@ -313,6 +322,66 @@ class TargetResolutionResult(BaseModel):
         }
 
 
+class TargetPlanSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    target_display_name: str
+    state: TargetState
+    best_candidate_summary: str = ""
+    risk_summary: dict[str, int] = Field(default_factory=dict)
+    confirmation_count: int = 0
+    unresolved_questions: tuple[str, ...] = ()
+    recommended_next_action: str = ""
+    last_successful_source: str | None = None
+    schema_version: str = TARGET_PLAN_SUMMARY_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "title": self.title,
+            "target_display_name": self.target_display_name,
+            "state": self.state.value,
+            "best_candidate_summary": self.best_candidate_summary,
+            "risk_summary": dict(self.risk_summary),
+            "confirmation_count": self.confirmation_count,
+            "unresolved_questions": list(self.unresolved_questions),
+            "recommended_next_action": self.recommended_next_action,
+            "last_successful_source": self.last_successful_source,
+        }
+
+
+class TargetMemoryRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_id: str
+    provider_id: str
+    path: str | None = None
+    command: str | None = None
+    last_successful_state: TargetState = TargetState.LAUNCHABLE
+    timestamp: str = ""
+    evidence: tuple[str, ...] = ()
+    scope: str = "local_machine_user"
+
+    @field_validator("target_id")
+    @classmethod
+    def validate_target_id(cls, value: str) -> str:
+        if not SAFE_ID_PATTERN.fullmatch(value):
+            raise ValueError("target memory target_id must be a safe filename-like identifier")
+        return value
+
+    @field_validator("provider_id", "scope")
+    @classmethod
+    def validate_nonblank(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("target memory fields must not be blank")
+        return text
+
+    def to_dict(self) -> dict[str, object]:
+        return self.model_dump(mode="json")
+
+
 class TargetCatalog(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -336,6 +405,12 @@ class TargetDiscoveryProvider(Protocol):
         context: TargetDiscoveryContext,
     ) -> ProviderDiscovery: ...
 
+    def build_plan(
+        self,
+        candidate: TargetCandidate,
+        policy_context: dict[str, Any] | None = None,
+    ) -> TargetPlanSummary: ...
+
 
 PrimitiveRunner = Callable[[str, dict[str, Any]], Any]
 
@@ -345,6 +420,9 @@ class ProviderDiscovery:
     provider: TargetProvider
     candidates: tuple[TargetCandidate, ...] = ()
     diagnostics: tuple[str, ...] = ()
+
+
+TargetProviderResult = ProviderDiscovery
 
 
 @dataclass(frozen=True)
@@ -381,6 +459,7 @@ def builtin_target_catalog() -> TargetCatalog:
                     window_titles=("Diablo IV",),
                     shortcut_names=("Diablo IV",),
                     media_volume_labels=("DIABLO_IV", "DIABLO4"),
+                    launcher_hints=("battle_net",),
                 ),
             ),
         )
@@ -475,12 +554,22 @@ def compile_target_start_plan(
     steps: list[PrimitivePlanStep] = []
     unresolved: list[str] = []
     cleanup = ["Target plan preview does not launch apps, click UI, install software, or write files."]
-    candidate = resolved.best_candidate
+    ranked_candidates = tuple(sorted(resolved.candidates, key=_candidate_sort_key))
+    ranked_resolution = (
+        resolved.model_copy(update={"candidates": ranked_candidates})
+        if ranked_candidates != resolved.candidates
+        else resolved
+    )
+    ambiguous = _ambiguous_candidate_choices(ranked_candidates)
+    candidate = None if ambiguous else (ranked_candidates[0] if ranked_candidates else None)
 
     if target is None:
         unresolved.append(f"target '{target_id_or_name}' is not in the local target catalog")
     elif candidate is None:
-        unresolved.append(f"no local launch source was found for {display_name}")
+        if ambiguous:
+            unresolved.append("Multiple possible sources found. Choose one.")
+        else:
+            unresolved.append(f"no local launch source was found for {display_name}")
     elif candidate.state is TargetState.RUNNING:
         title = candidate.window_title or _first(target.hints.window_titles)
         if title:
@@ -560,7 +649,8 @@ def compile_target_start_plan(
     else:
         unresolved.append(f"target state {candidate.state.value} has no executable transition in v1")
 
-    unresolved.extend(resolved.suggestions if resolved.state is TargetState.NOT_FOUND else ())
+    unresolved.extend(ranked_resolution.suggestions if ranked_resolution.state is TargetState.NOT_FOUND else ())
+    intent = _target_intent_with_resolution(intent, ranked_resolution, selected_candidate=candidate)
     return _build_target_plan(
         plan_id,
         intent=intent,
@@ -569,8 +659,8 @@ def compile_target_start_plan(
         unresolved_questions=tuple(dict.fromkeys(unresolved)),
         rollback_or_cleanup_notes=cleanup,
         verification_steps=(
-            f"Target resolution state: {resolved.state.value}",
-            f"Candidates discovered: {len(resolved.candidates)}",
+            f"Target resolution state: {ranked_resolution.state.value}",
+            f"Candidates discovered: {len(ranked_resolution.candidates)}",
         ),
     )
 
@@ -585,10 +675,66 @@ def target_plan_payload(
         "resolution": resolution.to_dict(),
         "plan": plan.to_dict(),
         "doctor": doctor.to_dict(),
+        "home_summary": build_target_plan_summary(resolution, plan, doctor).to_dict(),
     }
 
 
-class RunningProcessProvider:
+def build_target_plan_summary(
+    resolution: TargetResolutionResult,
+    plan: PrimitivePlan,
+    doctor: Any | None = None,
+) -> TargetPlanSummary:
+    target_name = resolution.target.display_name if resolution.target else resolution.query
+    candidate = resolution.best_candidate
+    doctor_status = ""
+    if doctor is not None:
+        compatibility = getattr(doctor, "compatibility", "")
+        doctor_status = str(compatibility or "")
+    return TargetPlanSummary(
+        title=f"Start {target_name}",
+        target_display_name=target_name,
+        state=resolution.state,
+        best_candidate_summary=_candidate_summary(candidate),
+        risk_summary=dict(plan.risk_summary),
+        confirmation_count=len(plan.confirmations_needed),
+        unresolved_questions=tuple(plan.unresolved_questions),
+        recommended_next_action=_recommended_next_action(resolution, plan, doctor_status=doctor_status),
+        last_successful_source=(
+            candidate.command or candidate.path
+            if candidate is not None and candidate.provider == "user_memory"
+            else None
+        ),
+    )
+
+
+class _TargetProviderPlanMixin:
+    def build_plan(
+        self,
+        candidate: TargetCandidate,
+        policy_context: dict[str, Any] | None = None,
+    ) -> TargetPlanSummary:
+        del policy_context
+        plan = PrimitivePlan(
+            plan_id=f"target_candidate_{candidate.candidate_id}",
+            steps=(),
+            intent={
+                "schema_version": "intent.v1",
+                "intent_id": f"target_candidate_{candidate.candidate_id}",
+                "kind": "target.start",
+                "target": candidate.target_id,
+                "user_visible_summary": f"Review {candidate.label}.",
+            },
+            unresolved_questions=("Provider plan summaries are preview-only in Target Resolution v1.",),
+        )
+        resolution = TargetResolutionResult(
+            query=candidate.target_id,
+            state=candidate.state,
+            candidates=(candidate,),
+        )
+        return build_target_plan_summary(resolution, plan)
+
+
+class RunningProcessProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="running_process",
@@ -626,13 +772,14 @@ class RunningProcessProvider:
                         process_name=executable_name,
                         process_id=pid,
                         window_title=_first(target.hints.window_titles),
+                        evidence=(f"Found running process: {executable_name}",),
                         details={"process": row},
                     )
                 )
         return ProviderDiscovery(self.provider_info(), candidates=tuple(candidates), diagnostics=tuple(diagnostics))
 
 
-class StartMenuShortcutProvider:
+class StartMenuShortcutProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="start_menu_shortcut",
@@ -654,7 +801,7 @@ class StartMenuShortcutProvider:
         )
 
 
-class DesktopShortcutProvider:
+class DesktopShortcutProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="desktop_shortcut",
@@ -676,7 +823,7 @@ class DesktopShortcutProvider:
         )
 
 
-class ExecutablePathProvider:
+class ExecutablePathProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="executable_path",
@@ -736,7 +883,7 @@ class ExecutablePathProvider:
         )
 
 
-class InstalledAppsProvider:
+class InstalledAppsProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="installed_apps",
@@ -779,13 +926,14 @@ class InstalledAppsProvider:
                     confidence=0.7,
                     path=str(launch_path) if launch_path else install_location or None,
                     command=str(launch_path) if launch_path else None,
+                    evidence=(f"Found installed app metadata: {display_name}",),
                     details={key: value for key, value in row.items() if value},
                 )
             )
         return ProviderDiscovery(self.provider_info(), candidates=tuple(candidates))
 
 
-class RemovableMediaProvider:
+class RemovableMediaProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="removable_media",
@@ -829,13 +977,21 @@ class RemovableMediaProvider:
                     path=str(root),
                     command=command,
                     volume_label=label,
+                    evidence=tuple(
+                        item
+                        for item in (
+                            f"Found removable volume {root} labeled {label}" if label else "",
+                            f"Found installer candidate: {command}" if command else "",
+                        )
+                        if item
+                    ),
                     details={"installer": command, "root": str(root)},
                 )
             )
         return ProviderDiscovery(self.provider_info(), candidates=tuple(candidates))
 
 
-class UserMemoryProvider:
+class UserMemoryProvider(_TargetProviderPlanMixin):
     def provider_info(self) -> TargetProvider:
         return TargetProvider(
             id="user_memory",
@@ -858,7 +1014,11 @@ class UserMemoryProvider:
             return ProviderDiscovery(self.provider_info(), diagnostics=(f"could not read target memory: {exc}",))
         rows = _memory_rows(raw, target.id)
         candidates: list[TargetCandidate] = []
+        diagnostics: list[str] = []
         for index, row in enumerate(rows):
+            if _contains_sensitive_key(row):
+                diagnostics.append("ignored target memory entry containing sensitive keys")
+                continue
             command = str(row.get("command") or row.get("path") or "").strip()
             if not command:
                 continue
@@ -884,10 +1044,11 @@ class UserMemoryProvider:
                     path=command or None,
                     command=command or None,
                     window_title=str(row.get("window_title") or "") or None,
+                    evidence=("Found prior local target memory entry",),
                     details={"source": "target-memory"},
                 )
             )
-        return ProviderDiscovery(self.provider_info(), candidates=tuple(candidates))
+        return ProviderDiscovery(self.provider_info(), candidates=tuple(candidates), diagnostics=tuple(diagnostics))
 
 
 def normalize_target_name(value: str) -> str:
@@ -951,6 +1112,7 @@ def _discover_shortcuts(
                     confidence=0.8,
                     path=str(path),
                     command=str(path),
+                    evidence=(f"Found {label_prefix}: {path.stem}",),
                     details={"root": str(root)},
                 )
             )
@@ -994,6 +1156,7 @@ def _path_candidate(
         confidence=0.75,
         path=str(path),
         command=str(path),
+        evidence=(f"Found local path: {path}",),
     )
 
 
@@ -1172,6 +1335,19 @@ def _memory_rows(raw: object, target_id: str) -> list[dict[str, Any]]:
     return []
 
 
+def _contains_sensitive_key(value: object) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).casefold()
+            if any(marker in normalized for marker in ("password", "passwd", "secret", "token", "api_key")):
+                return True
+            if _contains_sensitive_key(item):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_sensitive_key(item) for item in value)
+    return False
+
+
 def _target_state(value: object) -> TargetState | None:
     if value is None:
         return None
@@ -1191,8 +1367,13 @@ def _result_rows(result: Any, key: str) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def _candidate_sort_key(candidate: TargetCandidate) -> tuple[int, float, str]:
-    return (-_STATE_PRIORITY.get(candidate.state, 0), -candidate.confidence, candidate.label.casefold())
+def _candidate_sort_key(candidate: TargetCandidate) -> tuple[int, int, float, str]:
+    return (
+        -_STATE_PRIORITY.get(candidate.state, 0),
+        -_PROVIDER_PRIORITY.get(candidate.provider, 0),
+        -candidate.confidence,
+        candidate.label.casefold(),
+    )
 
 
 _STATE_PRIORITY: dict[TargetState, int] = {
@@ -1210,6 +1391,97 @@ _STATE_PRIORITY: dict[TargetState, int] = {
     TargetState.NOT_FOUND: 0,
     TargetState.UNKNOWN: 0,
 }
+
+_PROVIDER_PRIORITY: dict[str, int] = {
+    "running_process": 100,
+    "user_memory": 90,
+    "start_menu_shortcut": 80,
+    "desktop_shortcut": 75,
+    "executable_path": 70,
+    "installed_apps": 60,
+    "removable_media": 40,
+}
+
+
+def _ambiguous_candidate_choices(candidates: tuple[TargetCandidate, ...]) -> tuple[TargetCandidate, ...]:
+    if len(candidates) < 2:
+        return ()
+    first = candidates[0]
+    ambiguous = [first]
+    first_state_priority = _STATE_PRIORITY.get(first.state, 0)
+    first_provider_priority = _PROVIDER_PRIORITY.get(first.provider, 0)
+    for candidate in candidates[1:]:
+        if _STATE_PRIORITY.get(candidate.state, 0) != first_state_priority:
+            break
+        if _PROVIDER_PRIORITY.get(candidate.provider, 0) != first_provider_priority:
+            break
+        if abs(candidate.confidence - first.confidence) > 0.05:
+            break
+        ambiguous.append(candidate)
+    unique_sources = {
+        candidate.command or candidate.path or candidate.window_title or candidate.label
+        for candidate in ambiguous
+    }
+    return tuple(ambiguous) if len(unique_sources) > 1 else ()
+
+
+def _target_intent_with_resolution(
+    intent: dict[str, object],
+    resolution: TargetResolutionResult,
+    *,
+    selected_candidate: TargetCandidate | None,
+) -> dict[str, object]:
+    updated = dict(intent)
+    updated["target_resolution"] = {
+        "schema_version": resolution.schema_version,
+        "state": resolution.state.value,
+        "selected_candidate_id": selected_candidate.candidate_id if selected_candidate else None,
+        "candidate_ranking": [
+            {
+                "candidate_id": candidate.candidate_id,
+                "provider": candidate.provider,
+                "state": candidate.state.value,
+                "confidence": candidate.confidence,
+                "label": candidate.label,
+            }
+            for candidate in resolution.candidates
+        ],
+        "diagnostics": list(resolution.diagnostics),
+        "suggestions": list(resolution.suggestions),
+    }
+    return updated
+
+
+def _candidate_summary(candidate: TargetCandidate | None) -> str:
+    if candidate is None:
+        return ""
+    source = candidate.command or candidate.path or candidate.window_title or candidate.label
+    return f"{candidate.provider}: {candidate.state.value} - {source}"
+
+
+def _recommended_next_action(
+    resolution: TargetResolutionResult,
+    plan: PrimitivePlan,
+    *,
+    doctor_status: str,
+) -> str:
+    if plan.unresolved_questions:
+        if plan.unresolved_questions[0] == "Multiple possible sources found. Choose one.":
+            return "Choose which discovered local source to use."
+        return plan.unresolved_questions[0]
+    if doctor_status == "incompatible":
+        return "Review Doctor errors before running this target plan."
+    if plan.confirmations_needed:
+        return "Review the confirmation prompt before continuing."
+    if resolution.state is TargetState.RUNNING:
+        return "Focus the existing target window."
+    if resolution.state in {TargetState.LAUNCHABLE, TargetState.READY}:
+        return "Run the launch plan when ready."
+    if resolution.state is TargetState.INSTALL_MEDIA_PRESENT:
+        return "Review detected install media manually; Ritualist will not install silently."
+    if resolution.state is TargetState.NOT_FOUND:
+        return "Choose a local executable or shortcut for this target."
+    return "Review the target plan before running."
 
 
 def _suggestions_for_state(state: TargetState) -> tuple[str, ...]:

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from ritualist.cli import app
@@ -17,10 +19,14 @@ from ritualist.target_resolution import (
     TargetCandidate,
     TargetCatalog,
     TargetDiscoveryContext,
+    TargetMemoryRecord,
+    TargetPlanSummary,
     TargetResolutionResult,
     TargetSpec,
     TargetState,
+    TargetTransition,
     UserMemoryProvider,
+    build_target_plan_summary,
     builtin_target_catalog,
     compile_target_start_plan,
     resolve_target,
@@ -39,13 +45,34 @@ def test_target_spec_parsing_accepts_catalog_shape() -> None:
             "kind": "tool",
             "display_name": "Vendor App",
             "aliases": ["Vendor", {"value": "VA", "kind": "short"}],
-            "hints": {"executable_names": ["Vendor.exe"], "window_titles": ["Vendor"]},
+            "hints": {
+                "executable_names": ["Vendor.exe"],
+                "window_titles": ["Vendor"],
+                "launcher_hints": ["vendor_launcher"],
+            },
         }
     )
 
     assert spec.identity.id == "vendor_app"
     assert [alias.value for alias in spec.aliases] == ["Vendor", "VA"]
     assert spec.hints.executable_names == ("Vendor.exe",)
+    assert spec.hints.launcher_hints == ("vendor_launcher",)
+
+
+def test_builtin_target_keeps_launcher_as_hint_not_user_action() -> None:
+    target, _matched = builtin_target_catalog().resolve("diablo_iv")
+
+    assert target is not None
+    assert target.hints.launcher_hints == ("battle_net",)
+    plan = compile_target_start_plan(
+        "diablo_iv",
+        resolution=TargetResolutionResult(
+            query="diablo_iv",
+            target=target,
+            state=TargetState.NOT_FOUND,
+        ),
+    )
+    assert "battle_net" not in json.dumps(plan.to_dict()).casefold()
 
 
 def test_alias_matching_finds_builtin_target() -> None:
@@ -135,6 +162,7 @@ def test_removable_media_discovery(tmp_path: Path) -> None:
     assert result.state is TargetState.INSTALL_MEDIA_PRESENT
     assert result.candidates[0].volume_label == "DIABLO4"
     assert result.candidates[0].command == str(setup)
+    assert "installer candidate" in result.candidates[0].evidence[1]
 
 
 def test_unlabeled_generic_installer_is_not_target_media(tmp_path: Path) -> None:
@@ -229,6 +257,45 @@ def test_plan_for_install_media_uses_human_handoff(tmp_path: Path) -> None:
 
     assert [step.primitive_id for step in plan.steps] == ["operator.prompt.prompt"]
     assert "installer/media execution is not implemented" in plan.unresolved_questions[0]
+    assert any("Confirm" in item or "confirmation" in item for item in plan.confirmations_needed)
+
+
+def test_candidate_serialization_includes_evidence_and_transitions() -> None:
+    transition = TargetTransition(
+        name="ask_user",
+        from_state=TargetState.INSTALL_MEDIA_PRESENT,
+        to_state=TargetState.INSTALL_AVAILABLE,
+        primitive_id="operator.prompt.prompt",
+        requires_confirmation=True,
+        summary="Ask before installer/media action.",
+    )
+    candidate = TargetCandidate(
+        candidate_id="media_diablo",
+        target_id="diablo_iv",
+        provider="removable_media",
+        state=TargetState.INSTALL_MEDIA_PRESENT,
+        label="install media",
+        possible_transitions=(transition,),
+        evidence=("Found removable media",),
+    )
+
+    data = candidate.to_dict()
+
+    assert data["possible_transitions"][0]["name"] == "ask_user"
+    assert data["possible_transitions"][0]["requires_confirmation"] is True
+    assert data["evidence"] == ["Found removable media"]
+
+
+def test_target_memory_record_rejects_secret_fields() -> None:
+    with pytest.raises(ValidationError):
+        TargetMemoryRecord.model_validate(
+            {
+                "target_id": "diablo_iv",
+                "provider_id": "user_memory",
+                "path": "C:/Games/Diablo IV.lnk",
+                "password": "not allowed",
+            }
+        )
 
 
 def test_not_found_resolution_has_safe_diagnostics() -> None:
@@ -336,6 +403,147 @@ def test_user_memory_downgrades_volatile_running_state(tmp_path: Path) -> None:
     assert result.candidates[0].state is TargetState.LAUNCHABLE
 
 
+def test_user_memory_ignores_secret_shaped_rows(tmp_path: Path) -> None:
+    launcher = tmp_path / "Diablo IV.lnk"
+    launcher.write_text("shortcut", encoding="utf-8")
+    memory_path = tmp_path / "target-memory.json"
+    memory_path.write_text(
+        json.dumps(
+            {
+                "targets": {
+                    "diablo_iv": {
+                        "label": "remembered shortcut",
+                        "path": str(launcher),
+                        "token": "not allowed",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = resolve_target(
+        "diablo_iv",
+        providers=(UserMemoryProvider(),),
+        context=TargetDiscoveryContext(memory_path=memory_path),
+    )
+
+    assert result.candidates == ()
+    assert "ignored target memory entry containing sensitive keys" in result.diagnostics
+
+
+def test_user_memory_is_preferred_over_equal_launch_sources(tmp_path: Path) -> None:
+    remembered = tmp_path / "remembered.lnk"
+    remembered.write_text("shortcut", encoding="utf-8")
+    start_menu_shortcut = tmp_path / "start" / "Diablo IV.lnk"
+    start_menu_shortcut.parent.mkdir()
+    start_menu_shortcut.write_text("shortcut", encoding="utf-8")
+    memory_path = tmp_path / "target-memory.json"
+    memory_path.write_text(
+        json.dumps(
+            {
+                "targets": {
+                    "diablo_iv": {
+                        "label": "remembered shortcut",
+                        "path": str(remembered),
+                        "state": "launchable",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = resolve_target(
+        "diablo_iv",
+        providers=(UserMemoryProvider(), StartMenuShortcutProvider()),
+        context=TargetDiscoveryContext(start_menu_roots=(start_menu_shortcut.parent,), memory_path=memory_path),
+    )
+
+    assert [candidate.provider for candidate in result.candidates[:2]] == [
+        "user_memory",
+        "start_menu_shortcut",
+    ]
+    assert result.best_candidate is not None
+    assert result.best_candidate.command == str(remembered)
+
+
+def test_ambiguous_equal_candidates_require_user_choice(tmp_path: Path) -> None:
+    first = tmp_path / "Diablo IV.lnk"
+    second = tmp_path / "Diablo IV Alt.lnk"
+    first.write_text("shortcut", encoding="utf-8")
+    second.write_text("shortcut", encoding="utf-8")
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    resolution = TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=TargetState.LAUNCHABLE,
+        candidates=(
+            TargetCandidate(
+                candidate_id="shortcut_diablo",
+                target_id="diablo_iv",
+                provider="start_menu_shortcut",
+                state=TargetState.LAUNCHABLE,
+                label="Diablo IV",
+                confidence=0.8,
+                path=str(first),
+                command=str(first),
+            ),
+            TargetCandidate(
+                candidate_id="shortcut_diablo_alt",
+                target_id="diablo_iv",
+                provider="start_menu_shortcut",
+                state=TargetState.LAUNCHABLE,
+                label="Diablo IV Alt",
+                confidence=0.78,
+                path=str(second),
+                command=str(second),
+            ),
+        ),
+    )
+
+    plan = compile_target_start_plan("diablo_iv", resolution=resolution)
+
+    assert plan.steps == ()
+    assert "Multiple possible sources found. Choose one." in plan.unresolved_questions
+    assert plan.intent["target_resolution"]["selected_candidate_id"] is None
+
+
+def test_plan_ranks_unsorted_candidates_before_selecting(tmp_path: Path) -> None:
+    shortcut = tmp_path / "Diablo IV.lnk"
+    shortcut.write_text("shortcut", encoding="utf-8")
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    resolution = TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=TargetState.LAUNCHABLE,
+        candidates=(
+            TargetCandidate(
+                candidate_id="installed_diablo",
+                target_id="diablo_iv",
+                provider="installed_apps",
+                state=TargetState.LAUNCHER_AVAILABLE,
+                label="installed metadata",
+            ),
+            TargetCandidate(
+                candidate_id="shortcut_diablo",
+                target_id="diablo_iv",
+                provider="start_menu_shortcut",
+                state=TargetState.LAUNCHABLE,
+                label="Diablo IV",
+                path=str(shortcut),
+                command=str(shortcut),
+            ),
+        ),
+    )
+
+    plan = compile_target_start_plan("diablo_iv", resolution=resolution)
+
+    assert [step.primitive_id for step in plan.steps] == ["app.process.launch"]
+    assert plan.steps[0].parameters["command"] == str(shortcut)
+    assert plan.intent["target_resolution"]["candidate_ranking"][0]["candidate_id"] == "shortcut_diablo"
+
+
 def test_target_plan_json_payload_has_stable_shape() -> None:
     result = resolve_target(
         "diablo_iv",
@@ -345,10 +553,44 @@ def test_target_plan_json_payload_has_stable_shape() -> None:
     plan = compile_target_start_plan("diablo_iv", resolution=result)
     payload = target_plan_payload(result, plan, SimpleNamespace(to_dict=lambda: {"compatibility": {"status": "ok"}}))
 
-    assert set(payload) == {"schema_version", "resolution", "plan", "doctor"}
+    assert set(payload) == {"schema_version", "resolution", "plan", "doctor", "home_summary"}
     assert payload["schema_version"] == "target.plan.v1"
     assert payload["resolution"]["target"]["id"] == "diablo_iv"
     assert payload["plan"]["intent"]["kind"] == "target.start"
+    assert payload["home_summary"]["schema_version"] == "target.plan_summary.v1"
+
+
+def test_target_home_summary_reports_user_memory_source(tmp_path: Path) -> None:
+    shortcut = tmp_path / "Diablo IV.lnk"
+    shortcut.write_text("shortcut", encoding="utf-8")
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    resolution = TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=TargetState.LAUNCHABLE,
+        candidates=(
+            TargetCandidate(
+                candidate_id="memory_diablo",
+                target_id="diablo_iv",
+                provider="user_memory",
+                state=TargetState.LAUNCHABLE,
+                label="remembered shortcut",
+                path=str(shortcut),
+                command=str(shortcut),
+            ),
+        ),
+    )
+    plan = compile_target_start_plan("diablo_iv", resolution=resolution)
+
+    summary = build_target_plan_summary(
+        resolution,
+        plan,
+        SimpleNamespace(compatibility="compatible_with_warnings"),
+    )
+
+    assert isinstance(summary, TargetPlanSummary)
+    assert summary.last_successful_source == str(shortcut)
+    assert summary.recommended_next_action == "Review the confirmation prompt before continuing."
 
 
 def test_target_start_intent_compiles_through_target_resolution(monkeypatch) -> None:
@@ -430,6 +672,25 @@ requested_outcome: Start Diablo IV.
     assert [step.primitive_id for step in plan.steps] == ["app.process.launch"]
 
 
+def test_target_start_cli_fixture_compiles_concrete_target(monkeypatch) -> None:
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    resolution = TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=TargetState.NOT_FOUND,
+        suggestions=("Choose a local executable or shortcut for this target.",),
+    )
+    monkeypatch.setattr("ritualist.target_resolution.resolve_target", lambda _target: resolution)
+
+    result = CliRunner().invoke(app, ["plan", "preview", "target.start:diablo_iv", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["plan"]["intent"]["kind"] == "target.start"
+    assert data["plan"]["intent"]["target"] == "diablo_iv"
+    assert data["plan"]["intent"]["target_resolution"]["state"] == "not_found"
+
+
 def test_target_cli_discover_json_shape(monkeypatch) -> None:
     target = builtin_target_catalog().resolve("diablo_iv")[0]
     monkeypatch.setattr(
@@ -449,3 +710,53 @@ def test_target_cli_discover_json_shape(monkeypatch) -> None:
     assert data["schema_version"] == "target.resolution.v1"
     assert data["target"]["id"] == "diablo_iv"
     assert data["state"] == "not_found"
+
+
+def test_target_cli_plan_json_includes_home_summary(monkeypatch) -> None:
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    monkeypatch.setattr(
+        "ritualist.cli.resolve_target",
+        lambda _target: TargetResolutionResult(
+            query="diablo_iv",
+            target=target,
+            state=TargetState.NOT_FOUND,
+            suggestions=("Choose a local executable or shortcut for this target.",),
+        ),
+    )
+
+    result = CliRunner().invoke(app, ["target", "plan", "diablo_iv", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "target.plan.v1"
+    assert data["home_summary"]["recommended_next_action"] == "no local launch source was found for Diablo IV"
+
+
+def test_doctor_target_json_is_plan_doctor_and_side_effect_free(monkeypatch) -> None:
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+
+    def fail_adapter_creation():
+        raise AssertionError("target doctor must not create runtime adapters")
+
+    def fail_executor(*_args, **_kwargs):
+        raise AssertionError("target doctor must not create workflow executor")
+
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", fail_adapter_creation)
+    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_executor)
+    monkeypatch.setattr(
+        "ritualist.cli.resolve_target",
+        lambda _target: TargetResolutionResult(
+            query="diablo_iv",
+            target=target,
+            state=TargetState.NOT_FOUND,
+            suggestions=("Choose a local executable or shortcut for this target.",),
+        ),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "target:diablo_iv", "--json", "--no-strict"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "target.plan.v1"
+    assert data["doctor"]["schema_version"] == "intent.plan_doctor.v1"
+    assert data["doctor"]["compatibility"]["status"] == "compatible_with_warnings"
