@@ -437,7 +437,7 @@ def test_pack_import_quarantines_disabled_and_enable_copies_recipe(tmp_path, mon
     assert (recipes_root / "demo_recipe.yaml").exists()
 
 
-def test_enable_import_rejects_actions_blocked_by_import_policy(tmp_path, monkeypatch):
+def test_enable_import_allows_launch_actions_under_primitive_policy(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
     monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
@@ -465,11 +465,11 @@ def test_enable_import_rejects_actions_blocked_by_import_policy(tmp_path, monkey
 
     record = import_pack(pack_path)
 
-    with pytest.raises(PackImportError, match="blocked action\\(s\\): app.launch"):
-        enable_import(record.import_id)
+    enabled = enable_import(record.import_id)
 
     assert record.status == "disabled"
-    assert not (recipes_root / "demo_recipe.yaml").exists()
+    assert enabled.status == "enabled"
+    assert (recipes_root / "demo_recipe.yaml").exists()
 
 
 def test_enable_import_rejects_browser_click_actions_blocked_by_import_policy(
@@ -503,7 +503,7 @@ def test_enable_import_rejects_browser_click_actions_blocked_by_import_policy(
 
     record = import_pack(pack_path)
 
-    with pytest.raises(PackImportError, match="blocked action\\(s\\): browser.click_text"):
+    with pytest.raises(PackImportError, match="blocked by primitive policy.*browser.interact.click_text"):
         enable_import(record.import_id)
 
     assert record.status == "disabled"
@@ -547,7 +547,7 @@ def test_enable_import_rejects_nested_branch_actions_blocked_by_import_policy(
 
     record = import_pack(pack_path)
 
-    with pytest.raises(PackImportError, match="blocked action\\(s\\): browser.click_text"):
+    with pytest.raises(PackImportError, match="blocked by primitive policy.*browser.interact.click_text"):
         enable_import(record.import_id)
 
     assert record.status == "disabled"

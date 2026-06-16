@@ -27,6 +27,8 @@ from .packs import (
     export_recipe_pack,
     import_pack as import_recipe_pack,
     list_imports as list_pack_imports,
+    validate_imported_pack,
+    validate_pack,
 )
 from .perf import PerformanceReport, measure_operation
 from .paths import (
@@ -41,6 +43,15 @@ from .paths import (
     runs_dir,
 )
 from .primitives import PrimitiveSpec, create_primitive_registry
+from .policy import (
+    PolicyFinding,
+    PolicyProfile,
+    PolicyReport,
+    build_policy_report_for_recipe,
+    build_policy_report_for_recipe_reference,
+    explain_primitive_policy,
+    policy_overview,
+)
 from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
 from .run_logs import (
     RunLogWriter,
@@ -58,9 +69,11 @@ app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
 pack_app = typer.Typer(help="Export, import, and review portable local recipe packs.")
 primitive_app = typer.Typer(help="Inspect primitive kernel metadata.")
+policy_app = typer.Typer(help="Inspect primitive policy and local pack governance.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
+app.add_typer(policy_app, name="policy")
 console = Console()
 
 
@@ -253,6 +266,88 @@ def _print_primitive_spec(spec: PrimitiveSpec) -> None:
                 "yes" if parameter.sensitive else "no",
             )
         console.print(parameter_table)
+
+
+@policy_app.command("show")
+def policy_show(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable policy metadata."),
+    ] = False,
+) -> None:
+    """Show local primitive policy categories, decisions, and profiles."""
+    overview = policy_overview()
+    if json_output:
+        console.print_json(data=overview)
+        return
+
+    table = Table(title="Primitive Policy")
+    table.add_column("Name", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("schema", escape(str(overview["schema_version"])))
+    table.add_row("default_profile", escape(str(overview["default_profile"])))
+    table.add_row("categories", escape(", ".join(overview["categories"])))  # type: ignore[arg-type]
+    table.add_row("decisions", escape(", ".join(overview["decisions"])))  # type: ignore[arg-type]
+    console.print(table)
+
+    profile_table = Table(title="Policy Profiles")
+    profile_table.add_column("Profile", no_wrap=True)
+    profile_table.add_column("Description", overflow="fold")
+    profiles = overview.get("profiles", {})
+    if isinstance(profiles, dict):
+        for name, description in profiles.items():
+            profile_table.add_row(escape(str(name)), escape(str(description)))
+    console.print(profile_table)
+
+
+@policy_app.command("check")
+def policy_check(
+    target: Annotated[str, typer.Argument(help="Recipe id/path, imported pack dir, or .ritualistpack.")],
+    profile: Annotated[
+        str,
+        typer.Option("--profile", help="Local policy profile to evaluate."),
+    ] = PolicyProfile.CONSUMER_SAFE.value,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable policy report."),
+    ] = False,
+) -> None:
+    """Evaluate primitive policy for a local recipe or recipe pack without running it."""
+    try:
+        report = _build_policy_report_for_target(target, profile=profile)
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=report.to_dict())
+    else:
+        _print_policy_report(report)
+    if not report.allowed:
+        raise typer.Exit(1)
+
+
+@policy_app.command("explain")
+def policy_explain(
+    primitive_id: Annotated[str, typer.Argument(help="Primitive id such as browser.session.open.")],
+    profile: Annotated[
+        str,
+        typer.Option("--profile", help="Local policy profile to evaluate."),
+    ] = PolicyProfile.CONSUMER_SAFE.value,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable policy finding."),
+    ] = False,
+) -> None:
+    """Explain one primitive's imported-pack policy decision."""
+    try:
+        finding = explain_primitive_policy(primitive_id, profile=profile)
+    except (KeyError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=finding.to_dict())
+        return
+    _print_policy_finding(finding)
 
 
 @pack_app.command("export")
@@ -1109,6 +1204,64 @@ def _print_import_record(record: ImportedPackRecord) -> None:
     table.add_row("path", escape(str(record.root)))
     for recipe in record.recipes:
         table.add_row(f"recipe {escape(recipe.recipe_id)}", escape(recipe.name))
+    console.print(table)
+
+
+def _build_policy_report_for_target(target: str, *, profile: str) -> PolicyReport:
+    resolved_profile = PolicyProfile(profile)
+    candidate = Path(target).expanduser()
+    if candidate.exists() and candidate.is_dir() and (candidate / "manifest.yaml").exists():
+        pack = validate_imported_pack(candidate)
+        return build_policy_report_for_recipe(
+            pack.recipe,
+            target=str(candidate),
+            profile=resolved_profile,
+            imported=True,
+            private_or_local=False,
+        )
+    if candidate.exists() and candidate.is_file() and candidate.suffix == ".ritualistpack":
+        pack = validate_pack(candidate)
+        return build_policy_report_for_recipe(
+            pack.recipe,
+            target=str(candidate),
+            profile=resolved_profile,
+            imported=True,
+            private_or_local=False,
+        )
+    return build_policy_report_for_recipe_reference(target, profile=resolved_profile)
+
+
+def _print_policy_report(report: PolicyReport) -> None:
+    table = Table(title=f"Policy Check: {escape(report.target)}")
+    table.add_column("Decision", no_wrap=True)
+    table.add_column("Category", no_wrap=True)
+    table.add_column("Primitive", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Reason", overflow="fold")
+    for finding in report.findings:
+        style = "red" if finding.blocked else "yellow" if finding.disclosure_required else "green"
+        table.add_row(
+            f"[{style}]{escape(finding.decision.value)}[/]",
+            escape(finding.category.value),
+            escape(finding.primitive_id),
+            escape(finding.source),
+            escape(finding.reason),
+        )
+    console.print(table)
+    status = "allowed" if report.allowed else "blocked"
+    console.print(
+        f"Profile: {escape(report.profile.value)} | "
+        f"Target: {'imported pack' if report.imported else 'local recipe'} | "
+        f"Result: {escape(status)}"
+    )
+
+
+def _print_policy_finding(finding: PolicyFinding) -> None:
+    table = Table(title=f"Policy: {escape(finding.primitive_id)}")
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    for key, value in finding.to_dict().items():
+        table.add_row(escape(str(key)), escape(_format_metadata_value(value)))
     console.print(table)
 
 

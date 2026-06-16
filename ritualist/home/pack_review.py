@@ -7,6 +7,13 @@ from typing import Any
 
 from ritualist.actions.catalog import SIDE_EFFECT_LABELS, create_action_catalog
 from ritualist.actions.registry import ActionRegistry, create_default_registry
+from ritualist.policy import (
+    PolicyFinding,
+    PrimitivePolicyEngine,
+    PrimitiveRequirement,
+    build_policy_report_for_recipe,
+)
+from ritualist.primitives import create_primitive_registry
 
 
 class PackReviewDecision(StrEnum):
@@ -21,6 +28,9 @@ class PackReviewAction:
     action_name: str
     side_effect_level: str = ""
     side_effect_label: str = ""
+    primitive_id: str = ""
+    policy_category: str = ""
+    policy_decision: str = ""
     required_capabilities: tuple[str, ...] = ()
     safety_warnings: tuple[str, ...] = ()
     blocked_by_policy: bool = False
@@ -101,6 +111,9 @@ def build_pack_import_review(
 
     resolved_registry = registry or create_default_registry()
     catalog = create_action_catalog(resolved_registry)
+    primitive_registry = create_primitive_registry(resolved_registry)
+    policy_engine = PrimitivePolicyEngine(primitive_registry=primitive_registry)
+    recipe_policy_findings = _policy_findings_by_action(summary, registry=resolved_registry)
     pack_info = (
         _mapping_or_object(_first_value(summary, ("pack", "manifest", "metadata"))) or summary
     )
@@ -113,6 +126,9 @@ def build_pack_import_review(
         raw_actions,
         registry=resolved_registry,
         catalog=catalog,
+        primitive_registry=primitive_registry,
+        policy_engine=policy_engine,
+        recipe_policy_findings=recipe_policy_findings,
     )
     summary_capabilities = _string_tuple(
         _first_value(summary, ("required_capabilities", "capabilities"))
@@ -141,7 +157,12 @@ def build_pack_import_review(
         [
             *_string_tuple(_first_value(summary, ("policy_failures", "policy_errors"))),
             *(
-                f"Action '{action.action_name}' is blocked in imported recipe packs."
+                f"Action '{action.action_name}' is blocked by primitive policy"
+                + (
+                    f" ({action.primitive_id}: {action.policy_decision})."
+                    if action.primitive_id
+                    else "."
+                )
                 for action in actions
                 if action.blocked_by_policy
             ),
@@ -167,6 +188,9 @@ def _review_actions(
     *,
     registry: ActionRegistry,
     catalog: object,
+    primitive_registry: object,
+    policy_engine: PrimitivePolicyEngine,
+    recipe_policy_findings: Mapping[str, PolicyFinding],
 ) -> tuple[tuple[PackReviewAction, ...], tuple[str, ...]]:
     actions: list[PackReviewAction] = []
     validation_errors: list[str] = []
@@ -183,6 +207,27 @@ def _review_actions(
             catalog_entry = catalog.entry(action_name)
         except KeyError:
             validation_errors.append(f"Action '{action_name}' is not registered.")
+        policy_finding = None
+        primitive_id = ""
+        if metadata is not None:
+            try:
+                spec = primitive_registry.spec_for_action(action_name)
+                primitive_id = spec.primitive_id
+                policy_finding = recipe_policy_findings.get(action_name)
+                if policy_finding is None:
+                    policy_finding = policy_engine.evaluate_requirement(
+                        PrimitiveRequirement(
+                            primitive_id=spec.primitive_id,
+                            source="pack_review",
+                            action_name=action_name,
+                            spec=spec,
+                            risk=spec.risk,
+                        ),
+                        imported=True,
+                        private_or_local=False,
+                    )
+            except KeyError:
+                validation_errors.append(f"Action '{action_name}' has no primitive policy metadata.")
 
         side_effect_level = _first_text(
             action_mapping,
@@ -206,22 +251,23 @@ def _review_actions(
         if not safety_warnings and catalog_entry is not None:
             safety_warnings = tuple(catalog_entry.safety_warnings)
 
-        allowed_raw = _first_value(
-            action_mapping,
-            ("allowed_in_imported_packs", "allowedInImportedPacks"),
-        )
-        allowed = _optional_bool(allowed_raw)
-        if allowed is None and metadata is not None:
-            allowed = metadata.allowed_in_imported_packs
+        policy_category = policy_finding.category.value if policy_finding else ""
+        policy_decision = policy_finding.decision.value if policy_finding else ""
+        blocked_by_policy = policy_finding.blocked if policy_finding else False
+        if policy_finding is not None and policy_finding.disclosure_required:
+            safety_warnings = _unique([*safety_warnings, policy_finding.reason])
 
         actions.append(
             PackReviewAction(
                 action_name=action_name,
                 side_effect_level=side_effect_level,
                 side_effect_label=side_effect_label,
+                primitive_id=primitive_id,
+                policy_category=policy_category,
+                policy_decision=policy_decision,
                 required_capabilities=required_capabilities,
                 safety_warnings=safety_warnings,
-                blocked_by_policy=allowed is False,
+                blocked_by_policy=blocked_by_policy,
             )
         )
     return tuple(actions), tuple(validation_errors)
@@ -241,6 +287,44 @@ def _action_items(raw_actions: object) -> tuple[object, ...]:
     if isinstance(raw_actions, Sequence):
         return tuple(raw_actions)
     return (raw_actions,)
+
+
+def _policy_findings_by_action(
+    summary: object,
+    *,
+    registry: ActionRegistry,
+) -> dict[str, PolicyFinding]:
+    recipe = _first_value(summary, ("recipe",))
+    if recipe is None or not hasattr(recipe, "execution_steps"):
+        return {}
+    try:
+        report = build_policy_report_for_recipe(
+            recipe,
+            target="pack_review",
+            imported=True,
+            private_or_local=False,
+            registry=registry,
+        )
+    except Exception:  # noqa: BLE001 - preserve pack-review rendering best effort.
+        return {}
+    grouped: dict[str, list[PolicyFinding]] = {}
+    for finding in report.findings:
+        if finding.action_name:
+            grouped.setdefault(finding.action_name, []).append(finding)
+    return {
+        action_name: _preferred_policy_finding(findings)
+        for action_name, findings in grouped.items()
+    }
+
+
+def _preferred_policy_finding(findings: list[PolicyFinding]) -> PolicyFinding:
+    return sorted(
+        findings,
+        key=lambda finding: (
+            0 if finding.blocked else 1 if finding.disclosure_required else 2,
+            finding.source,
+        ),
+    )[0]
 
 
 def _action_name(raw_action: object) -> str:

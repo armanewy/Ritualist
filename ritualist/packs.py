@@ -20,6 +20,12 @@ from .doctor import build_doctor_report
 from .errors import RecipeValidationError, RitualistError
 from .models import SAFE_ID_PATTERN, Recipe
 from .paths import imported_packs_dir, imported_packs_path, recipes_dir
+from .policy import (
+    PolicyProfile,
+    blocked_policy_messages,
+    build_policy_report_for_recipe,
+    detect_never_importable_raw,
+)
 from .recipe_loader import load_recipe_document, load_recipe_for_diagnostics
 
 PACK_SCHEMA_V1 = "ritualist.pack.v1"
@@ -491,15 +497,20 @@ def enable_import(import_id: str, *, registry: ActionRegistry | None = None) -> 
     if record.status != "disabled":
         raise PackImportError(f"import is not disabled: {import_id}")
 
-    pack = validate_imported_pack(record.root, registry=registry)
-    blocked = _blocked_import_actions(
-        pack.manifest.required_actions,
-        registry or create_default_registry(),
+    resolved_registry = registry or create_default_registry()
+    pack = validate_imported_pack(record.root, registry=resolved_registry)
+    policy_report = build_policy_report_for_recipe(
+        pack.recipe,
+        target=str(record.root),
+        profile=PolicyProfile.CONSUMER_SAFE,
+        imported=True,
+        private_or_local=False,
+        registry=resolved_registry,
     )
+    blocked = blocked_policy_messages(policy_report)
     if blocked:
         raise PackImportError(
-            "imported pack must be reviewed/configured before enable; blocked action(s): "
-            + ", ".join(blocked)
+            "imported pack is blocked by primitive policy: " + "; ".join(blocked)
         )
     doctor_report = build_doctor_report(pack.recipe)
     if doctor_report.compatibility == "incompatible":
@@ -565,6 +576,16 @@ def _build_validated_pack(
     registry: ActionRegistry,
 ) -> RitualistPack:
     manifest = _parse_manifest(manifest_raw)
+    never_importable = detect_never_importable_raw(
+        recipe_raw,
+        manifest_raw=manifest_raw,
+        asset_names=asset_names,
+    )
+    if never_importable:
+        messages = "; ".join(
+            f"{finding.primitive_id} at {finding.source}" for finding in never_importable
+        )
+        raise PackValidationError(f"never-importable pack content is blocked: {messages}")
     _validate_manifest_actions(manifest, registry)
 
     raw_recipe_actions = _collect_recipe_actions(recipe_raw)

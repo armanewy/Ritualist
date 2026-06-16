@@ -32,7 +32,10 @@ def test_pack_review_dialog_shows_review_data_and_blocks_enable() -> None:
         required_capabilities=("windows_uia",),
         safety_warnings=("Requires window_title_contains",),
         readme="# Blocked Pack\nManual review required.",
-        policy_failures=("Action 'desktop.click_text' is blocked in imported recipe packs.",),
+        policy_failures=(
+            "Action 'desktop.click_text' is blocked by primitive policy "
+            "(uia.element.click_text: blocked).",
+        ),
     )
 
     dialog = PackImportReviewDialog(review)
@@ -49,7 +52,7 @@ def test_pack_review_dialog_shows_review_data_and_blocks_enable() -> None:
     assert "target_window" in dialog.variables_text.toPlainText()
     assert "windows_uia" in dialog.capabilities_text.toPlainText()
     assert "Requires window_title_contains" in dialog.warnings_text.toPlainText()
-    assert "blocked in imported recipe packs" in dialog.warnings_text.toPlainText()
+    assert "blocked by primitive policy" in dialog.warnings_text.toPlainText()
     assert "# Blocked Pack" in dialog.readme_text.toPlainText()
 
     dialog.enable_button.click()

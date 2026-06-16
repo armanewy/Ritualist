@@ -49,9 +49,12 @@ def test_pack_import_review_derives_policy_and_safety_from_fake_summary() -> Non
     assert "Always asks for confirmation" in review.safety_warnings
     assert "Clicking text exactly equal to Play requires confirmation" in review.safety_warnings
     assert "Requires window_title_contains" in review.safety_warnings
-    assert "Action 'browser.open' is blocked in imported recipe packs." in review.policy_failures
+    browser_open = next(action for action in review.actions if action.action_name == "browser.open")
+    assert browser_open.primitive_id == "browser.session.open"
+    assert browser_open.policy_decision == "allowed"
     assert (
-        "Action 'desktop.click_text' is blocked in imported recipe packs."
+        "Action 'desktop.click_text' is blocked by primitive policy"
+        " (uia.element.click_text: blocked)."
         in review.policy_failures
     )
     assert review.enable_allowed is False
@@ -109,8 +112,12 @@ def test_pack_import_review_blocks_policy_from_validated_pack(tmp_path: Path) ->
     assert review.pack_name == "Launch Pack"
     assert review.action_names == ("app.launch",)
     assert "app_launch" in review.required_capabilities
-    assert "Action 'app.launch' is blocked in imported recipe packs." in review.policy_failures
-    assert review.enable_allowed is False
+    action = review.actions[0]
+    assert action.primitive_id == "app.process.launch"
+    assert action.policy_decision == "requires_disclosure"
+    assert any("demo.exe" in warning for warning in action.safety_warnings)
+    assert review.policy_failures == ()
+    assert review.enable_allowed is True
 
 
 def test_pack_import_review_blocks_validation_failures_and_unknown_actions() -> None:
