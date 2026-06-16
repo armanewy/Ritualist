@@ -4,29 +4,60 @@ from ritualist import desktop_entry
 from ritualist.errors import DependencyMissingError
 
 
-def test_desktop_entry_launches_gui(monkeypatch):
+def test_desktop_entry_launches_home_by_default(monkeypatch):
     called = []
-    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(True))
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append("home"))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append("gui"))
 
-    assert desktop_entry.main() == 0
-    assert called == [True]
+    assert desktop_entry.main([]) == 0
+    assert called == ["home"]
 
 
-def test_desktop_entry_reports_gui_dependency_error(monkeypatch, capsys):
+def test_desktop_entry_launches_home_with_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append("home"))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append("gui"))
+
+    assert desktop_entry.main(["--home"]) == 0
+    assert called == ["home"]
+
+
+def test_desktop_entry_launches_classic_gui_with_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append("home"))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append("gui"))
+
+    assert desktop_entry.main(["--classic-gui"]) == 0
+    assert called == ["gui"]
+
+
+def test_desktop_entry_reports_home_dependency_error(monkeypatch, capsys):
     messages = []
     logs = []
 
-    def missing_gui() -> None:
-        raise DependencyMissingError("GUI requires PySide6; install ritualist[gui]")
+    def missing_home() -> None:
+        raise DependencyMissingError("Home UI requires PySide6; install ritualist[gui]")
 
-    monkeypatch.setattr(desktop_entry, "_run_gui", missing_gui)
+    monkeypatch.setattr(desktop_entry, "_run_home", missing_home)
     monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
     monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
 
-    assert desktop_entry.main() == 1
-    assert messages == ["GUI requires PySide6; install ritualist[gui]"]
-    assert logs[0][0] == "GUI requires PySide6; install ritualist[gui]"
+    assert desktop_entry.main([]) == 1
+    assert messages == ["Home UI requires PySide6; install ritualist[gui]"]
+    assert logs[0][0] == "Home UI requires PySide6; install ritualist[gui]"
     assert "ritualist[gui]" in capsys.readouterr().err
+
+
+def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
+    messages = []
+    logs = []
+    monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
+    monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
+
+    assert desktop_entry.main(["--unknown"]) == 1
+    assert "Unsupported desktop option" in messages[0]
+    assert "Ritualist.exe --classic-gui" in logs[0][0]
+    assert "Unsupported desktop option" in capsys.readouterr().err
 
 
 def test_desktop_entry_writes_startup_error_log(tmp_path, monkeypatch):
