@@ -18,6 +18,7 @@ WORKSPACE_TEMPLATE_IDS = {
 WORKSPACE_TEMPLATE_PATHS = [
     SAMPLE_DIR / f"{template_id}.yaml" for template_id in sorted(WORKSPACE_TEMPLATE_IDS)
 ]
+SAMPLE_RECIPE_PATHS = sorted(SAMPLE_DIR.glob("*.yaml"))
 TEMPLATE_REF_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
 ALLOWED_TEMPLATE_ACTIONS = {
     "app.launch",
@@ -28,6 +29,44 @@ ALLOWED_TEMPLATE_ACTIONS = {
     "confirm.ask",
     "wait.for_user",
 }
+FORBIDDEN_EVIDENCE_CAPTURE_ACTIONS = {
+    "browser.capture_page",
+    "browser.capture_page_contents",
+    "browser.cookies",
+    "browser.export_cookies",
+    "browser.page_contents",
+    "browser.page_source",
+    "browser.screenshot",
+    "clipboard.read",
+    "desktop.capture_screenshot",
+    "desktop.screenshot",
+    "input.read_clipboard",
+    "ocr.read",
+    "password.capture",
+    "system.read_clipboard",
+}
+FORBIDDEN_EVIDENCE_CAPTURE_MARKERS = (
+    "capture_page",
+    "clipboard",
+    "cookie",
+    "ocr",
+    "page_contents",
+    "page_content",
+    "page_html",
+    "page_source",
+    "page_text",
+    "password",
+    "screenshot",
+)
+FORBIDDEN_DEFAULT_EVIDENCE_TERMS = (
+    "clipboard contents",
+    "cookie",
+    "cookies",
+    "page contents",
+    "page_content",
+    "password",
+    "screenshot",
+)
 
 
 def test_workspace_templates_are_bundled() -> None:
@@ -97,10 +136,25 @@ def test_workspace_templates_avoid_disallowed_content() -> None:
         actions = {step["action"] for step in _all_steps(raw)}
 
         assert actions <= ALLOWED_TEMPLATE_ACTIONS
-        assert "password" not in text
         assert "secret" not in text
         assert "token" not in text
+        for term in FORBIDDEN_DEFAULT_EVIDENCE_TERMS:
+            assert term not in text
         assert "desktop.click_text" not in actions
+
+
+def test_sample_recipes_do_not_use_forbidden_evidence_capture_actions() -> None:
+    for path in SAMPLE_RECIPE_PATHS:
+        raw = read_recipe_document(path)
+        for step in _all_steps(raw):
+            action = step["action"]
+            normalized_action = _normalized_action_name(action)
+
+            assert action not in FORBIDDEN_EVIDENCE_CAPTURE_ACTIONS
+            assert not any(
+                marker in normalized_action
+                for marker in FORBIDDEN_EVIDENCE_CAPTURE_MARKERS
+            )
 
 
 def _all_steps(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -115,3 +169,7 @@ def _template_reference(value: str) -> str:
     match = TEMPLATE_REF_RE.fullmatch(value)
     assert match is not None
     return match.group(1)
+
+
+def _normalized_action_name(action: str) -> str:
+    return action.casefold().replace(".", "_").replace("-", "_")

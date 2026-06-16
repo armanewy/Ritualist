@@ -153,6 +153,12 @@ Remove-Item Env:\RITUALIST_RUNTIME_SMOKE
 
 See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract, runtime event rules, and performance budgets. See [RUNTIME.md](RUNTIME.md) for Runtime v2 run states, step states, events, controls, waits, and GUI/Home integration rules.
 
+Helpdesk-oriented recipes must also follow the local evidence policy in
+[docs/helpdesk_privacy_evidence.md](docs/helpdesk_privacy_evidence.md): default
+evidence is limited to timestamps, action names, statuses, window titles, and
+operator notes; passwords, cookies, page contents, screenshots, and clipboard
+contents are forbidden by default.
+
 ### Performance Non-Negotiables
 
 - Keep slow runtime, filesystem, adapter, and process work off the UI thread.
@@ -300,6 +306,11 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 - `browser-profiles`
 
 Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
+
+Helpdesk summaries use the same privacy boundary. They may include timestamps,
+action names, statuses, scoped window titles, and operator notes, but default
+templates must not capture passwords, cookies, page contents, screenshots, or
+clipboard contents.
 
 Run history uses `success` for completed runs, `stopped` for cleanly cancelled or failed workflows, and `interrupted` when a previous Ritualist process exited before finalizing `run.json`. `ritualist runs` repairs stale `running` records automatically; use `ritualist runs --no-repair` to inspect raw statuses without reconciliation.
 
