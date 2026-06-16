@@ -20,6 +20,9 @@ from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
 from .models import (
+    BrowserClickRoleStep,
+    BrowserClickTestIdStep,
+    BrowserClickTextStep,
     Condition,
     DesktopClickTextStep,
     ExecutableStep,
@@ -28,6 +31,7 @@ from .models import (
     WindowMatchMixin,
     WindowTitleScopeMixin,
     WindowWaitStep,
+    is_risky_browser_click_target,
 )
 from .overlay import (
     ActionPreview,
@@ -1103,7 +1107,17 @@ def _heartbeat_wait_fields(step: ExecutableStep | None, started_at: datetime | N
 
 
 def _is_wait_step(step: ExecutableStep) -> bool:
-    return step.action == "window.wait" or step.action.startswith("wait.")
+    return (
+        step.action == "window.wait"
+        or step.action.startswith("wait.")
+        or step.action
+        in {
+            "browser.wait_text",
+            "browser.wait_title",
+            "browser.wait_url",
+            "browser.element_visible",
+        }
+    )
 
 
 def _step_requests_keep_open(step: ExecutableStep) -> bool:
@@ -1130,6 +1144,14 @@ def _wait_target_label(step: ExecutableStep) -> str:
         return f"window {_window_match_label(step)}"
     if action == "wait.for_window_gone" and isinstance(step, WindowMatchMixin):
         return f"window {_window_match_label(step)} to close"
+    if action == "browser.wait_text":
+        return f"browser text {getattr(step, 'text', '')}"
+    if action == "browser.wait_title":
+        return f"browser title {getattr(step, 'title', None) or getattr(step, 'title_contains', '')}"
+    if action == "browser.wait_url":
+        return f"browser URL {getattr(step, 'url', None) or getattr(step, 'url_contains', '')}"
+    if action == "browser.element_visible":
+        return f"browser element {_browser_element_label(step)}"
     return step.display_name
 
 
@@ -1238,12 +1260,21 @@ def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None)
         return region.target_text
     if isinstance(step, DesktopClickTextStep):
         return step.text
+    if isinstance(step, BrowserClickTextStep):
+        return step.text
+    if isinstance(step, BrowserClickRoleStep):
+        return step.accessible_name
+    if isinstance(step, BrowserClickTestIdStep):
+        return step.test_id
     return None
 
 
 def _confirmation_safety_message(step: ExecutableStep) -> str | None:
     if isinstance(step, DesktopClickTextStep) and step.text.strip().casefold() == "play":
         return "Clicking visible text exactly equal to Play requires explicit confirmation."
+    browser_target = _browser_click_target(step)
+    if browser_target is not None and is_risky_browser_click_target(browser_target):
+        return f"Clicking browser target '{browser_target.strip()}' requires explicit confirmation."
     if getattr(step, "requires_confirmation", False):
         return "This step requires explicit confirmation before Ritualist continues."
     return None
@@ -1308,3 +1339,23 @@ def _dry_run_layout_message(step: ExecutableStep) -> str | None:
     if operation is None:
         return None
     return f"would {operation} '{title}'"
+
+
+def _browser_click_target(step: ExecutableStep) -> str | None:
+    if isinstance(step, BrowserClickTextStep):
+        return step.text
+    if isinstance(step, BrowserClickRoleStep):
+        return step.accessible_name
+    if isinstance(step, BrowserClickTestIdStep):
+        return step.test_id
+    return None
+
+
+def _browser_element_label(step: ExecutableStep) -> str:
+    text = getattr(step, "text", None)
+    if text:
+        return f"text {text}"
+    role = getattr(step, "role", None)
+    if role:
+        return f"role {role} named {getattr(step, 'accessible_name', '')}"
+    return f"test id {getattr(step, 'test_id', '')}"

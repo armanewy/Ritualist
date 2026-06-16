@@ -449,6 +449,77 @@ def test_enable_import_rejects_actions_blocked_by_import_policy(tmp_path, monkey
     assert not (recipes_root / "demo_recipe.yaml").exists()
 
 
+def test_enable_import_rejects_browser_click_actions_blocked_by_import_policy(
+    tmp_path,
+    monkeypatch,
+):
+    imported_root = tmp_path / "imported-packs"
+    recipes_root = tmp_path / "recipes"
+    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr(
+        "ritualist.packs.imported_packs_dir",
+        lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
+    )
+    monkeypatch.setattr(
+        "ritualist.packs.recipes_dir",
+        lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
+    )
+    pack_path = _write_pack(
+        tmp_path,
+        manifest=_manifest(
+            required_actions=["browser.click_text"],
+            required_capabilities=["playwright", "browser_control"],
+        ),
+        recipe={
+            "version": "0.1",
+            "id": "demo_recipe",
+            "name": "Demo",
+            "steps": [{"action": "browser.click_text", "text": "Continue"}],
+        },
+    )
+
+    record = import_pack(pack_path)
+
+    with pytest.raises(PackImportError, match="blocked action\\(s\\): browser.click_text"):
+        enable_import(record.import_id)
+
+    assert record.status == "disabled"
+    assert not (recipes_root / "demo_recipe.yaml").exists()
+
+
+def test_enable_import_allows_read_only_browser_wait_actions(tmp_path, monkeypatch):
+    imported_root = tmp_path / "imported-packs"
+    recipes_root = tmp_path / "recipes"
+    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr(
+        "ritualist.packs.imported_packs_dir",
+        lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
+    )
+    monkeypatch.setattr(
+        "ritualist.packs.recipes_dir",
+        lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
+    )
+    pack_path = _write_pack(
+        tmp_path,
+        manifest=_manifest(
+            required_actions=["browser.wait_text"],
+            required_capabilities=["playwright", "browser_control"],
+        ),
+        recipe={
+            "version": "0.1",
+            "id": "demo_recipe",
+            "name": "Demo",
+            "steps": [{"action": "browser.wait_text", "text": "Ready"}],
+        },
+    )
+
+    record = import_pack(pack_path)
+    enabled = enable_import(record.import_id)
+
+    assert enabled.status == "enabled"
+    assert (recipes_root / "demo_recipe.yaml").exists()
+
+
 def test_enable_import_materializes_manifest_defaults_for_installed_recipe(
     tmp_path,
     monkeypatch,

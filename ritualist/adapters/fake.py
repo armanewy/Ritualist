@@ -74,6 +74,27 @@ class FakeBrowserAdapter(RecordingAdapter):
         self.record("text_visible", **kwargs)
         return bool(self.response("text_visible", True))
 
+    def title_matches(self, **kwargs: Any) -> bool:
+        self.record("title_matches", **kwargs)
+        return bool(self.response("title_matches", True))
+
+    def url_matches(self, **kwargs: Any) -> bool:
+        self.record("url_matches", **kwargs)
+        return bool(self.response("url_matches", True))
+
+    def element_visible(self, **kwargs: Any) -> bool:
+        self.record("element_visible", **kwargs)
+        return bool(self.response("element_visible", True))
+
+    def click_text(self, **kwargs: Any) -> None:
+        self.record("click_text", **kwargs)
+
+    def click_role(self, **kwargs: Any) -> None:
+        self.record("click_role", **kwargs)
+
+    def click_test_id(self, **kwargs: Any) -> None:
+        self.record("click_test_id", **kwargs)
+
 
 class FakeWindowAdapter(RecordingAdapter):
     def foreground_window_title(self) -> str:

@@ -8,7 +8,7 @@ import yaml
 
 from ritualist.actions.catalog import ActionCatalog, ActionCatalogEntry, create_action_catalog
 from ritualist.errors import RecipeValidationError
-from ritualist.models import SAFE_ID_PATTERN, Recipe
+from ritualist.models import SAFE_ID_PATTERN, Recipe, is_risky_browser_click_target
 from ritualist.recipe_builder import RecipeBuilder
 from ritualist.templating import collect_template_variables
 
@@ -135,6 +135,9 @@ class RecipeStepBuilder:
             and str(values.get("text", "")).strip().casefold() == "play"
         ):
             values["requires_confirmation"] = True
+        browser_target = _browser_click_target(values)
+        if is_risky_browser_click_target(browser_target):
+            values["requires_confirmation"] = True
 
     def _validate_step(self, values: dict[str, Any]) -> None:
         Recipe.model_validate(
@@ -233,6 +236,17 @@ def _coerce_field_value(field_name: str, raw: object) -> Any:
             raise RecipeValidationError(f"{field_name} must be a YAML mapping")
         return loaded
     return str(raw)
+
+
+def _browser_click_target(values: dict[str, Any]) -> str:
+    action = values.get("action")
+    if action == "browser.click_text":
+        return str(values.get("text") or "")
+    if action == "browser.click_role":
+        return str(values.get("accessible_name") or "")
+    if action == "browser.click_test_id":
+        return str(values.get("test_id") or "")
+    return ""
 
 
 def _is_workflow_action(action_name: str) -> bool:

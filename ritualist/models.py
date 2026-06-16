@@ -8,6 +8,18 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 from .errors import SafetyError
 
 SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+RISKY_BROWSER_CLICK_TARGETS = frozenset(
+    {
+        "buy",
+        "purchase",
+        "pay",
+        "send",
+        "delete",
+        "submit",
+        "confirm",
+    }
+)
+_WORD_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
 
 PredicateType = Literal[
@@ -95,6 +107,133 @@ class BrowserMediaStep(StepBase):
     play: bool | None = None
     loop: bool | None = None
     muted: bool | None = None
+
+
+class BrowserWaitTextStep(StepBase):
+    action: Literal["browser.wait_text"]
+    text: str = Field(min_length=1)
+    exact: bool = True
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        return _required_text("text", value)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "BrowserWaitTextStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
+
+
+class BrowserWaitTitleStep(StepBase):
+    action: Literal["browser.wait_title"]
+    title: str | None = None
+    title_contains: str | None = None
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_title_matcher(self) -> "BrowserWaitTitleStep":
+        _require_one_text_field(
+            "browser.wait_title",
+            {"title": self.title, "title_contains": self.title_contains},
+        )
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
+
+
+class BrowserWaitUrlStep(StepBase):
+    action: Literal["browser.wait_url"]
+    url: str | None = None
+    url_contains: str | None = None
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_url_matcher(self) -> "BrowserWaitUrlStep":
+        _require_one_text_field(
+            "browser.wait_url",
+            {"url": self.url, "url_contains": self.url_contains},
+        )
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
+
+
+class BrowserElementVisibleStep(StepBase):
+    action: Literal["browser.element_visible"]
+    text: str | None = None
+    role: str | None = None
+    accessible_name: str | None = None
+    test_id: str | None = None
+    exact: bool = True
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_structured_locator(self) -> "BrowserElementVisibleStep":
+        _validate_browser_locator(
+            "browser.element_visible",
+            text=self.text,
+            role=self.role,
+            accessible_name=self.accessible_name,
+            test_id=self.test_id,
+        )
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
+
+
+class BrowserClickTextStep(StepBase):
+    action: Literal["browser.click_text"]
+    text: str = Field(min_length=1)
+    exact: bool = True
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        return _required_text("text", value)
+
+    @model_validator(mode="after")
+    def enforce_browser_click_text_safety(self) -> "BrowserClickTextStep":
+        _enforce_browser_click_safety("browser.click_text", self.text, self.requires_confirmation)
+        return self
+
+
+class BrowserClickRoleStep(StepBase):
+    action: Literal["browser.click_role"]
+    role: str = Field(min_length=1)
+    accessible_name: str = Field(min_length=1)
+    exact: bool = True
+
+    @field_validator("role", "accessible_name")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        return _required_text("target", value)
+
+    @model_validator(mode="after")
+    def enforce_browser_click_role_safety(self) -> "BrowserClickRoleStep":
+        _enforce_browser_click_safety(
+            "browser.click_role",
+            self.accessible_name,
+            self.requires_confirmation,
+        )
+        return self
+
+
+class BrowserClickTestIdStep(StepBase):
+    action: Literal["browser.click_test_id"]
+    test_id: str = Field(min_length=1)
+
+    @field_validator("test_id")
+    @classmethod
+    def reject_blank_test_id(cls, value: str) -> str:
+        return _required_text("test_id", value)
+
+    @model_validator(mode="after")
+    def enforce_browser_click_test_id_safety(self) -> "BrowserClickTestIdStep":
+        _enforce_browser_click_safety(
+            "browser.click_test_id",
+            self.test_id,
+            self.requires_confirmation,
+        )
+        return self
 
 
 class AppLaunchStep(StepBase):
@@ -453,6 +592,13 @@ AssertionStep = Annotated[
 WorkflowStep = Annotated[
     BrowserOpenStep
     | BrowserMediaStep
+    | BrowserWaitTextStep
+    | BrowserWaitTitleStep
+    | BrowserWaitUrlStep
+    | BrowserElementVisibleStep
+    | BrowserClickTextStep
+    | BrowserClickRoleStep
+    | BrowserClickTestIdStep
     | AppLaunchStep
     | AppWaitProcessStep
     | WindowFocusStep
@@ -629,6 +775,54 @@ def _validate_predicate_fields(condition: Condition) -> None:
             raise ValueError(f"condition {predicate_type} does not support {field_name}")
     if condition.control_type is not None and not condition.control_type.strip():
         raise ValueError("condition control_type must not be blank")
+
+
+def _require_one_text_field(action: str, values: dict[str, str | None]) -> None:
+    provided = [name for name, value in values.items() if isinstance(value, str) and value.strip()]
+    if len(provided) != 1:
+        choices = ", ".join(values)
+        raise ValueError(f"{action} requires exactly one of {choices}")
+
+
+def _validate_browser_locator(
+    action: str,
+    *,
+    text: str | None,
+    role: str | None,
+    accessible_name: str | None,
+    test_id: str | None,
+) -> None:
+    locators = [
+        bool(isinstance(text, str) and text.strip()),
+        bool(isinstance(role, str) and role.strip()),
+        bool(isinstance(test_id, str) and test_id.strip()),
+    ]
+    if sum(locators) != 1:
+        raise ValueError(f"{action} requires exactly one structured locator: text, role, or test_id")
+    if role is not None and role.strip():
+        if not isinstance(accessible_name, str) or not accessible_name.strip():
+            raise ValueError(f"{action} role locator requires accessible_name")
+    elif accessible_name is not None:
+        raise ValueError(f"{action} accessible_name is only supported with role")
+
+
+def _enforce_browser_click_safety(
+    action: str,
+    target: str,
+    requires_confirmation: bool,
+) -> None:
+    normalized = target.strip().casefold()
+    if not normalized:
+        raise ValueError(f"{action} target must not be blank")
+    if is_risky_browser_click_target(normalized) and not requires_confirmation:
+        raise SafetyError(
+            f"{action} with target '{target.strip()}' requires requires_confirmation: true"
+        )
+
+
+def is_risky_browser_click_target(target: str) -> bool:
+    tokens = {token.casefold() for token in _WORD_PATTERN.findall(target)}
+    return bool(tokens.intersection(RISKY_BROWSER_CLICK_TARGETS))
 
 
 def _validate_composition_fields(condition: Condition) -> None:

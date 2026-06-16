@@ -1,0 +1,333 @@
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from textwrap import dedent
+
+import pytest
+
+from ritualist.adapters.fake import FakeAdapters
+from ritualist.actions.base import ActionContext
+from ritualist.actions.browser_actions import BrowserWaitTextHandler
+from ritualist.actions.registry import create_default_registry
+from ritualist.config import AppConfig
+from ritualist.executor import WorkflowExecutor
+from ritualist.models import BrowserWaitTextStep, Recipe
+from ritualist.overlay import ConfirmationRequest, NullOverlayController
+from ritualist.recipe_loader import load_recipe
+from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
+
+
+def test_browser_wait_text_success_uses_fake_browser_adapter():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_wait",
+            "name": "Browser Wait",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 0.01},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "text_visible", "close"]
+    assert fakes.browser.calls[1][2]["text"] == "Ready"
+
+
+def test_browser_wait_text_timeout_fails_without_page_contents():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_wait",
+            "name": "Browser Wait",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 0.01},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.responses["text_visible"] = False
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert not summary.success
+    assert summary.results[-1].action == "browser.wait_text"
+    assert summary.results[-1].status == "failed"
+    assert "timed out" in summary.results[-1].message
+    assert "Ready" in summary.results[-1].message
+
+
+def test_browser_click_text_invokes_adapter_with_structured_target():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {"action": "browser.click_text", "text": "Continue"},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "click_text", "close"]
+    assert fakes.browser.calls[1][2] == {
+        "text": "Continue",
+        "exact": True,
+        "timeout_seconds": 10.0,
+    }
+    assert summary.results[1].metadata["browser_click"] == {
+        "target_type": "text",
+        "text": "Continue",
+    }
+
+
+def test_browser_click_role_invokes_adapter_with_accessible_name():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {
+                    "action": "browser.click_role",
+                    "role": "button",
+                    "accessible_name": "Continue",
+                    "exact": False,
+                },
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "click_role", "close"]
+    assert fakes.browser.calls[1][2]["role"] == "button"
+    assert fakes.browser.calls[1][2]["accessible_name"] == "Continue"
+    assert fakes.browser.calls[1][2]["exact"] is False
+
+
+def test_browser_click_test_id_invokes_adapter_with_test_id():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {"action": "browser.click_test_id", "test_id": "continue-button"},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "click_test_id", "close"]
+    assert fakes.browser.calls[1][2]["test_id"] == "continue-button"
+
+
+def test_risky_browser_click_requires_confirmation(tmp_path):
+    path = tmp_path / "risky.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: risky
+            name: Risky
+            steps:
+              - action: browser.click_text
+                text: Buy now
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception, match="requires_confirmation"):
+        load_recipe(path)
+
+
+def test_browser_click_actions_are_risky_and_blocked_in_imported_packs():
+    registry = create_default_registry()
+
+    for action in ("browser.click_text", "browser.click_role", "browser.click_test_id"):
+        metadata = registry.metadata(action)
+        assert metadata.side_effect_level == "risky"
+        assert metadata.allowed_in_imported_packs is False
+
+
+def test_declined_risky_browser_click_stops_before_clicking():
+    requested: list[ConfirmationRequest] = []
+
+    def confirm(prompt):
+        assert isinstance(prompt, ConfirmationRequest)
+        requested.append(prompt)
+        return False
+
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test"},
+                {
+                    "action": "browser.click_text",
+                    "text": "Buy now",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        config=AppConfig(),
+        confirmer=confirm,
+    ).run(recipe)
+
+    assert not summary.success
+    assert summary.results[-1].status == "cancelled"
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "close"]
+    assert requested[0].action == "browser.click_text"
+    assert requested[0].target_text == "Buy now"
+    assert "requires explicit confirmation" in (requested[0].safety_message or "")
+
+
+def test_browser_click_dry_run_does_not_click():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [{"action": "browser.click_text", "text": "Continue"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        config=AppConfig(),
+        dry_run=True,
+    ).run(recipe)
+
+    assert summary.success
+    assert summary.results[0].status == "dry-run"
+    assert fakes.browser.calls == []
+
+
+def test_browser_wait_timeout_runs_on_timeout_actions():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_wait",
+            "name": "Browser Wait",
+            "steps": [
+                {
+                    "action": "browser.wait_text",
+                    "text": "Ready",
+                    "timeout_seconds": 0.01,
+                    "on_timeout": [
+                        {
+                            "action": "notify.toast",
+                            "title": "Timeout",
+                            "message": "Browser text was not visible.",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.responses["text_visible"] = False
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert [result.action for result in summary.results] == ["browser.wait_text", "notify.toast"]
+    assert summary.results[0].status == "failed"
+    assert summary.results[1].status == "success"
+
+
+def test_stop_during_browser_wait_is_cooperative():
+    control = RuntimeControl()
+    heartbeats = 0
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        control.stop()
+
+    context = _context(FakeAdapters(), control=control, heartbeat=heartbeat)
+    step = BrowserWaitTextStep.model_validate(
+        {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 5}
+    )
+
+    with pytest.raises(RuntimeStoppedError):
+        BrowserWaitTextHandler().run(step, context)
+
+    assert heartbeats == 1
+
+
+def test_pause_resume_during_browser_wait_is_cooperative():
+    control = RuntimeControl()
+    fakes = FakeAdapters()
+    fakes.browser.responses["text_visible"] = False
+    heartbeats = 0
+    pause_started = threading.Event()
+
+    def resume_soon() -> None:
+        pause_started.wait(timeout=1)
+        time.sleep(0.02)
+        control.resume()
+
+    resume_thread = threading.Thread(target=resume_soon, daemon=True)
+    resume_thread.start()
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        if heartbeats == 1:
+            control.pause()
+            pause_started.set()
+
+    context = _context(fakes, control=control, heartbeat=heartbeat)
+    step = BrowserWaitTextStep.model_validate(
+        {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 0.05}
+    )
+
+    with pytest.raises(Exception, match="timed out"):
+        BrowserWaitTextHandler().run(step, context)
+
+    resume_thread.join(timeout=1)
+    assert pause_started.is_set()
+    assert control.is_paused() is False
+    assert heartbeats >= 2
+
+
+def _context(
+    fakes: FakeAdapters,
+    *,
+    control: RuntimeControl,
+    heartbeat,
+) -> ActionContext:
+    return ActionContext(
+        adapters=fakes.bundle(),
+        dry_run=False,
+        logger=logging.getLogger("test"),
+        confirm=lambda _request: True,
+        recipe=Recipe.model_validate(
+            {"id": "browser_actions", "name": "Browser Actions", "steps": [{"action": "wait.seconds", "seconds": 0.1}]}
+        ),
+        config=AppConfig(),
+        overlay=NullOverlayController(),
+        runtime_control=control,
+        heartbeat=heartbeat,
+    )

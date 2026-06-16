@@ -351,6 +351,56 @@ Playwright owns the browser process it launches. When a CLI run exits, the brows
 
 GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
 
+## Structured Browser Runbooks
+
+Ritualist supports a narrow browser runbook surface for pages it opened through
+`browser.open`. These actions operate on the current Ritualist-managed page:
+
+- `browser.wait_text`
+- `browser.wait_title`
+- `browser.wait_url`
+- `browser.element_visible`
+- `browser.click_text`
+- `browser.click_role`
+- `browser.click_test_id`
+
+Browser waits are read-only and can use `timeout_seconds` and `on_timeout`.
+Browser clicks are structured and reviewable: they target visible text, ARIA
+role plus `accessible_name`, or test id. Ritualist does not support arbitrary
+recipe-supplied JavaScript, browser clicking by raw CSS selector, password
+typing, credential storage, or Google/YouTube login automation. Click targets
+such as `Buy`, `Purchase`, `Pay`, `Send`, `Delete`, `Submit`, and `Confirm`
+must include `requires_confirmation: true`. Browser click actions remain blocked
+by default for imported recipe packs.
+
+Use persistent profiles plus an operator handoff for sign-in:
+
+```yaml
+steps:
+  - action: browser.open
+    url: https://example.test/dashboard
+    profile: work_dashboard
+    keep_open: true
+
+  - action: browser.wait_text
+    text: Sign in
+    optional: true
+    timeout_seconds: 5
+
+  - action: human.prompt
+    prompt: Sign in manually if the page asks, then return to Ritualist.
+
+  - action: wait.for_user
+    prompt: Continue after the browser is signed in.
+
+  - action: browser.wait_text
+    text: Dashboard
+    timeout_seconds: 30
+```
+
+This pattern keeps credentials with the user and the browser profile. Ritualist
+only waits for structured page state or clicks explicit, reviewable controls.
+
 ## Building A Local Windows App
 
 Use a PyInstaller one-folder build for v0.1-alpha packaging. One-folder mode leaves the executable and its support files visible under `dist\Ritualist`, which makes missing data files and DLL issues easier to diagnose than a one-file bundle.

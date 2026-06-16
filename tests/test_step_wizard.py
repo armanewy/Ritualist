@@ -36,6 +36,16 @@ def test_step_builder_preserves_play_confirmation_gate():
     assert step["requires_confirmation"] is True
 
 
+def test_step_builder_preserves_risky_browser_confirmation_gate():
+    step = RecipeStepBuilder().build_step("browser.click_text", {"text": "Buy now"})
+
+    assert step == {
+        "action": "browser.click_text",
+        "text": "Buy now",
+        "requires_confirmation": True,
+    }
+
+
 def test_step_builder_rejects_unscoped_desktop_click():
     with pytest.raises(RecipeValidationError, match="window_title_contains"):
         RecipeStepBuilder().build_step(
