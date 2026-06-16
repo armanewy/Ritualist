@@ -1,0 +1,73 @@
+version: "0.1"
+id: support_triage_workspace
+name: Support Triage Workspace
+description: Open a support triage workspace for reviewing queues, known issues, and local notes without changing customer systems.
+home:
+  category: Helpdesk
+  card:
+    title: Support Triage Workspace
+    subtitle: Queue + KB + status + notes
+    image: ""
+    accent: "#3d8b6f"
+variables:
+  ticket_queue_url: "https://support.example.invalid/queue"
+  knowledge_base_url: "https://support.example.invalid/kb"
+  status_dashboard_url: "https://status.example.invalid"
+  notes_app_path: notepad.exe
+  triage_notes_path: '%USERPROFILE%\Documents\Support\triage-notes.txt'
+  triage_folder_path: '%USERPROFILE%\Documents'
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+  variable_hints:
+    ticket_queue_url: Set this to the team's ticket queue URL.
+    knowledge_base_url: Set this to the internal knowledge base URL.
+    status_dashboard_url: Set this to the service status dashboard URL.
+    notes_app_path: Set this to the local notes application command or executable path.
+    triage_notes_path: Set this to the local note file for the current shift or case.
+    triage_folder_path: Set this to a local folder that should exist before triage starts.
+preflight:
+  - name: Triage folder exists
+    action: assert.path_exists
+    path: "{{ triage_folder_path }}"
+    optional: true
+
+steps:
+  - name: Confirm support triage workspace
+    action: confirm.ask
+    prompt: Open the support queue, knowledge base, service status, and local notes for manual triage?
+
+  - name: Open ticket queue
+    action: browser.open
+    url: "{{ ticket_queue_url }}"
+    browser: chrome
+    profile: support_triage
+    keep_open: true
+
+  - name: Open knowledge base
+    action: browser.open
+    url: "{{ knowledge_base_url }}"
+    browser: chrome
+    profile: support_triage
+    keep_open: true
+
+  - name: Open service status
+    action: browser.open
+    url: "{{ status_dashboard_url }}"
+    browser: chrome
+    profile: support_triage
+    keep_open: true
+
+  - name: Open triage notes
+    action: app.launch
+    command: "{{ notes_app_path }}"
+    args:
+      - "{{ triage_notes_path }}"
+    optional: true
+
+  - name: Wait for triage review
+    action: wait.for_user
+    prompt: Continue after ticket context, service status, and local notes are ready for manual review.

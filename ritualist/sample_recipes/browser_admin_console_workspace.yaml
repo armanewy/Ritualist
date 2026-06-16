@@ -1,0 +1,63 @@
+version: "0.1"
+id: browser_admin_console_workspace
+name: Browser Admin Console Workspace
+description: Open browser-based admin consoles and runbooks in a dedicated local profile for manual review.
+home:
+  category: Helpdesk
+  card:
+    title: Browser Admin Console Workspace
+    subtitle: Admin + monitoring + audit + runbook
+    image: ""
+    accent: "#4c7f99"
+variables:
+  admin_console_url: "https://admin.example.invalid"
+  monitoring_console_url: "https://monitoring.example.invalid"
+  audit_log_url: "https://audit.example.invalid"
+  admin_runbook_url: "https://support.example.invalid/admin-runbook"
+environment:
+  required_capabilities:
+    - browser_control
+    - playwright
+  variable_hints:
+    admin_console_url: Set this to the browser admin console URL.
+    monitoring_console_url: Set this to the monitoring console URL.
+    audit_log_url: Set this to the audit log or activity page URL.
+    admin_runbook_url: Set this to the approved admin console runbook URL.
+steps:
+  - name: Confirm admin console workspace
+    action: confirm.ask
+    prompt: Open the admin console, monitoring console, audit page, and runbook for manual review?
+
+  - name: Open admin console
+    action: browser.open
+    url: "{{ admin_console_url }}"
+    browser: chrome
+    profile: admin_console_workspace
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Open monitoring console
+    action: browser.open
+    url: "{{ monitoring_console_url }}"
+    browser: chrome
+    profile: admin_console_workspace
+    keep_open: true
+
+  - name: Open audit page
+    action: browser.open
+    url: "{{ audit_log_url }}"
+    browser: chrome
+    profile: admin_console_workspace
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Open admin runbook
+    action: browser.open
+    url: "{{ admin_runbook_url }}"
+    browser: chrome
+    profile: admin_console_workspace
+    keep_open: true
+
+  - name: Wait for manual console review
+    action: wait.for_user
+    prompt: Continue after access, console scope, monitoring state, and audit context are reviewed manually.

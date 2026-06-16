@@ -1,0 +1,66 @@
+version: "0.1"
+id: vendor_app_configuration_placeholder
+name: Vendor App Configuration Placeholder
+description: Open a vendor app and reference material for manual configuration review without applying changes automatically.
+home:
+  category: Helpdesk
+  card:
+    title: Vendor App Configuration Placeholder
+    subtitle: App + runbook + change record
+    image: ""
+    accent: "#8d6a44"
+variables:
+  vendor_app_path: 'C:\Program Files\VendorApp\VendorApp.exe'
+  vendor_runbook_url: "https://support.example.invalid/vendor-runbook"
+  change_record_url: "https://support.example.invalid/change-record"
+  vendor_status_url: "https://status.example.invalid/vendor"
+  vendor_app_window: Vendor App
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - playwright
+  expected_windows:
+    - title_contains: "{{ vendor_app_window }}"
+  variable_hints:
+    vendor_app_path: Set this to the local vendor app executable path.
+    vendor_runbook_url: Set this to the approved vendor app runbook URL.
+    change_record_url: Set this to the change or case record URL.
+    vendor_status_url: Set this to the vendor status page URL.
+    vendor_app_window: Set this to visible vendor app window title text.
+steps:
+  - name: Confirm vendor configuration workspace
+    action: confirm.ask
+    prompt: Open the vendor app, runbook, change record, and status page for manual configuration review?
+
+  - name: Launch vendor app
+    action: app.launch
+    command: "{{ vendor_app_path }}"
+    optional: true
+    requires_confirmation: true
+
+  - name: Open vendor runbook
+    action: browser.open
+    url: "{{ vendor_runbook_url }}"
+    browser: chrome
+    profile: vendor_config
+    keep_open: true
+
+  - name: Open change record
+    action: browser.open
+    url: "{{ change_record_url }}"
+    browser: chrome
+    profile: vendor_config
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Open vendor status
+    action: browser.open
+    url: "{{ vendor_status_url }}"
+    browser: chrome
+    profile: vendor_config
+    keep_open: true
+
+  - name: Wait for manual configuration review
+    action: wait.for_user
+    prompt: Continue after current settings have been compared with the runbook and documented manually.
