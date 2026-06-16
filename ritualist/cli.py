@@ -621,6 +621,23 @@ def gui() -> None:
         raise typer.Exit(1) from exc
 
 
+@app.command()
+def home(
+    mock: Annotated[
+        bool,
+        typer.Option("--mock/--no-mock", help="Show the QML Home mock card model."),
+    ] = True,
+) -> None:
+    """Open the experimental Qt Quick Home surface."""
+    try:
+        from .home.app import run_home
+
+        run_home(mock=mock)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+
 def _run_recipe(
     recipe: str,
     *,

@@ -54,6 +54,14 @@ Launch the GUI:
 ritualist gui
 ```
 
+Launch the experimental Qt Quick Home mock:
+
+```powershell
+ritualist home --mock
+```
+
+The Home mock is a technical spike for a full-screen, local-first recipe dashboard. It uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
+
 Inspect a real Windows UI Automation window before tuning click text:
 
 ```powershell
