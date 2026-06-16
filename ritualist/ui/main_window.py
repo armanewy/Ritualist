@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self._wait_status: dict[str, object] | None = None
         self.step_append_controller = RecipeStepAppendController()
         self.overlay_controller, self._overlay_warning = self._create_overlay_controller()
+        self._diagnostics_dialog: DiagnosticsDialog | None = None
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -552,8 +553,20 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def show_diagnostics(self) -> None:
-        dialog = DiagnosticsDialog(self)
-        dialog.exec()
+        try:
+            if self._diagnostics_dialog is None:
+                self._diagnostics_dialog = DiagnosticsDialog(self)
+                self._diagnostics_dialog.finished.connect(self._clear_diagnostics_dialog)
+            self._diagnostics_dialog.show()
+            self._diagnostics_dialog.raise_()
+            self._diagnostics_dialog.activateWindow()
+        except Exception as exc:  # noqa: BLE001 - diagnostics must not disappear silently.
+            message = f"Diagnostics failed: {exc}"
+            self.append_log(message)
+            QMessageBox.critical(self, "Ritualist Diagnostics", message)
+
+    def _clear_diagnostics_dialog(self, _result: int | None = None) -> None:
+        self._diagnostics_dialog = None
 
     def reconcile_runs(self) -> None:
         for repaired in reconcile_running_runs():

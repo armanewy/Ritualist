@@ -231,6 +231,8 @@ def resolve_home_categories(
 
 def generate_mock_home_cards(
     categories: Sequence[HomeCategory | str] | None = None,
+    *,
+    count: int = 120,
 ) -> list[HomeCard]:
     cards: list[HomeCard] = []
     resolved_categories = resolve_home_categories(categories)
@@ -258,7 +260,7 @@ def generate_mock_home_cards(
         HomeCardStatus.DISABLED: "Disabled in this profile",
     }
 
-    for index in range(120):
+    for index in range(max(0, count)):
         category = resolved_categories[index % len(resolved_categories)]
         status = statuses[index % len(statuses)]
         card_number = index + 1
@@ -280,8 +282,13 @@ def generate_mock_home_cards(
 
 def create_mock_home_model(
     categories: Sequence[HomeCategory | str] | None = None,
+    *,
+    count: int = 120,
 ) -> HomeModel:
-    return HomeModel(cards=generate_mock_home_cards(categories), categories=resolve_home_categories(categories))
+    return HomeModel(
+        cards=generate_mock_home_cards(categories, count=count),
+        categories=resolve_home_categories(categories),
+    )
 
 
 @dataclass

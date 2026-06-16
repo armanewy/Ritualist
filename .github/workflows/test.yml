@@ -49,4 +49,39 @@ jobs:
         run: |
           python -m ritualist --help
           python -m ritualist doctor --help
+          python -m ritualist home --help
           python -m ritualist inspect-window --help
+          python -m ritualist pack --help
+
+  optional-deps-gui-home:
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONFAULTHANDLER: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install all optional dependencies
+        run: python -m pip install -e ".[all,dev]"
+
+      - name: Run optional dependency tests
+        run: python -m pytest -q
+
+      - name: Compile package and tests
+        run: python -m compileall -q ritualist tests
+
+      - name: Smoke CLI and Home commands
+        run: |
+          python -m ritualist --help
+          python -m ritualist home --help
+          python -m ritualist pack --help
+          python -m ritualist perf home-model --mock-cards 100 --json
+          python -m ritualist perf home-model --mock-cards 300 --json
+          python -m ritualist perf fake-run ritualist/sample_recipes/gaming_mode.yaml --json

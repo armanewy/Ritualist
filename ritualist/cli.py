@@ -394,6 +394,59 @@ def perf_load_recipes(
         console.print("No recipes found. Run [bold]ritualist init[/] first.")
 
 
+@perf_app.command("home-model")
+def perf_home_model(
+    mock_cards: Annotated[
+        int,
+        typer.Option("--mock-cards", min=1, help="Number of generated Home cards to model."),
+    ] = 120,
+    budget_ms: Annotated[
+        float,
+        typer.Option("--budget-ms", help="Advisory duration budget in milliseconds."),
+    ] = 250.0,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure Home model generation with generated cards and no GUI side effects."""
+    with measure_operation("perf.home-model") as report:
+        from ritualist.home.models import create_mock_home_model
+
+        model = create_mock_home_model(count=mock_cards)
+        qml_payload = model.to_qml()
+        cards = qml_payload.get("cards")
+        categories = qml_payload.get("categories")
+        report.counts.update(
+            {
+                "cards": len(model.cards),
+                "categories": len(model.categories),
+                "qml_cards": len(cards) if isinstance(cards, list) else 0,
+                "qml_categories": len(categories) if isinstance(categories, list) else 0,
+                "thumbnail_cache_items": 0,
+            }
+        )
+
+    if budget_ms > 0 and report.duration_ms > budget_ms:
+        report.warnings.append(
+            f"Home model generation exceeded advisory budget: "
+            f"{report.duration_ms:.3f} ms > {budget_ms:.3f} ms"
+        )
+
+    payload = _performance_payload(
+        report,
+        advisory_budget_ms=budget_ms,
+        thumbnail_cache_work="not_applicable_for_mock_cards",
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(f"advisory_budget_ms: {budget_ms:.3f}")
+    console.print("thumbnail_cache_work: not_applicable_for_mock_cards")
+
+
 @perf_app.command("fake-run")
 def perf_fake_run(
     recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],

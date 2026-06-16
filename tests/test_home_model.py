@@ -72,6 +72,15 @@ def test_mock_home_cards_generate_at_least_100_cards():
     assert len({card.id for card in cards}) == len(cards)
 
 
+def test_mock_home_cards_accept_requested_count():
+    cards = generate_mock_home_cards(count=300)
+    model = create_mock_home_model(count=300)
+
+    assert len(cards) == 300
+    assert len(model.cards) == 300
+    assert len(model.to_qml()["cards"]) == 300
+
+
 def test_mock_home_cards_assign_all_required_categories():
     cards = generate_mock_home_cards()
     categories = {card.category for card in cards}

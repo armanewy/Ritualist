@@ -176,6 +176,14 @@ Remove-Item Env:\RITUALIST_RUNTIME_SMOKE
 
 See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract, runtime event rules, and performance budgets. See [RUNTIME.md](RUNTIME.md) for Runtime v2 run states, step states, events, controls, waits, and GUI/Home integration rules.
 
+Home model performance smoke checks are advisory only; they print warnings
+instead of failing on noisy CI wall-clock timing:
+
+```powershell
+python -m ritualist perf home-model --mock-cards 100 --json
+python -m ritualist perf home-model --mock-cards 300 --json
+```
+
 Helpdesk-oriented recipes must also follow the local evidence policy in
 [docs/helpdesk_privacy_evidence.md](docs/helpdesk_privacy_evidence.md): default
 evidence is limited to timestamps, action names, statuses, window titles, and
@@ -368,14 +376,10 @@ Home QML files and bundled sample recipes are collected into the app bundle so H
 Manual packaged-build smoke checks:
 
 ```text
-dist\Ritualist\Ritualist.exe opens Home
-dist\Ritualist\Ritualist.exe --classic-gui opens the classic GUI
-Initialize App works in the classic GUI
-Home loads installed recipes after initialization
-Open Recipes Folder works
-Dry Run selected recipe works with gaming_mode
-Open Logs/Runs Folder works
-python -m ritualist doctor gaming_mode still works from the development checkout
+Dev CLI: pytest, compileall, init, Doctor JSON, dry-run, actions JSON, perf fake-run, perf home-model 100/300, and pack export/import/list.
+Home/QML: python -m ritualist home --help, python -m ritualist home --mock, and offscreen optional-dependency tests where available.
+Packaged one-folder: build dist\Ritualist\Ritualist.exe, launch Home, launch --classic-gui, open diagnostics, initialize, refresh recipes, load installed recipes, dry-run gaming_mode, and open logs/runs.
+Real Windows UIA/Battle.net: run gaming_mode from Home, pause/resume a wait action, stop an active ritual, hard-kill during a run, relaunch, and verify interrupted repair.
 ```
 
 Playwright browser binaries and persistent profile behavior should be retested after packaging. Keep the one-folder build working before attempting a one-file executable.

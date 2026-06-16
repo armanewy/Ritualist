@@ -485,3 +485,47 @@ def test_diagnostics_dialog_copies_text_to_clipboard():
     assert QtWidgets.QApplication.clipboard().text() == dialog.text.toPlainText()
 
     dialog.close()
+
+
+def test_main_window_show_diagnostics_keeps_dialog_reference(monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    monkeypatch.setattr(main_window, "reconcile_running_runs", lambda: [])
+    monkeypatch.setattr(main_window, "discover_recipes", lambda: [])
+    calls = []
+
+    class FakeSignal:
+        def connect(self, callback):
+            calls.append(("connect", callback.__name__))
+
+    class FakeDiagnosticsDialog:
+        def __init__(self, parent=None):
+            calls.append(("init", parent.__class__.__name__))
+            self.finished = FakeSignal()
+
+        def show(self):
+            calls.append(("show", None))
+
+        def raise_(self):
+            calls.append(("raise", None))
+
+        def activateWindow(self):
+            calls.append(("activate", None))
+
+    monkeypatch.setattr(main_window, "DiagnosticsDialog", FakeDiagnosticsDialog)
+
+    window = main_window.MainWindow()
+    window.show_diagnostics()
+
+    assert app is not None
+    assert window._diagnostics_dialog is not None
+    assert calls == [
+        ("init", "MainWindow"),
+        ("connect", "_clear_diagnostics_dialog"),
+        ("show", None),
+        ("raise", None),
+        ("activate", None),
+    ]
+
+    window._clear_diagnostics_dialog()
+    assert window._diagnostics_dialog is None
+    window.close()

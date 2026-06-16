@@ -94,6 +94,8 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "root.confirmationPending" in qml
     assert "height: 176" in qml
     assert "maximumLineCount: 7" in qml
+    assert "firstCategoryWithCards" in qml
+    assert "Number(categoryModel.get(nextCategory).count || 0) === 0" in qml
 
 
 def test_home_runtime_control_is_active_before_action_state_signal():

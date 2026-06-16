@@ -66,6 +66,15 @@ Window {
         return count
     }
 
+    function firstCategoryWithCards(fallbackIndex) {
+        for (var i = 0; i < categoryModel.count; i += 1) {
+            if (Number(categoryModel.get(i).count || 0) > 0) {
+                return i
+            }
+        }
+        return fallbackIndex
+    }
+
     function loadCategories() {
         categoryModel.clear()
         var categories = allCategories()
@@ -73,7 +82,15 @@ Window {
             var name = categories[i].label
             categoryModel.append({ "name": name, "count": String(categoryCount(name)) })
         }
-        selectedCategory = categoryModel.count === 0 ? 0 : clamp(selectedCategory, 0, categoryModel.count - 1)
+        if (categoryModel.count === 0) {
+            selectedCategory = 0
+            return
+        }
+        var nextCategory = clamp(selectedCategory, 0, categoryModel.count - 1)
+        if (Number(categoryModel.get(nextCategory).count || 0) === 0) {
+            nextCategory = firstCategoryWithCards(nextCategory)
+        }
+        selectedCategory = nextCategory
     }
 
     function setSelectedCard(index) {

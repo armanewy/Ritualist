@@ -318,6 +318,32 @@ def test_perf_list_runs_json_counts_steps(tmp_path, monkeypatch):
     assert data["runs"][0]["run_id"] == "20260615T120000Z_demo"
 
 
+def test_perf_home_model_json_counts_generated_cards():
+    result = CliRunner().invoke(app, ["perf", "home-model", "--mock-cards", "100", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["operation"] == "perf.home-model"
+    assert data["duration_ms"] >= 0
+    assert data["advisory_budget_ms"] == 250.0
+    assert data["thumbnail_cache_work"] == "not_applicable_for_mock_cards"
+    assert data["counts"]["cards"] == 100
+    assert data["counts"]["qml_cards"] == 100
+    assert data["counts"]["categories"] >= 1
+    assert data["counts"]["thumbnail_cache_items"] == 0
+
+
+def test_perf_home_model_prints_advisory_warning_when_budget_exceeded():
+    result = CliRunner().invoke(
+        app,
+        ["perf", "home-model", "--mock-cards", "1", "--budget-ms", "0.000001"],
+    )
+
+    assert result.exit_code == 0
+    assert "operation: perf.home-model" in result.output
+    assert "Home model generation exceeded advisory budget" in result.output
+
+
 def test_perf_fake_run_uses_fake_adapters_and_confirms(monkeypatch):
     fakes = FakeAdapters()
     recipe = Recipe.model_validate(
