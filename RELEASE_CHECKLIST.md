@@ -45,6 +45,63 @@ Remove-Item Env:\PYTHONFAULTHANDLER -ErrorAction SilentlyContinue
 
 On Linux CI, keep `QT_QPA_PLATFORM=offscreen` for optional GUI/Home tests.
 
+## Release Candidate Validation - 2026-06-16
+
+Validation commit: `2d83b66`.
+
+Repository and environment:
+
+- `git status`: clean on `main`, up to date with `origin/main`.
+- `git pull --ff-only`: already up to date.
+- Project version confirmed in `pyproject.toml`: `0.1.0-alpha.1`.
+- `python -m pip install -e ".[all,dev]"`: passed.
+- `python -m playwright install chromium`: passed.
+- `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
+  `402 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+
+CLI validation:
+
+- `python -m ritualist init`: passed; app data was already up to date.
+- `python -m ritualist doctor gaming_mode --json --no-strict`: passed;
+  compatibility status `compatible`, `errors_count: 0`, `warnings_count: 0`.
+- `python -m ritualist dry-run gaming_mode`: passed; final run state `success`,
+  keep-open inactive.
+- `python -m ritualist actions --json`: passed.
+- `python -m ritualist perf fake-run gaming_mode --json`: passed in 18.219 ms,
+  7/7 fake steps successful.
+- `python -m ritualist perf home-model --mock-cards 100 --json`: passed in
+  12.827 ms, 100 cards, 6 categories, no warnings.
+- `python -m ritualist perf home-model --mock-cards 300 --json`: passed in
+  13.425 ms, 300 cards, 6 categories, no warnings.
+
+Packaged build validation:
+
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+- Verified `dist\Ritualist\Ritualist.exe` exists.
+- Verified bundled sample recipe exists:
+  `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`.
+- Verified bundled Home QML exists:
+  `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`.
+- Brief packaged launch created a `Ritualist Home` window.
+- Existing old `startup-error.log` was not modified by the normal packaged launch.
+- PyInstaller still reports Conda-environment warnings in
+  `build\Ritualist\warn-Ritualist.txt`, including optional/platform-specific
+  missing modules and MKL/SYCL/MSMPI-related DLL warnings. No startup failure was
+  observed from those warnings in this validation.
+
+Manual release gates:
+
+- Not passed in this validation. Per the release hard rule, no manual packaged
+  Home checks are marked complete because they require real desktop input.
+- Synthetic launch/process inspection confirmed Home starts, but it does not
+  satisfy the real-input checks for Home buttons, category switching, hover/focus
+  feel, Doctor, Dry Run, Run, Pause, Resume, Stop, Diagnostics copy, logs/runs
+  folder opening, real `gaming_mode` trace, Play decline, or hard-kill repair.
+- Release tag `v0.1.0-alpha.1` was not created. Tagging is blocked until a human
+  completes the manual packaged Home and real `gaming_mode` checks below.
+
 ## Dogfood Findings - 2026-06-16
 
 Automated Windows development-checkout checks passed:
