@@ -730,13 +730,20 @@ class WorkflowExecutor:
     def _cleanup_browser_adapter(self) -> None:
         if self.dry_run or self._browser_keep_open_active or not self._browser_used:
             return
+        self.close_browser_state()
+
+    def close_browser_state(self) -> bool:
         close = getattr(getattr(self.adapters, "browser", None), "close", None)
         if close is None:
-            return
+            return False
         try:
             close()
         except Exception as exc:  # noqa: BLE001 - cleanup must not mask run results.
             self.logger.debug("browser adapter cleanup failed: %s", exc)
+            return False
+        self._browser_keep_open_active = False
+        self._browser_used = False
+        return True
 
     def _start_wait_overlay(self, step: ExecutableStep) -> Any:
         if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):

@@ -97,6 +97,34 @@ steps:
     assert overlay.previews[0].action == "window.focus"
 
 
+def test_home_runtime_service_can_close_keep_open_browser(monkeypatch, tmp_path):
+    recipe_path = tmp_path / "browser.yaml"
+    recipe_path.write_text(
+        """
+version: "0.1"
+id: browser_recipe
+name: Browser Recipe
+steps:
+  - action: browser.open
+    url: https://example.test
+    keep_open: true
+""".strip(),
+        encoding="utf-8",
+    )
+    fakes = FakeAdapters()
+    monkeypatch.setattr("ritualist.adapters.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.run_logs.RunLogWriter", lambda: None)
+
+    service = HomeActionService()
+    summary = service.run_recipe(recipe_path, dry_run=False)
+
+    assert summary.success
+    assert fakes.browser.closed is False
+    assert service.close_browser_state() is True
+    assert fakes.browser.closed is True
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "close"]
+
+
 def test_home_doctor_action_does_not_run_side_effect_runtime():
     runtime_calls: list[object] = []
     doctor_calls: list[object] = []

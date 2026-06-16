@@ -177,6 +177,32 @@ def run_home(*, mock: bool = False) -> int:
         def openLogs(self, card_id: str) -> None:
             self._start_action(card_id, HomeCardAction.OPEN_LOGS)
 
+        @Slot(str)
+        def closeKeepOpenBrowser(self, card_id: str) -> None:
+            if self._mock:
+                self._last_event_label = "Close browser is disabled in mock mode"
+                self.metricsChanged.emit()
+                return
+            if self._action_busy:
+                self._last_event_label = "Another Home action is still running"
+                self.metricsChanged.emit()
+                return
+            closed = self._dispatcher.service.close_browser_state()
+            self._last_event_label = (
+                "Closed keep-open browser state"
+                if closed
+                else "No keep-open browser state to close"
+            )
+            if card_id:
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=card_id,
+                        keep_open_active=False,
+                        subtitle=self._last_event_label,
+                    )
+                )
+            self.metricsChanged.emit()
+
         @Slot()
         def stopCurrentRun(self) -> None:
             if self._runtime_control is None:

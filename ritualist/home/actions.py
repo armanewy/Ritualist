@@ -38,6 +38,7 @@ class HomeActionService:
     recipe_path_resolver: Callable[[RecipeReference], Path] | None = None
     runs_path_resolver: Callable[[], Path] | None = None
     overlay_controller: Any | None = None
+    _last_executor: Any | None = field(default=None, init=False, repr=False)
 
     def run_recipe(
         self,
@@ -82,7 +83,16 @@ class HomeActionService:
             config=load_app_config(),
             overlay=self.overlay_controller or NullOverlayController(),
         )
+        self._last_executor = executor
         return executor.run(load_recipe_reference(recipe_ref))
+
+    def close_browser_state(self) -> bool:
+        if self._last_executor is None:
+            return False
+        close = getattr(self._last_executor, "close_browser_state", None)
+        if close is None:
+            return False
+        return bool(close())
 
     def doctor_recipe(self, recipe_ref: RecipeReference) -> Any:
         if self.doctor_runner is not None:

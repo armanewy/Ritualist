@@ -400,6 +400,9 @@ def test_executor_emits_wait_status_metadata():
     assert waiting_event.action == "wait.seconds"
     assert waiting_event.target == "0.01s"
     assert waiting_event.timeout_seconds == 0.2
+    event_types = [event.type for event in runtime_events]
+    assert event_types.index("step.started") < event_types.index("step.waiting")
+    assert event_types.index("step.waiting") < event_types.index("step.finished")
 
 
 def test_executor_emits_confirmation_events_when_confirmation_declined():
@@ -436,6 +439,11 @@ def test_executor_emits_confirmation_events_when_confirmation_declined():
     assert resolved.approved is False
     assert resolved.state is StepState.CANCELLED
     assert runtime_events[-1].state is RunState.STOPPED
+    event_types = [event.type for event in runtime_events]
+    assert event_types.index("confirmation.requested") < event_types.index(
+        "confirmation.resolved"
+    )
+    assert event_types.index("confirmation.resolved") < event_types.index("step.finished")
 
 
 def test_executor_emits_wait_for_user_confirmation_events():
@@ -461,6 +469,11 @@ def test_executor_emits_wait_for_user_confirmation_events():
         isinstance(event, ConfirmationResolved) and event.approved is True
         for event in runtime_events
     )
+    event_types = [event.type for event in runtime_events]
+    assert event_types.index("step.waiting") < event_types.index("confirmation.requested")
+    assert event_types.index("confirmation.requested") < event_types.index(
+        "confirmation.resolved"
+    )
 
 
 def test_executor_emits_pause_and_resume_events_during_wait():
@@ -484,6 +497,10 @@ def test_executor_emits_pause_and_resume_events_during_wait():
     assert summary.success
     assert any(isinstance(event, StepPaused) for event in runtime_events)
     assert any(isinstance(event, StepResumed) for event in runtime_events)
+    event_types = [event.type for event in runtime_events]
+    assert event_types.index("step.waiting") < event_types.index("step.paused")
+    assert event_types.index("step.paused") < event_types.index("step.resumed")
+    assert event_types.index("step.resumed") < event_types.index("step.finished")
 
 
 def test_executor_emits_skipped_runtime_step_for_optional_failure():
@@ -582,6 +599,32 @@ def test_browser_adapter_stays_open_when_later_step_fails_after_keep_open():
     assert not summary.success
     assert fakes.browser.closed is False
     assert [call[0] for call in fakes.browser.calls] == ["open_url"]
+
+
+def test_browser_adapter_closes_on_explicit_cleanup_after_keep_open():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    executor = WorkflowExecutor(adapters=fakes.bundle())
+
+    summary = executor.run(recipe)
+
+    assert summary.success
+    assert fakes.browser.closed is False
+    assert executor.close_browser_state() is True
+    assert fakes.browser.closed is True
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "close"]
 
 
 def test_executor_stops_before_step_with_runtime_control():

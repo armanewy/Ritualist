@@ -408,6 +408,89 @@ def test_home_card_relative_image_resolves_next_to_recipe(tmp_path, monkeypatch)
     assert cards[0].image == "file:///thumb.png"
 
 
+def test_home_card_absolute_image_path_still_resolves(tmp_path, monkeypatch):
+    recipe_path = tmp_path / "recipes" / "card_recipe.yaml"
+    image_path = tmp_path / "shared" / "card.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"not decoded in this test")
+    recipe = Recipe.model_validate(
+        {
+            "id": "card_recipe",
+            "name": "Card Recipe",
+            "home": {"card": {"image": str(image_path)}},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    seen: list[Path] = []
+
+    class FakeThumbnailCache:
+        def ensure_thumbnail(self, source):
+            seen.append(Path(source))
+            return SimpleNamespace(thumbnail_url="file:///absolute-thumb.png")
+
+    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(recipe_path, recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+
+    assert seen == [image_path]
+    assert cards[0].image == "file:///absolute-thumb.png"
+
+
+def test_home_card_missing_image_falls_back(tmp_path):
+    recipe_path = tmp_path / "recipes" / "card_recipe.yaml"
+    recipe_path.parent.mkdir(parents=True)
+    recipe = Recipe.model_validate(
+        {
+            "id": "card_recipe",
+            "name": "Card Recipe",
+            "home": {"card": {"image": "assets/missing.png"}},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(recipe_path, recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+
+    assert cards[0].image == ""
+
+
+def test_home_card_imported_pack_asset_path_resolves_safely(tmp_path, monkeypatch):
+    pack_root = tmp_path / "imported-packs" / "demo_pack"
+    recipe_path = pack_root / "recipe.yaml"
+    image_path = pack_root / "assets" / "card.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"not decoded in this test")
+    recipe = Recipe.model_validate(
+        {
+            "id": "pack_recipe",
+            "name": "Pack Recipe",
+            "home": {"card": {"image": "assets/card.png"}},
+            "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+        }
+    )
+    seen: list[Path] = []
+
+    class FakeThumbnailCache:
+        def ensure_thumbnail(self, source):
+            seen.append(Path(source))
+            return SimpleNamespace(thumbnail_url="file:///pack-thumb.png")
+
+    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(recipe_path, recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+
+    assert seen == [image_path]
+    assert cards[0].image == "file:///pack-thumb.png"
+
+
 def test_home_run_history_cache_keeps_latest_runbook_summary(tmp_path):
     run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
     run_dir.mkdir(parents=True)

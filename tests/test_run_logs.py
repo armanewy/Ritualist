@@ -345,6 +345,37 @@ def test_run_log_writer_records_failed_final_state_for_required_failure(tmp_path
     assert run_json["current_run_state"] == "failed"
 
 
+def test_run_log_writer_records_stopped_status_for_declined_confirmation(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                }
+            ],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert not summary.success
+    assert summary.run_dir is not None
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_json["status"] == "stopped"
+    assert run_json["final_state"] == "stopped"
+    assert run_json["current_run_state"] == "stopped"
+
+
 def test_run_log_writer_throttles_steady_heartbeat_writes(tmp_path):
     recipe = Recipe.model_validate(
         {

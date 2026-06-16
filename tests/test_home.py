@@ -84,6 +84,8 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "stopCurrentRun" in qml
     assert "pauseCurrentRun" in qml
     assert "resumeCurrentRun" in qml
+    assert "closeKeepOpenBrowser" in qml
+    assert "Close Browser" in qml
     assert "property bool runtimeActive" in qml
     assert "cellHeight: 382" in qml
     assert "confirmationModalBlocker" in qml
@@ -178,6 +180,38 @@ def test_home_event_bridge_coalesces_repeated_heartbeat_style_updates():
 
     assert len(applied) == 1
     assert model.get_card("gaming-001").subtitle == "heartbeat 19"
+
+
+def test_home_runtime_flush_policy_only_flushes_important_events():
+    assert (
+        home_app._should_flush_home_event(
+            HomeRuntimeEvent(
+                card_id="gaming-001",
+                status=HomeCardStatus.RUNNING,
+                subtitle="Run state: running",
+            )
+        )
+        is False
+    )
+    assert (
+        home_app._should_flush_home_event(
+            HomeRuntimeEvent(
+                card_id="gaming-001",
+                status=HomeCardStatus.WARNING,
+                subtitle="Confirmation required",
+            )
+        )
+        is True
+    )
+    assert (
+        home_app._should_flush_home_event(
+            HomeRuntimeEvent(
+                card_id="gaming-001",
+                last_run_status="success",
+            )
+        )
+        is True
+    )
 
 
 def test_fake_emitter_updates_model_through_bridge():

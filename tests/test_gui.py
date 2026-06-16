@@ -42,6 +42,7 @@ def test_main_window_has_personal_app_controls_and_loads_selected_recipe(tmp_pat
     assert window.pause_button.text() == "Pause"
     assert window.resume_button.text() == "Resume"
     assert window.stop_button.text() == "Stop"
+    assert window.close_browser_button.text() == "Close Browser"
     assert window.pause_button.isEnabled() is False
     assert window.resume_button.isEnabled() is False
     assert window.run_state_label.text() == "Run state: stopped"
@@ -51,6 +52,32 @@ def test_main_window_has_personal_app_controls_and_loads_selected_recipe(tmp_pat
     assert window.path_edit.text() == str(recipe_path)
     assert window.status_label.text() == "Loaded gaming_mode"
 
+    window.close()
+
+
+def test_main_window_close_keep_open_browser_calls_executor_cleanup(tmp_path, monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    monkeypatch.setattr(main_window, "reconcile_running_runs", lambda: [])
+    monkeypatch.setattr(main_window, "discover_recipes", lambda: [])
+    window = main_window.MainWindow()
+    calls = []
+
+    class FakeExecutor:
+        def close_browser_state(self) -> bool:
+            calls.append("close")
+            return True
+
+    window.runner = SimpleNamespace(executor=FakeExecutor())
+    window.keep_open_label.setText("Keep-open: active")
+
+    window.close_keep_open_browser()
+
+    assert app is not None
+    assert calls == ["close"]
+    assert "Closed keep-open browser state" in window.log.toPlainText()
+    assert window.keep_open_label.text() == "Keep-open: inactive"
+
+    window.runner = None
     window.close()
 
 

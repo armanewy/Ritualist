@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from types import ModuleType
 
 import pytest
@@ -243,6 +245,56 @@ def test_path_assertion_timeout_emits_heartbeats(tmp_path):
     with pytest.raises(Exception, match="path does not exist"):
         AssertPathExistsHandler().run(step, context)
 
+    assert heartbeats >= 2
+
+
+def test_path_assertion_timeout_respects_runtime_pause_resume(tmp_path):
+    control = RuntimeControl()
+    heartbeats = 0
+    pause_started = threading.Event()
+
+    def resume_soon() -> None:
+        pause_started.wait(timeout=1)
+        time.sleep(0.02)
+        control.resume()
+
+    resume_thread = threading.Thread(target=resume_soon, daemon=True)
+    resume_thread.start()
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        if heartbeats == 1:
+            control.pause()
+            pause_started.set()
+
+    context = ActionContext(
+        adapters=FakeAdapters().bundle(),
+        dry_run=False,
+        logger=__import__("logging").getLogger("test"),
+        confirm=lambda _request: True,
+        recipe=Recipe.model_validate(
+            {
+                "id": "run",
+                "name": "Run",
+                "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+            }
+        ),
+        config=AppConfig(),
+        overlay=NullOverlayController(),
+        runtime_control=control,
+        heartbeat=heartbeat,
+    )
+    step = AssertPathExistsStep.model_validate(
+        {"action": "assert.path_exists", "path": str(tmp_path / "missing"), "timeout_seconds": 0.05}
+    )
+
+    with pytest.raises(Exception, match="path does not exist"):
+        AssertPathExistsHandler().run(step, context)
+
+    resume_thread.join(timeout=1)
+    assert pause_started.is_set()
+    assert control.is_paused() is False
     assert heartbeats >= 2
 
 

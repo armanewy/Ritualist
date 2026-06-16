@@ -240,6 +240,13 @@ Window {
         }
     }
 
+    function selectedCardId() {
+        if (cardModel.count === 0 || selectedCard < 0 || selectedCard >= cardModel.count) {
+            return ""
+        }
+        return cardModel.get(selectedCard).id || ""
+    }
+
     onSelectedCategoryChanged: {
         if (categoryModel.count > 0) {
             loadCards()
@@ -515,6 +522,39 @@ Window {
                                 color: "#b8c4d6"
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
+                            }
+                        }
+
+                        Rectangle {
+                            id: closeBrowserControl
+
+                            Layout.preferredWidth: 132
+                            Layout.preferredHeight: 40
+                            radius: 8
+                            color: closeBrowserControl.closeEnabled ? (closeBrowserPointer.containsMouse ? "#263648" : "#1c2734") : "#151b24"
+                            border.color: closeBrowserControl.closeEnabled ? "#40546a" : "#263648"
+                            opacity: closeBrowserControl.closeEnabled ? 1.0 : 0.52
+
+                            property bool closeEnabled: homeController && !mockMode && !actionBusy
+
+                            MouseArea {
+                                id: closeBrowserPointer
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: closeBrowserControl.closeEnabled
+                                onClicked: root.homeController.closeKeepOpenBrowser(root.selectedCardId())
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 12
+                                text: "Close Browser"
+                                color: closeBrowserControl.closeEnabled ? "#d8e2ee" : "#7f8da1"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
                             }
                         }
 

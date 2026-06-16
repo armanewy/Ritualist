@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop_run)
         self.stop_button.setEnabled(False)
+        self.close_browser_button = QPushButton("Close Browser")
+        self.close_browser_button.clicked.connect(self.close_keep_open_browser)
         self.pause_button = QPushButton("Pause")
         self.pause_button.clicked.connect(self.pause_run)
         self.pause_button.setEnabled(False)
@@ -114,6 +116,7 @@ class MainWindow(QMainWindow):
         button_row.addWidget(self.pause_button)
         button_row.addWidget(self.resume_button)
         button_row.addWidget(self.stop_button)
+        button_row.addWidget(self.close_browser_button)
         button_row.addStretch(1)
         layout.addLayout(button_row)
 
@@ -460,6 +463,19 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.pause_button.setEnabled(False)
         self.resume_button.setEnabled(False)
+        self.keep_open_label.setText("Keep-open: inactive")
+
+    def close_keep_open_browser(self) -> None:
+        executor = getattr(self.runner, "executor", None)
+        close = getattr(executor, "close_browser_state", None)
+        if close is None:
+            self.append_log("No keep-open browser state to close")
+            self.keep_open_label.setText("Keep-open: inactive")
+            return
+        if close():
+            self.append_log("Closed keep-open browser state")
+        else:
+            self.append_log("No keep-open browser state to close")
         self.keep_open_label.setText("Keep-open: inactive")
 
     def pause_run(self) -> None:
