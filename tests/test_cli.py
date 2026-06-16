@@ -510,6 +510,75 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     assert "opened URL" in result.output
 
 
+def test_show_run_prints_user_entered_operator_notes(tmp_path, monkeypatch):
+    record = RunRecord(
+        run_id="20260615T120000Z_gaming_mode",
+        path=tmp_path / "20260615T120000Z_gaming_mode",
+        metadata={
+            "recipe_id": "gaming_mode",
+            "recipe_name": "Gaming Mode",
+            "status": "success",
+        },
+        steps=[],
+        notes=[
+            {
+                "schema_version": "operator_note.v1",
+                "kind": "operator_note",
+                "source": "user",
+                "user_entered": True,
+                "at": "2026-06-15T12:02:00+00:00",
+                "note": "Operator verified the visible target before continuing.",
+            }
+        ],
+    )
+    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+
+    result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
+
+    assert result.exit_code == 0
+    assert "Operator notes (user-entered)" in result.output
+    assert "user-entered" in result.output
+    assert "Operator verified the visible" in result.output
+    assert "target before continuing." in result.output
+
+
+def test_note_run_appends_user_entered_operator_note(tmp_path):
+    run_dir = tmp_path / "20260615T120000Z_gaming_mode"
+    run_dir.mkdir()
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "gaming_mode",
+                "recipe_name": "Gaming Mode",
+                "status": "success",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "steps.jsonl").write_text("", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["note-run", str(run_dir), "Operator checked the final status."],
+    )
+
+    assert result.exit_code == 0
+    assert "Added user-entered operator note" in result.output
+    notes = [
+        json.loads(line)
+        for line in (run_dir / "operator_notes.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(notes) == 1
+    assert notes[0]["source"] == "user"
+    assert notes[0]["user_entered"] is True
+    assert notes[0]["note"] == "Operator checked the final status."
+    run_json_text = (run_dir / "run.json").read_text(encoding="utf-8")
+    run_json = json.loads(run_json_text)
+    assert run_json["operator_notes_count"] == 1
+    assert "Operator checked the final status." not in run_json_text
+
+
 def test_show_run_prints_runtime_v2_state_metadata(tmp_path, monkeypatch):
     record = RunRecord(
         run_id="20260615T120000Z_gaming_mode",

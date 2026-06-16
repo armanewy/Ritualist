@@ -4,7 +4,7 @@ import json
 import os
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -15,6 +15,8 @@ from .paths import runs_dir
 
 
 RUN_LOG_SCHEMA_VERSION = 2
+OPERATOR_NOTES_FILENAME = "operator_notes.jsonl"
+OPERATOR_NOTE_SCHEMA_VERSION = "operator_note.v1"
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,7 @@ class RunRecord:
     path: Path
     metadata: dict[str, Any]
     steps: list[dict[str, Any]]
+    notes: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,8 @@ class RunLogWriter:
             "confirming_metadata": None,
             "steps_total": len(recipe.execution_steps),
             "steps_completed": 0,
+            "operator_notes_count": 0,
+            "last_operator_note_at": None,
         }
         self._write_run_json()
         self._steps_jsonl.write_text("", encoding="utf-8")
@@ -263,6 +268,22 @@ class RunLogWriter:
 
     def set_confirming_metadata(self, metadata: dict[str, Any] | None) -> None:
         self._set_transient_metadata("confirming_metadata", metadata, event="confirmation.requested")
+
+    def add_operator_note(self, note: str) -> dict[str, Any] | None:
+        if self.run_dir is None:
+            return None
+        entry = _operator_note_entry(note)
+        _append_operator_note_entry(self.run_dir, entry)
+        self._metadata["operator_notes_count"] = int(
+            self._metadata.get("operator_notes_count") or 0
+        ) + 1
+        self._metadata["last_operator_note_at"] = entry["at"]
+        self._append_event_summary(
+            "operator_note.added",
+            metadata={"source": "user", "user_entered": True},
+        )
+        self._write_run_json()
+        return entry
 
     def _create_run_dir(self, recipe_id: str) -> Path:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -456,7 +477,7 @@ def list_recent_runs(*, limit: int = 10, base_dir: Path | None = None) -> list[R
         key=lambda candidate: candidate.stat().st_mtime,
         reverse=True,
     ):
-        record = load_run(path)
+        record = load_run(path, include_notes=False)
         if record is not None:
             records.append(record)
         if len(records) >= limit:
@@ -471,7 +492,12 @@ def resolve_run_reference(run_id_or_path: str | Path, *, base_dir: Path | None =
     return (base_dir or runs_dir()) / str(run_id_or_path)
 
 
-def load_run(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> RunRecord | None:
+def load_run(
+    run_id_or_path: str | Path,
+    *,
+    base_dir: Path | None = None,
+    include_notes: bool = True,
+) -> RunRecord | None:
     path = resolve_run_reference(run_id_or_path, base_dir=base_dir)
     run_json = path / "run.json"
     steps_jsonl = path / "steps.jsonl"
@@ -490,7 +516,26 @@ def load_run(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> Run
                     steps.append(json.loads(line))
         except (OSError, json.JSONDecodeError):
             steps = []
-    return RunRecord(run_id=path.name, path=path, metadata=metadata, steps=steps)
+    notes = _read_operator_notes(path) if include_notes else []
+    return RunRecord(run_id=path.name, path=path, metadata=metadata, steps=steps, notes=notes)
+
+
+def append_operator_note(
+    run_id_or_path: str | Path,
+    note: str,
+    *,
+    base_dir: Path | None = None,
+) -> dict[str, Any] | None:
+    path = resolve_run_reference(run_id_or_path, base_dir=base_dir)
+    if not (path / "run.json").exists():
+        return None
+    entry = _operator_note_entry(note)
+    _append_operator_note_entry(path, entry)
+    metadata = _read_run_metadata(path)
+    if metadata is not None:
+        _mark_operator_note_in_metadata(path, metadata, entry)
+        _write_run_metadata(path, metadata)
+    return entry
 
 
 def summarize_run_record(record: RunRecord) -> RunbookSummary:
@@ -680,6 +725,57 @@ def _summary_last_step(steps: list[_SummaryStep], metadata: dict[str, Any]) -> s
     if step.status:
         label = f"{label} ({step.status})"
     return label
+
+
+def _operator_note_entry(note: str) -> dict[str, Any]:
+    normalized = note.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        raise ValueError("operator note cannot be empty")
+    return {
+        "schema_version": OPERATOR_NOTE_SCHEMA_VERSION,
+        "kind": "operator_note",
+        "source": "user",
+        "user_entered": True,
+        "at": _now_iso(),
+        "note": normalized,
+    }
+
+
+def _append_operator_note_entry(path: Path, entry: dict[str, Any]) -> None:
+    notes_path = path / OPERATOR_NOTES_FILENAME
+    with notes_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _read_operator_notes(path: Path) -> list[dict[str, Any]]:
+    notes_path = path / OPERATOR_NOTES_FILENAME
+    if not notes_path.exists():
+        return []
+    notes: list[dict[str, Any]] = []
+    try:
+        for line in notes_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            if isinstance(payload, dict):
+                notes.append(payload)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return notes
+
+
+def _mark_operator_note_in_metadata(
+    path: Path,
+    metadata: dict[str, Any],
+    entry: dict[str, Any],
+) -> None:
+    metadata["operator_notes_count"] = len(_read_operator_notes(path))
+    metadata["last_operator_note_at"] = entry["at"]
+    _append_metadata_event_summary(
+        metadata,
+        event="operator_note.added",
+        at=str(entry["at"]),
+    )
 
 
 def _read_run_metadata(path: Path) -> dict[str, Any] | None:

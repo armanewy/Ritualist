@@ -313,7 +313,7 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 - `runs`
 - `browser-profiles`
 
-Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
+Per-run logs are written to `runs/<timestamp>_<recipe_id>/run.json` and `steps.jsonl`. Add user-entered operator notes during or after a run with `ritualist note-run <run-id-or-path> "note text"`; notes are stored in the run folder as `operator_notes.jsonl` and are shown by `ritualist show-run`. Browser URLs are redacted in run step messages; Ritualist does not log cookies, screenshots, page contents, passwords, or secrets.
 
 Helpdesk summaries use the same privacy boundary. They may include timestamps,
 action names, statuses, scoped window titles, and operator notes, but default
