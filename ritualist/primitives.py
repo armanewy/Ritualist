@@ -245,6 +245,7 @@ class PrimitivePlan:
             "confirmations_needed": list(self.confirmations_needed),
             "artifacts_expected": list(self.artifacts_expected),
             "verification_steps": list(self.verification_steps),
+            "cleanup_or_rollback_notes": list(self.rollback_or_cleanup_notes),
             "rollback_or_cleanup_notes": list(self.rollback_or_cleanup_notes),
             "unresolved_questions": list(self.unresolved_questions),
         }

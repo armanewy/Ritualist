@@ -19,6 +19,8 @@ artifact, and test contracts are clear.
 - Keep mutation out of imported packs by default.
 - Keep target and intent plans previewable before execution.
 - Use fake adapters and golden JSON fixtures for all new primitive families.
+- Keep intent planning deterministic and inspectable; see
+  [Intents And Primitive Plans](intents_and_plans.md).
 
 ## Future Mutating And Risky Primitives
 
