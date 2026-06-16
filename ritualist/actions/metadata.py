@@ -16,6 +16,9 @@ CapabilityName = Literal[
     "registry_read",
     "registry_write",
     "process_inspection",
+    "hardware_inventory",
+    "network_connectivity",
+    "diagnostics_collect",
 ]
 
 PlatformName = Literal["windows", "macos", "linux"]

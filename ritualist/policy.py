@@ -8,7 +8,14 @@ from typing import Any
 
 from .actions.registry import ActionRegistry, create_default_registry
 from .models import Condition, FlowIfStep, Recipe
-from .primitives import PrimitiveRegistry, PrimitiveRisk, PrimitiveSpec, create_primitive_registry
+from .primitives import (
+    PrimitivePlan,
+    PrimitivePlanStep,
+    PrimitiveRegistry,
+    PrimitiveRisk,
+    PrimitiveSpec,
+    create_primitive_registry,
+)
 from .recipe_loader import load_recipe_for_diagnostics
 
 
@@ -355,6 +362,33 @@ def build_policy_report_for_recipe(
     )
 
 
+def build_policy_report_for_plan(
+    plan: PrimitivePlan,
+    *,
+    target: str | None = None,
+    profile: PolicyProfile | str = PolicyProfile.CONSUMER_SAFE,
+    imported: bool = False,
+    private_or_local: bool = True,
+    managed_policy: bool = False,
+    primitive_registry: PrimitiveRegistry | None = None,
+) -> PolicyReport:
+    registry = primitive_registry or create_primitive_registry()
+    requirements = collect_plan_primitive_requirements(
+        plan,
+        primitive_registry=registry,
+    )
+    return PrimitivePolicyEngine(
+        profile=profile,
+        primitive_registry=registry,
+    ).check_requirements(
+        requirements,
+        target=target or plan.plan_id,
+        imported=imported,
+        private_or_local=private_or_local,
+        managed_policy=managed_policy,
+    )
+
+
 def build_policy_report_for_recipe_reference(
     recipe_id_or_path: str | Path,
     *,
@@ -371,6 +405,36 @@ def build_policy_report_for_recipe_reference(
         managed_policy=False,
         registry=registry,
     )
+
+
+def collect_plan_primitive_requirements(
+    plan: PrimitivePlan,
+    *,
+    primitive_registry: PrimitiveRegistry | None = None,
+) -> tuple[PrimitiveRequirement, ...]:
+    registry = primitive_registry or create_primitive_registry()
+    requirements: list[PrimitiveRequirement] = []
+    seen: set[str] = set()
+    for index, step in enumerate(plan.steps):
+        requirements.append(
+            _requirement_for_plan_step(
+                step,
+                source=f"plan.steps[{index}]",
+                registry=registry,
+            )
+        )
+        seen.add(step.primitive_id)
+    for index, primitive_id in enumerate(plan.required_primitives):
+        if primitive_id in seen:
+            continue
+        requirements.append(
+            _requirement_for_plan_primitive_id(
+                primitive_id,
+                source=f"plan.required_primitives[{index}]",
+                registry=registry,
+            )
+        )
+    return tuple(requirements)
 
 
 def collect_recipe_primitive_requirements(
@@ -451,6 +515,39 @@ def blocked_policy_messages(report: PolicyReport) -> list[str]:
         f"{finding.primitive_id} at {finding.source}: {finding.reason}"
         for finding in report.blocked_findings
     ]
+
+
+def _requirement_for_plan_step(
+    step: PrimitivePlanStep,
+    *,
+    source: str,
+    registry: PrimitiveRegistry,
+) -> PrimitiveRequirement:
+    spec = _optional_registry_spec(registry, step.primitive_id)
+    return PrimitiveRequirement(
+        primitive_id=step.primitive_id,
+        source=source,
+        action_name=step.action_name,
+        spec=spec,
+        risk=spec.risk if spec else step.risk or PrimitiveRisk.RISKY,
+        details=_plan_step_details(step),
+    )
+
+
+def _requirement_for_plan_primitive_id(
+    primitive_id: str,
+    *,
+    source: str,
+    registry: PrimitiveRegistry,
+) -> PrimitiveRequirement:
+    spec = _optional_registry_spec(registry, primitive_id)
+    return PrimitiveRequirement(
+        primitive_id=primitive_id,
+        source=source,
+        spec=spec,
+        risk=spec.risk if spec else PrimitiveRisk.RISKY,
+        details={},
+    )
 
 
 def _collect_steps(
@@ -698,6 +795,17 @@ def _step_details(step: Any) -> dict[str, Any]:
             value = getattr(step, name)
             if value not in (None, "", [], {}):
                 details[name] = value
+    return details
+
+
+def _plan_step_details(step: PrimitivePlanStep) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "parameter_names": sorted(str(name) for name in step.parameters),
+    }
+    if step.step_name:
+        details["step_name"] = step.step_name
+    if step.action_name:
+        details["action_name"] = step.action_name
     return details
 
 

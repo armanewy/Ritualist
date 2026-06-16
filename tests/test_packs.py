@@ -93,6 +93,52 @@ def test_validate_pack_rejects_unknown_actions(tmp_path):
         validate_pack(path)
 
 
+def test_validate_pack_accepts_primitive_only_capability_declarations(tmp_path):
+    manifest = _manifest(
+        required_actions=["wait.seconds"],
+        required_capabilities=[
+            "network_connectivity",
+            "diagnostics_collect",
+        ],
+    )
+    path = _write_pack(tmp_path, manifest=manifest, recipe=_recipe())
+
+    pack = validate_pack(path)
+
+    assert pack.manifest.required_capabilities == [
+        "network_connectivity",
+        "diagnostics_collect",
+    ]
+
+
+def test_validate_pack_rejects_primitive_capability_platform_mismatch(tmp_path):
+    manifest = _manifest(
+        required_actions=["wait.seconds"],
+        required_capabilities=["hardware_inventory"],
+    )
+    path = _write_pack(tmp_path, manifest=manifest, recipe=_recipe())
+
+    with pytest.raises(
+        PackValidationError,
+        match="supported_os includes OS not supported by hardware_inventory",
+    ):
+        validate_pack(path)
+
+
+def test_validate_pack_accepts_windows_only_primitive_capability(tmp_path):
+    manifest = _manifest(
+        required_actions=["wait.seconds"],
+        required_capabilities=["hardware_inventory"],
+    )
+    manifest["supported_os"] = ["windows"]
+    path = _write_pack(tmp_path, manifest=manifest, recipe=_recipe())
+
+    pack = validate_pack(path)
+
+    assert pack.manifest.required_capabilities == ["hardware_inventory"]
+    assert pack.manifest.supported_os == ["windows"]
+
+
 def test_validate_pack_rejects_arbitrary_code_actions(tmp_path):
     manifest = _manifest(required_actions=["shell.run"])
     recipe = {

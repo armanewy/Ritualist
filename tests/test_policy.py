@@ -14,10 +14,13 @@ from ritualist.packs import PACK_SCHEMA_V1, PackValidationError, export_recipe_p
 from ritualist.policy import (
     PolicyProfile,
     PrimitivePolicyEngine,
+    build_policy_report_for_plan,
     build_policy_report_for_recipe,
+    collect_plan_primitive_requirements,
     detect_never_importable_raw,
     explain_primitive_policy,
 )
+from ritualist.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
 
 
 SAFETY = {
@@ -265,6 +268,63 @@ def test_no_arbitrary_scripts_accepted_by_pack_policy(tmp_path: Path) -> None:
 
     with pytest.raises(PackValidationError, match="arbitrary code actions"):
         validate_pack(path)
+
+
+def test_plan_policy_allows_read_only_primitive() -> None:
+    plan = PrimitivePlan(
+        plan_id="diagnostics",
+        steps=(PrimitivePlanStep("diagnostics.bundle.collect_minimal"),),
+    )
+
+    report = build_policy_report_for_plan(plan, imported=True, private_or_local=False)
+
+    assert report.allowed is True
+    assert report.findings[0].primitive_id == "diagnostics.bundle.collect_minimal"
+    assert report.findings[0].decision.value == "allowed"
+
+
+def test_plan_policy_blocks_risky_imported_primitive_without_leaking_values() -> None:
+    plan = PrimitivePlan(
+        plan_id="risky_plan",
+        steps=(
+            PrimitivePlanStep(
+                "uia.element.click_text",
+                action_name="desktop.click_text",
+                step_name="Click Play",
+                parameters={"text": "Play", "password": "not-logged"},
+                risk=PrimitiveRisk.RISKY,
+            ),
+        ),
+    )
+
+    report = build_policy_report_for_plan(plan, imported=True, private_or_local=False)
+    finding = report.findings[0]
+
+    assert report.allowed is False
+    assert finding.primitive_id == "uia.element.click_text"
+    assert finding.source == "plan.steps[0]"
+    assert finding.decision.value == "blocked"
+    assert finding.details == {
+        "parameter_names": ["password", "text"],
+        "step_name": "Click Play",
+        "action_name": "desktop.click_text",
+    }
+    assert "not-logged" not in json.dumps(finding.to_dict())
+
+
+def test_plan_policy_blocks_unknown_required_primitive() -> None:
+    plan = PrimitivePlan(
+        plan_id="unknown_plan",
+        steps=(),
+        required_primitives=("future.unknown",),
+    )
+
+    requirements = collect_plan_primitive_requirements(plan)
+    report = build_policy_report_for_plan(plan, imported=True, private_or_local=False)
+
+    assert requirements[0].risk is PrimitiveRisk.RISKY
+    assert report.allowed is False
+    assert report.findings[0].reason == "primitive is not registered"
 
 
 def _fake_requirement(primitive_id: str, risk: str):

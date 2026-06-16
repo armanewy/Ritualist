@@ -788,6 +788,14 @@ def _validate_supported_os(manifest: PackManifest, registry: ActionRegistry) -> 
                 f"manifest supported_os includes OS not supported by {action}: "
                 + ", ".join(unsupported)
             )
+    for capability in manifest.required_capabilities:
+        capability_platforms = set(_supported_os_for_capability(capability))
+        unsupported = sorted(supported - capability_platforms)
+        if unsupported:
+            raise PackValidationError(
+                f"manifest supported_os includes OS not supported by {capability}: "
+                + ", ".join(unsupported)
+            )
 
 
 def _metadata_for_action(action: str, registry: ActionRegistry):
@@ -1175,16 +1183,24 @@ def _supported_os_for_actions(actions: list[str], registry: ActionRegistry) -> l
 
 
 def _supported_os_for_capabilities(supported_os: list[str], capabilities: list[str]) -> list[str]:
+    supported = set(supported_os)
+    for capability in capabilities:
+        supported &= set(_supported_os_for_capability(capability))
+    return sorted(supported) if supported else supported_os
+
+
+def _supported_os_for_capability(capability: str) -> list[str]:
     windows_only = {
         "windows_uia",
         "window_management",
         "keyboard_input",
         "registry_read",
         "registry_write",
+        "hardware_inventory",
     }
-    if not windows_only.intersection(capabilities):
-        return supported_os
-    return ["windows"] if "windows" in supported_os else supported_os
+    if capability in windows_only:
+        return ["windows"]
+    return sorted(ALLOWED_PLATFORMS)
 
 
 def _unique_preserving_order(values) -> list[str]:
