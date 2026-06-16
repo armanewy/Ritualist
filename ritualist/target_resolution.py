@@ -408,7 +408,7 @@ def resolve_target(
 ) -> TargetResolutionResult:
     resolved_catalog = catalog or builtin_target_catalog()
     target, matched_alias = resolved_catalog.resolve(query)
-    provider_rows = tuple(providers or default_target_providers())
+    provider_rows = tuple(default_target_providers() if providers is None else providers)
     provider_infos = tuple(provider.provider_info() for provider in provider_rows)
     if target is None:
         return TargetResolutionResult(
@@ -450,6 +450,7 @@ def compile_target_start_plan(
     target_id_or_name: str,
     *,
     resolution: TargetResolutionResult | None = None,
+    intent_metadata: dict[str, object] | None = None,
     primitive_registry: PrimitiveRegistry | None = None,
 ) -> PrimitivePlan:
     registry = primitive_registry or create_primitive_registry()
@@ -457,7 +458,7 @@ def compile_target_start_plan(
     target = resolved.target
     target_id = target.id if target is not None else normalize_target_name(target_id_or_name) or "unknown"
     display_name = target.display_name if target is not None else target_id_or_name
-    intent = {
+    intent = intent_metadata or {
         "schema_version": "intent.v1",
         "intent_id": f"target_start_{target_id}",
         "kind": "target.start",
@@ -470,6 +471,7 @@ def compile_target_start_plan(
         "risk_budget": PrimitiveRisk.CONTROLS_UI.value,
         "user_visible_summary": f"Resolve local ways to start {display_name}.",
     }
+    plan_id = str(intent.get("intent_id") or f"target_start_{target_id}")
     steps: list[PrimitivePlanStep] = []
     unresolved: list[str] = []
     cleanup = ["Target plan preview does not launch apps, click UI, install software, or write files."]
@@ -498,8 +500,8 @@ def compile_target_start_plan(
                 parameters={"process_name": candidate.process_name or _first(target.hints.executable_names)},
             )
             unresolved.append(f"{display_name} appears to be running, but no window title is known to focus.")
-    elif candidate.state in {TargetState.LAUNCHABLE, TargetState.LAUNCHER_AVAILABLE}:
-        command = candidate.command or candidate.path
+    elif candidate.state in {TargetState.LAUNCHABLE, TargetState.READY}:
+        command = _launch_command(candidate)
         if command:
             _append_registered_plan_step(
                 steps,
@@ -510,6 +512,20 @@ def compile_target_start_plan(
             )
         else:
             unresolved.append(f"{candidate.label} is launchable but has no command path")
+    elif candidate.state is TargetState.LAUNCHER_AVAILABLE:
+        _append_registered_plan_step(
+            steps,
+            "operator.prompt.prompt",
+            registry=registry,
+            step_name=f"Review launcher for {display_name}",
+            parameters={
+                "prompt": (
+                    f"{display_name} appears to have installed app metadata, but no direct "
+                    "executable or shortcut was found. Choose a shortcut/executable manually."
+                )
+            },
+        )
+        unresolved.append("launcher metadata is available, but no safe launch command was found")
     elif candidate.state is TargetState.INSTALL_MEDIA_PRESENT:
         _append_registered_plan_step(
             steps,
@@ -546,7 +562,7 @@ def compile_target_start_plan(
 
     unresolved.extend(resolved.suggestions if resolved.state is TargetState.NOT_FOUND else ())
     return _build_target_plan(
-        f"target_start_{target_id}",
+        plan_id,
         intent=intent,
         steps=steps,
         registry=registry,
@@ -844,7 +860,14 @@ class UserMemoryProvider:
         candidates: list[TargetCandidate] = []
         for index, row in enumerate(rows):
             command = str(row.get("command") or row.get("path") or "").strip()
-            state = _target_state(row.get("state")) or TargetState.LAUNCHABLE
+            if not command:
+                continue
+            remembered_state = _target_state(row.get("state")) or TargetState.LAUNCHABLE
+            state = (
+                remembered_state
+                if remembered_state in {TargetState.LAUNCHABLE, TargetState.READY}
+                else TargetState.LAUNCHABLE
+            )
             if command:
                 command_path = _expand_path(command)
                 if not command_path.exists():
@@ -898,8 +921,8 @@ def _default_desktop_roots() -> tuple[Path, ...]:
 
 def _default_removable_roots() -> tuple[Path, ...]:
     if sys.platform == "win32":
-        return tuple(Path(f"{letter}:\\") for letter in "DEFGHIJKLMNOPQRSTUVWXYZ")
-    return (Path("/Volumes"), Path("/media"), Path("/run/media"))
+        return _windows_removable_roots()
+    return tuple(_non_windows_removable_roots((Path("/Volumes"), Path("/media"), Path("/run/media"))))
 
 
 def _existing_paths(paths: tuple[Path, ...]) -> list[Path]:
@@ -1068,7 +1091,67 @@ def _volume_label(root: Path) -> str:
                 return label
         except OSError:
             pass
+    if sys.platform == "win32":
+        label = _windows_volume_label(root)
+        if label:
+            return label
     return root.name.rstrip("\\/") or str(root).rstrip("\\/")
+
+
+def _windows_removable_roots() -> tuple[Path, ...]:
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        bitmask = int(kernel32.GetLogicalDrives())
+        rows: list[Path] = []
+        for index, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+            if not bitmask & (1 << index):
+                continue
+            root = f"{letter}:\\"
+            drive_type = int(kernel32.GetDriveTypeW(ctypes.c_wchar_p(root)))
+            if drive_type in {2, 5}:  # DRIVE_REMOVABLE, DRIVE_CDROM
+                rows.append(Path(root))
+        return tuple(rows)
+    except Exception:  # noqa: BLE001 - fallback keeps discovery best effort.
+        return tuple(Path(f"{letter}:\\") for letter in "DEFGHIJKLMNOPQRSTUVWXYZ" if Path(f"{letter}:\\").exists())
+
+
+def _windows_volume_label(root: Path) -> str:
+    try:
+        import ctypes
+
+        label_buffer = ctypes.create_unicode_buffer(261)
+        filesystem_buffer = ctypes.create_unicode_buffer(261)
+        serial_number = ctypes.c_uint32()
+        max_component_length = ctypes.c_uint32()
+        filesystem_flags = ctypes.c_uint32()
+        ok = ctypes.windll.kernel32.GetVolumeInformationW(
+            ctypes.c_wchar_p(str(root)),
+            label_buffer,
+            len(label_buffer),
+            ctypes.byref(serial_number),
+            ctypes.byref(max_component_length),
+            ctypes.byref(filesystem_flags),
+            filesystem_buffer,
+            len(filesystem_buffer),
+        )
+        return label_buffer.value.strip() if ok else ""
+    except Exception:  # noqa: BLE001 - fallback to path-derived label.
+        return ""
+
+
+def _non_windows_removable_roots(base_roots: tuple[Path, ...]) -> list[Path]:
+    rows: list[Path] = []
+    for base in base_roots:
+        if not base.exists():
+            continue
+        rows.append(base)
+        try:
+            rows.extend(child for child in base.iterdir() if child.is_dir())
+        except OSError:
+            continue
+    return rows
 
 
 def _normalize_label(value: str) -> str:
@@ -1168,6 +1251,18 @@ def _append_registered_plan_step(
             risk=spec.risk,
         )
     )
+
+
+def _launch_command(candidate: TargetCandidate) -> str:
+    if candidate.command:
+        return candidate.command
+    if not candidate.path:
+        return ""
+    path = Path(candidate.path)
+    suffix = path.suffix.casefold()
+    if suffix in {".lnk", ".url", ".exe", ".app"} or path.is_file():
+        return candidate.path
+    return ""
 
 
 def _build_target_plan(

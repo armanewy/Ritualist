@@ -20,6 +20,7 @@ from ritualist.target_resolution import (
     TargetResolutionResult,
     TargetSpec,
     TargetState,
+    UserMemoryProvider,
     builtin_target_catalog,
     compile_target_start_plan,
     resolve_target,
@@ -136,6 +137,21 @@ def test_removable_media_discovery(tmp_path: Path) -> None:
     assert result.candidates[0].command == str(setup)
 
 
+def test_unlabeled_generic_installer_is_not_target_media(tmp_path: Path) -> None:
+    media = tmp_path / "drive"
+    media.mkdir()
+    (media / "install.exe").write_text("installer", encoding="utf-8")
+
+    result = resolve_target(
+        "diablo_iv",
+        providers=(RemovableMediaProvider(),),
+        context=TargetDiscoveryContext(removable_roots=(media,)),
+    )
+
+    assert result.state is TargetState.NOT_FOUND
+    assert result.candidates == ()
+
+
 def test_plan_for_running_target_focuses_existing_window() -> None:
     target = builtin_target_catalog().resolve("diablo_iv")[0]
     resolution = TargetResolutionResult(
@@ -247,6 +263,79 @@ def test_target_discovery_does_not_create_runtime_adapters(monkeypatch) -> None:
     assert result.state is TargetState.NOT_FOUND
 
 
+def test_explicit_empty_provider_list_does_not_use_defaults(monkeypatch) -> None:
+    def fail_defaults():
+        raise AssertionError("explicit providers=() must not use default providers")
+
+    monkeypatch.setattr("ritualist.target_resolution.default_target_providers", fail_defaults)
+
+    result = resolve_target(
+        "diablo_iv",
+        providers=(),
+        context=TargetDiscoveryContext(),
+    )
+
+    assert result.state is TargetState.NOT_FOUND
+    assert result.providers == ()
+
+
+def test_launcher_available_without_command_uses_human_handoff(tmp_path: Path) -> None:
+    install_dir = tmp_path / "Vendor"
+    install_dir.mkdir()
+    target = builtin_target_catalog().resolve("diablo_iv")[0]
+    resolution = TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=TargetState.LAUNCHER_AVAILABLE,
+        candidates=(
+            TargetCandidate(
+                candidate_id="installed_diablo",
+                target_id="diablo_iv",
+                provider="installed_apps",
+                state=TargetState.LAUNCHER_AVAILABLE,
+                label="installed app metadata",
+                path=str(install_dir),
+                command=None,
+            ),
+        ),
+    )
+
+    plan = compile_target_start_plan("diablo_iv", resolution=resolution)
+
+    assert [step.primitive_id for step in plan.steps] == ["operator.prompt.prompt"]
+    assert "no safe launch command" in plan.unresolved_questions[0]
+    assert "app.process.launch" not in plan.required_primitives
+
+
+def test_user_memory_downgrades_volatile_running_state(tmp_path: Path) -> None:
+    launcher = tmp_path / "Diablo IV.lnk"
+    launcher.write_text("shortcut", encoding="utf-8")
+    memory_path = tmp_path / "target-memory.json"
+    memory_path.write_text(
+        json.dumps(
+            {
+                "targets": {
+                    "diablo_iv": {
+                        "label": "remembered shortcut",
+                        "state": "running",
+                        "path": str(launcher),
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = resolve_target(
+        "diablo_iv",
+        providers=(UserMemoryProvider(),),
+        context=TargetDiscoveryContext(memory_path=memory_path),
+    )
+
+    assert result.state is TargetState.LAUNCHABLE
+    assert result.candidates[0].state is TargetState.LAUNCHABLE
+
+
 def test_target_plan_json_payload_has_stable_shape() -> None:
     result = resolve_target(
         "diablo_iv",
@@ -286,11 +375,22 @@ def test_target_start_intent_compiles_through_target_resolution(monkeypatch) -> 
         IntentSpec(
             intent_id="start_diablo",
             kind="target.start",
+            display_name="Start my game",
+            description="Use the target engine.",
             target="diablo_iv",
             requested_outcome="Start Diablo IV.",
+            constraints={"mode": "local"},
+            preferences={"focus": True},
+            user_visible_summary="Start Diablo from a remembered shortcut.",
         )
     )
 
+    assert plan.plan_id == "start_diablo"
+    assert plan.intent["display_name"] == "Start my game"
+    assert plan.intent["requested_outcome"] == "Start Diablo IV."
+    assert plan.intent["constraints"] == {"mode": "local"}
+    assert plan.intent["preferences"] == {"focus": True}
+    assert plan.intent["user_visible_summary"] == "Start Diablo from a remembered shortcut."
     assert [step.primitive_id for step in plan.steps] == ["app.process.launch"]
     assert plan.steps[0].parameters["command"] == "C:/Games/Diablo IV.lnk"
 

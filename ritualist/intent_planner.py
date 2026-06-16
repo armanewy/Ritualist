@@ -146,7 +146,11 @@ def compile_intent_to_plan(
         if target_ref:
             from .target_resolution import compile_target_start_plan
 
-            return compile_target_start_plan(target_ref, primitive_registry=registry)
+            return compile_target_start_plan(
+                target_ref,
+                intent_metadata=intent.to_plan_intent(),
+                primitive_registry=registry,
+            )
         unresolved.append("target.start requires a target id or name")
     elif intent.kind == "diagnostics.collect":
         _compile_diagnostics_intent(intent, registry=registry, steps=steps, artifacts=artifacts, verification=verification)
