@@ -30,7 +30,15 @@ from .paths import (
     runs_dir,
 )
 from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
-from .run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
+from .run_logs import (
+    RunLogWriter,
+    RunbookSummary,
+    list_recent_runs,
+    load_run,
+    reconcile_running_runs,
+    summarize_run_record,
+    summarize_step_results,
+)
 from .runtime_control import RuntimeControl
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
@@ -425,6 +433,8 @@ def show_run(
         table.add_row("final_message", escape(str(metadata.get("final_message", ""))))
     table.add_row("path", escape(str(record.path)))
     console.print(table)
+
+    _print_runbook_summary(summarize_run_record(record))
 
     steps = Table(title="Steps")
     steps.add_column("#", justify="right")
@@ -864,6 +874,13 @@ def _print_post_run_summary(
     counts_text = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
     console.print(f"Summary: {escape(counts_text or 'no steps recorded')}")
     metadata = _run_logger_metadata(run_logger)
+    _print_runbook_summary(
+        summarize_step_results(
+            list(getattr(summary, "results", [])) if summary is not None else [],
+            metadata=metadata,
+            interrupted=interrupted,
+        )
+    )
     console.print(
         f"Final run state: {escape(_final_run_state(summary, metadata, interrupted=interrupted))}"
     )
@@ -888,6 +905,24 @@ def _print_post_run_summary(
     ):
         console.print("Confirmation declined; no confirmed risky action was performed.")
     console.print(f"Keep-open: {'active' if keep_open_active else 'inactive'}")
+
+
+def _print_runbook_summary(summary: RunbookSummary) -> None:
+    console.print("Runbook summary:")
+    console.print(
+        "  Preflight: "
+        f"{escape(summary.preflight_status)} "
+        f"({summary.preflight_passed} passed, {summary.preflight_failed} failed)"
+    )
+    console.print(f"  Actions completed: {summary.actions_completed}")
+    console.print(
+        "  Assertions: "
+        f"{summary.assertions_passed} passed, {summary.assertions_failed} failed"
+    )
+    console.print(f"  Human prompts answered: {summary.human_prompts_answered}")
+    console.print(f"  Final status: {escape(summary.final_status)}")
+    console.print(f"  Stopped/interrupted: {escape(summary.stop_semantics)}")
+    console.print(f"  Last step: {escape(summary.last_step or 'none')}")
 
 
 def _finish_run_logger_as_stopped(run_logger: object, *, logger: object) -> None:

@@ -32,6 +32,34 @@ class ReconciledRun:
     message: str
 
 
+@dataclass(frozen=True)
+class RunbookSummary:
+    preflight_status: str
+    preflight_passed: int
+    preflight_failed: int
+    actions_completed: int
+    assertions_passed: int
+    assertions_failed: int
+    human_prompts_answered: int
+    final_status: str
+    stop_semantics: str
+    last_step: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "preflight_status": self.preflight_status,
+            "preflight_passed": self.preflight_passed,
+            "preflight_failed": self.preflight_failed,
+            "actions_completed": self.actions_completed,
+            "assertions_passed": self.assertions_passed,
+            "assertions_failed": self.assertions_failed,
+            "human_prompts_answered": self.human_prompts_answered,
+            "final_status": self.final_status,
+            "stop_semantics": self.stop_semantics,
+            "last_step": self.last_step,
+        }
+
+
 class RunLogWriter:
     def __init__(self, *, base_dir: Path | None = None) -> None:
         self.base_dir = base_dir or runs_dir()
@@ -61,6 +89,8 @@ class RunLogWriter:
             "last_heartbeat_at": started_at,
             "last_step_id": None,
             "last_step_name": None,
+            "last_step_phase": None,
+            "current_phase": None,
             "final_message": None,
             "current_run_state": "running",
             "current_step_state": None,
@@ -127,6 +157,7 @@ class RunLogWriter:
             "action": result.action,
             "status": result.status,
             "message": _safe_message(result),
+            "phase": result.phase,
             "started_at": result.started_at.isoformat(),
             "ended_at": result.ended_at.isoformat(),
             "optional": result.optional,
@@ -139,6 +170,8 @@ class RunLogWriter:
         self._metadata["steps_completed"] = result.index
         self._metadata["last_step_id"] = result.index
         self._metadata["last_step_name"] = result.step_name
+        self._metadata["last_step_phase"] = result.phase
+        self._metadata["current_phase"] = result.phase
         self._metadata["last_heartbeat_at"] = _now_iso()
         step_state = _runtime_step_state(result.status)
         self._metadata["current_step_state"] = step_state
@@ -147,6 +180,7 @@ class RunLogWriter:
             step_state=step_state,
             step_id=result.index,
             step_name=result.step_name,
+            phase=result.phase,
             action=result.action,
             message=_safe_message(result),
             metadata=result.metadata or None,
@@ -193,6 +227,7 @@ class RunLogWriter:
         *,
         step_id: int | None = None,
         step_name: str | None = None,
+        phase: str | None = None,
         action: str | None = None,
         message: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -204,12 +239,16 @@ class RunLogWriter:
             self._metadata["last_step_id"] = step_id
         if step_name is not None:
             self._metadata["last_step_name"] = step_name
+        if phase is not None:
+            self._metadata["last_step_phase"] = phase
+            self._metadata["current_phase"] = phase
         self._metadata["current_step_state"] = state
         self._append_event_summary(
             _event_for_step_state(state),
             step_state=state,
             step_id=step_id,
             step_name=step_name,
+            phase=phase,
             action=action,
             message=message,
             metadata=metadata,
@@ -275,6 +314,7 @@ class RunLogWriter:
         step_state: str | None = None,
         step_id: int | None = None,
         step_name: str | None = None,
+        phase: str | None = None,
         action: str | None = None,
         message: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -288,6 +328,8 @@ class RunLogWriter:
             entry["step_id"] = step_id
         if step_name is not None:
             entry["step_name"] = step_name
+        if phase is not None:
+            entry["phase"] = phase
         if action is not None:
             entry["action"] = action
         if message:
@@ -449,6 +491,189 @@ def load_run(run_id_or_path: str | Path, *, base_dir: Path | None = None) -> Run
         except (OSError, json.JSONDecodeError):
             steps = []
     return RunRecord(run_id=path.name, path=path, metadata=metadata, steps=steps)
+
+
+def summarize_run_record(record: RunRecord) -> RunbookSummary:
+    return summarize_run_steps(record.steps, metadata=record.metadata)
+
+
+def summarize_step_results(
+    results: list[StepResult],
+    *,
+    metadata: dict[str, Any] | None = None,
+    interrupted: bool = False,
+) -> RunbookSummary:
+    steps = [
+        {
+            "index": result.index,
+            "step_name": result.step_name,
+            "action": result.action,
+            "status": result.status,
+            "message": result.message,
+            "phase": result.phase,
+        }
+        for result in results
+    ]
+    return summarize_run_steps(steps, metadata=metadata, interrupted=interrupted)
+
+
+def summarize_run_steps(
+    steps: list[dict[str, Any]],
+    *,
+    metadata: dict[str, Any] | None = None,
+    interrupted: bool = False,
+) -> RunbookSummary:
+    metadata = metadata or {}
+    normalized_steps = [_SummaryStep.from_mapping(step) for step in steps]
+    preflight_steps = _preflight_steps(normalized_steps)
+    statuses = [step.status for step in normalized_steps]
+    final_status = _summary_final_status(statuses, metadata, interrupted=interrupted)
+    return RunbookSummary(
+        preflight_status=_preflight_status(preflight_steps),
+        preflight_passed=_count_status(preflight_steps, "success"),
+        preflight_failed=_count_status(preflight_steps, "failed"),
+        actions_completed=sum(
+            1
+            for step in normalized_steps
+            if not _is_assertion_action(step.action) and step.status == "success"
+        ),
+        assertions_passed=sum(
+            1
+            for step in normalized_steps
+            if _is_assertion_action(step.action) and step.status == "success"
+        ),
+        assertions_failed=sum(
+            1
+            for step in normalized_steps
+            if _is_assertion_action(step.action) and step.status == "failed"
+        ),
+        human_prompts_answered=sum(
+            1
+            for step in normalized_steps
+            if step.action in HUMAN_PROMPT_ACTIONS and step.status == "success"
+        ),
+        final_status=final_status,
+        stop_semantics=_stop_semantics(final_status, statuses, interrupted=interrupted),
+        last_step=_summary_last_step(normalized_steps, metadata),
+    )
+
+
+@dataclass(frozen=True)
+class _SummaryStep:
+    index: int | None
+    step_name: str
+    action: str
+    status: str
+    phase: str
+
+    @classmethod
+    def from_mapping(cls, step: dict[str, Any]) -> "_SummaryStep":
+        raw_index = step.get("index")
+        try:
+            index = int(raw_index) if raw_index not in (None, "") else None
+        except (TypeError, ValueError):
+            index = None
+        return cls(
+            index=index,
+            step_name=str(step.get("step_name") or ""),
+            action=str(step.get("action") or ""),
+            status=str(step.get("status") or ""),
+            phase=str(step.get("phase") or ""),
+        )
+
+
+ASSERTION_ACTION_PREFIX = "assert."
+HUMAN_PROMPT_ACTIONS = {"confirm.ask", "wait.for_user"}
+
+
+def _preflight_steps(steps: list[_SummaryStep]) -> list[_SummaryStep]:
+    if any(step.phase for step in steps):
+        return [step for step in steps if step.phase == "preflight"]
+    return _legacy_leading_assertion_steps(steps)
+
+
+def _legacy_leading_assertion_steps(steps: list[_SummaryStep]) -> list[_SummaryStep]:
+    preflight: list[_SummaryStep] = []
+    for step in steps:
+        if not _is_assertion_action(step.action):
+            break
+        preflight.append(step)
+    return preflight
+
+
+def _is_assertion_action(action: str) -> bool:
+    return action.startswith(ASSERTION_ACTION_PREFIX)
+
+
+def _count_status(steps: list[_SummaryStep], status: str) -> int:
+    return sum(1 for step in steps if step.status == status)
+
+
+def _preflight_status(preflight_steps: list[_SummaryStep]) -> str:
+    if not preflight_steps:
+        return "not configured"
+    if any(step.status == "failed" for step in preflight_steps):
+        return "failed"
+    if any(step.status == "cancelled" for step in preflight_steps):
+        return "stopped"
+    if all(step.status == "dry-run" for step in preflight_steps):
+        return "dry-run"
+    if all(step.status in {"success", "dry-run", "skipped"} for step in preflight_steps):
+        return "passed"
+    return "incomplete"
+
+
+def _summary_final_status(
+    statuses: list[str],
+    metadata: dict[str, Any],
+    *,
+    interrupted: bool,
+) -> str:
+    if interrupted:
+        return "stopped"
+    raw_status = metadata.get("final_state") or metadata.get("status")
+    status = str(raw_status or "").strip().lower()
+    if status and status != "running":
+        return status
+    if any(step_status == "failed" for step_status in statuses):
+        return "failed"
+    if any(step_status == "cancelled" for step_status in statuses):
+        return "stopped"
+    if statuses and all(
+        step_status in {"success", "skipped", "dry-run"} for step_status in statuses
+    ):
+        return "success"
+    return status or "unknown"
+
+
+def _stop_semantics(final_status: str, statuses: list[str], *, interrupted: bool) -> str:
+    if interrupted or final_status == "interrupted":
+        return "interrupted"
+    if final_status == "stopped" or any(status == "cancelled" for status in statuses):
+        return "stopped"
+    return "none"
+
+
+def _summary_last_step(steps: list[_SummaryStep], metadata: dict[str, Any]) -> str:
+    step_id = metadata.get("last_step_id")
+    step_name = metadata.get("last_step_name")
+    step_state = metadata.get("current_step_state")
+    if step_id is not None or step_name:
+        label = f"#{step_id}" if step_id is not None else "unknown step"
+        if step_name:
+            label = f"{label} {step_name}"
+        if step_state:
+            label = f"{label} ({step_state})"
+        return label
+    if not steps:
+        return ""
+    step = steps[-1]
+    label = f"#{step.index}" if step.index is not None else "unknown step"
+    if step.step_name:
+        label = f"{label} {step.step_name}"
+    if step.status:
+        label = f"{label} ({step.status})"
+    return label
 
 
 def _read_run_metadata(path: Path) -> dict[str, Any] | None:

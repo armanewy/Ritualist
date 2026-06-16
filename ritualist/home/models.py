@@ -278,24 +278,33 @@ class HomeRunHistoryCache:
     limit: int = 100
     base_dir: Path | None = None
     _last_status_by_recipe_id: dict[str, HomeLastRunStatus] = field(default_factory=dict)
+    _last_summary_by_recipe_id: dict[str, Any] = field(default_factory=dict)
     _loaded: bool = False
 
     def refresh(self) -> None:
-        from ritualist.run_logs import list_recent_runs
+        from ritualist.run_logs import list_recent_runs, summarize_run_record
 
         latest: dict[str, HomeLastRunStatus] = {}
+        summaries: dict[str, Any] = {}
         for record in list_recent_runs(limit=self.limit, base_dir=self.base_dir):
             recipe_id = _optional_string(record.metadata.get("recipe_id"))
             if not recipe_id or recipe_id in latest:
                 continue
             latest[recipe_id] = _last_run_status_from_metadata(record.metadata)
+            summaries[recipe_id] = summarize_run_record(record)
         self._last_status_by_recipe_id = latest
+        self._last_summary_by_recipe_id = summaries
         self._loaded = True
 
     def get(self, recipe_id: str) -> HomeLastRunStatus:
         if not self._loaded:
             self.refresh()
         return self._last_status_by_recipe_id.get(recipe_id, HomeLastRunStatus.NONE)
+
+    def get_summary(self, recipe_id: str) -> Any | None:
+        if not self._loaded:
+            self.refresh()
+        return self._last_summary_by_recipe_id.get(recipe_id)
 
 
 def create_installed_home_model(
@@ -447,7 +456,7 @@ def _last_run_status_from_metadata(metadata: Mapping[str, Any]) -> HomeLastRunSt
         return HomeLastRunStatus.STOPPED
     if status == "interrupted":
         return HomeLastRunStatus.INTERRUPTED
-    if status == "running":
+    if status in {"running", "waiting", "paused", "confirming", "stopping"}:
         return HomeLastRunStatus.RUNNING
     return HomeLastRunStatus.NONE
 

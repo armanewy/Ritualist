@@ -58,6 +58,7 @@ class StepResult:
     message: str
     started_at: datetime
     ended_at: datetime
+    phase: str = "steps"
     optional: bool = False
     dry_run: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)

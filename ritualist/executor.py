@@ -112,8 +112,8 @@ class WorkflowExecutor:
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
-        steps = recipe.execution_steps
-        total = len(steps)
+        execution_plan = _execution_plan(recipe)
+        total = len(execution_plan)
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
         self._start_runtime_run(recipe, total)
@@ -128,7 +128,7 @@ class WorkflowExecutor:
             runtime_control=self.runtime_control,
         )
 
-        for index, step in enumerate(steps, start=1):
+        for index, (phase, step) in enumerate(execution_plan, start=1):
             self._heartbeat(index, step.display_name, step_state=StepState.PENDING)
             try:
                 self._checkpoint_control()
@@ -142,6 +142,7 @@ class WorkflowExecutor:
                     message="run stopped by user before step",
                     started_at=_now(),
                     ended_at=_now(),
+                    phase=phase,
                     optional=step.optional,
                     dry_run=self.dry_run,
                 )
@@ -152,7 +153,7 @@ class WorkflowExecutor:
                 self._emit(index, total, step, "cancelled", result.message)
                 break
             started_at = _now()
-            self._start_step(index, step)
+            self._start_step(index, phase, step)
             self._emit(index, total, step, "running", step_started_at=started_at)
             status = "success"
             message = ""
@@ -246,6 +247,7 @@ class WorkflowExecutor:
                 message=message,
                 started_at=started_at,
                 ended_at=_now(),
+                phase=phase,
                 optional=step.optional,
                 dry_run=dry_run_step,
                 metadata=result_metadata,
@@ -340,7 +342,7 @@ class WorkflowExecutor:
             self.runtime_control.stop()
         self.runtime_control.raise_if_stopped()
 
-    def _start_step(self, index: int, step: ExecutableStep) -> None:
+    def _start_step(self, index: int, phase: str, step: ExecutableStep) -> None:
         if self._run_state not in {RunState.RUNNING, RunState.CONFIRMING, RunState.WAITING}:
             self._change_run_state(RunState.RUNNING)
         record_step_state = getattr(self.run_logger, "record_step_state", None)
@@ -350,6 +352,7 @@ class WorkflowExecutor:
                 step_id=index,
                 step_name=step.display_name,
                 action=step.action,
+                phase=phase,
             )
         self._emit_runtime_event(
             StepStarted(
@@ -588,6 +591,14 @@ class WorkflowExecutor:
 
 def _deny_confirmation(prompt: ConfirmationRequest | str) -> bool:
     return False
+
+
+def _execution_plan(recipe: Recipe) -> list[tuple[str, ExecutableStep]]:
+    return [
+        *[("preflight", step) for step in recipe.preflight],
+        *[("steps", step) for step in recipe.steps],
+        *[("verify", step) for step in recipe.verify],
+    ]
 
 
 def _now() -> datetime:

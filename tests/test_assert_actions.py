@@ -4,9 +4,56 @@ import sys
 from types import ModuleType
 
 from ritualist.adapters.fake import FakeAdapters
+from ritualist.actions.metadata import ALL_PLATFORMS, WINDOWS_ONLY
+from ritualist.actions.registry import create_default_registry
 from ritualist.config import AppConfig
 from ritualist.executor import WorkflowExecutor
 from ritualist.models import AssertRegistryValueStep, Recipe
+
+
+ASSERTION_METADATA = {
+    "assert.file_exists": {
+        "capabilities": ("file_read",),
+        "platforms": ALL_PLATFORMS,
+    },
+    "assert.path_exists": {
+        "capabilities": ("file_read",),
+        "platforms": ALL_PLATFORMS,
+    },
+    "assert.process_running": {
+        "capabilities": ("process_inspection",),
+        "platforms": ALL_PLATFORMS,
+    },
+    "assert.window_exists": {
+        "capabilities": ("windows_uia", "window_management"),
+        "platforms": WINDOWS_ONLY,
+    },
+    "assert.window_text_visible": {
+        "capabilities": ("windows_uia",),
+        "platforms": WINDOWS_ONLY,
+    },
+    "assert.browser_text_visible": {
+        "capabilities": ("playwright", "browser_control"),
+        "platforms": ALL_PLATFORMS,
+    },
+    "assert.registry_value": {
+        "capabilities": ("registry_read",),
+        "platforms": WINDOWS_ONLY,
+    },
+}
+
+
+def test_assertion_metadata_is_read_only_and_platform_gated():
+    registry = create_default_registry()
+
+    for action, expected in ASSERTION_METADATA.items():
+        metadata = registry.metadata(action)
+
+        assert metadata.side_effect_level == "read_only"
+        assert metadata.confirmation_policy == "never"
+        assert metadata.allowed_in_imported_packs is True
+        assert metadata.required_capabilities == expected["capabilities"]
+        assert metadata.supported_platforms == expected["platforms"]
 
 
 def test_preflight_assertions_run_before_steps(tmp_path):
@@ -49,6 +96,25 @@ def test_preflight_assertion_failure_stops_before_steps(tmp_path):
     assert summary.results[0].action == "assert.path_exists"
     assert summary.results[0].status == "failed"
     assert "path does not exist" in summary.results[0].message
+    assert fakes.shell.calls == []
+
+
+def test_file_exists_assertion_rejects_directories_without_mutating(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "preflight": [{"action": "assert.file_exists", "path": str(tmp_path)}],
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert not summary.success
+    assert summary.results[0].action == "assert.file_exists"
+    assert "path is not a file" in summary.results[0].message
     assert fakes.shell.calls == []
 
 

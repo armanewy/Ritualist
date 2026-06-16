@@ -242,6 +242,29 @@ def test_preflight_rejects_mutating_actions(tmp_path):
         load_recipe(path)
 
 
+def test_verify_rejects_mutating_actions(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            steps:
+              - action: app.launch
+                command: demo.exe
+            verify:
+              - action: app.launch
+                command: demo.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError):
+        load_recipe(path)
+
+
 def test_load_recipe_accepts_overrides(tmp_path):
     path = tmp_path / "recipe.yaml"
     path.write_text(

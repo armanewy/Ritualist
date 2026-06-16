@@ -267,6 +267,100 @@ def test_installed_recipe_card_includes_cached_last_run_status(tmp_path):
     assert card.status is HomeCardStatus.FAILED
 
 
+def test_home_run_history_maps_active_run_substates_to_running(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "history_recipe",
+            "name": "History Recipe",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "history_recipe",
+                "recipe_name": "History Recipe",
+                "status": "running",
+                "current_run_state": "waiting",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "history_recipe.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+
+    assert cards[0].last_run_status is HomeLastRunStatus.RUNNING
+    assert cards[0].status is HomeCardStatus.RUNNING
+
+
+def test_home_run_history_cache_keeps_latest_runbook_summary(tmp_path):
+    run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "history_recipe",
+                "recipe_name": "History Recipe",
+                "status": "success",
+                "final_state": "success",
+                "last_step_id": 3,
+                "last_step_name": "Verify marker",
+                "current_step_state": "success",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "steps.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "index": 1,
+                        "step_name": "Check marker",
+                        "action": "assert.file_exists",
+                        "status": "success",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "index": 2,
+                        "step_name": "Continue",
+                        "action": "wait.for_user",
+                        "status": "success",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "index": 3,
+                        "step_name": "Verify marker",
+                        "action": "assert.path_exists",
+                        "status": "success",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    cache = HomeRunHistoryCache(base_dir=tmp_path / "runs")
+
+    runbook = cache.get_summary("history_recipe")
+
+    assert runbook is not None
+    assert runbook.preflight_status == "passed"
+    assert runbook.actions_completed == 1
+    assert runbook.assertions_passed == 2
+    assert runbook.human_prompts_answered == 1
+    assert runbook.final_status == "success"
+    assert runbook.last_step == "#3 Verify marker (success)"
+
+
 def test_home_model_updates_card_from_runtime_event():
     model = create_mock_home_model()
     card = model.cards[0]

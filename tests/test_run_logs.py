@@ -7,7 +7,13 @@ from ritualist.adapters.fake import FakeAdapters
 from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
 from ritualist.overlay import ScreenRect, TargetRegion
-from ritualist.run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
+from ritualist.run_logs import (
+    RunLogWriter,
+    list_recent_runs,
+    load_run,
+    reconcile_running_runs,
+    summarize_run_record,
+)
 
 
 def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):
@@ -53,6 +59,7 @@ def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):
     assert run_json["paused_metadata"] is None
     assert run_json["confirming_metadata"] is None
     assert steps[0]["message"] == "opened URL"
+    assert [step["phase"] for step in steps] == ["steps", "steps"]
     assert "token=secret" not in (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8")
 
     loaded = load_run(summary.run_dir)
@@ -264,6 +271,88 @@ def test_run_log_writer_counts_preflight_and_verify_steps(tmp_path):
     run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_json["steps_total"] == 3
     assert run_json["steps_completed"] == 3
+    steps = [
+        json.loads(line)
+        for line in (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [step["phase"] for step in steps] == ["preflight", "steps", "verify"]
+    assert run_json["last_step_phase"] == "verify"
+    assert run_json["current_phase"] == "verify"
+    step_events = [
+        entry for entry in run_json["event_summaries"] if entry["event"] == "step.finished"
+    ]
+    assert [entry["phase"] for entry in step_events] == ["preflight", "steps", "verify"]
+
+
+def test_runbook_summary_reports_preflight_actions_assertions_and_prompts(tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "summary_test",
+            "name": "Summary Test",
+            "preflight": [{"action": "assert.file_exists", "path": str(marker)}],
+            "steps": [
+                {"action": "wait.for_user", "prompt": "Continue?"},
+                {"action": "app.launch", "command": "demo.exe"},
+            ],
+            "verify": [{"action": "assert.path_exists", "path": str(marker)}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: True,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    record = load_run(summary.run_dir)
+    assert record is not None
+    runbook = summarize_run_record(record)
+    assert runbook.preflight_status == "passed"
+    assert runbook.preflight_passed == 1
+    assert runbook.preflight_failed == 0
+    assert runbook.actions_completed == 2
+    assert runbook.assertions_passed == 2
+    assert runbook.assertions_failed == 0
+    assert runbook.human_prompts_answered == 1
+    assert runbook.final_status == "success"
+    assert runbook.stop_semantics == "none"
+    assert runbook.last_step == "#4 assert.path_exists (success)"
+
+
+def test_runbook_summary_reports_dry_run_preflight_without_pass_counts(tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    recipe = Recipe.model_validate(
+        {
+            "id": "summary_test",
+            "name": "Summary Test",
+            "preflight": [{"action": "assert.file_exists", "path": str(marker)}],
+            "steps": [{"action": "wait.seconds", "seconds": 1}],
+            "verify": [{"action": "assert.path_exists", "path": str(marker)}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        run_logger=writer,
+        dry_run=True,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    record = load_run(summary.run_dir)
+    assert record is not None
+    runbook = summarize_run_record(record)
+    assert runbook.preflight_status == "dry-run"
+    assert runbook.preflight_passed == 0
+    assert runbook.preflight_failed == 0
+    assert runbook.actions_completed == 0
+    assert runbook.assertions_passed == 0
+    assert runbook.assertions_failed == 0
 
 
 def test_reconcile_running_run_with_dead_pid_marks_interrupted_and_keeps_steps(tmp_path):

@@ -122,6 +122,39 @@ def test_dry_run_command_does_not_call_adapters(monkeypatch):
     assert fakes.shell.calls == []
 
 
+def test_run_prints_runbook_summary(monkeypatch, tmp_path):
+    marker = tmp_path / "marker.txt"
+    marker.write_text("ok", encoding="utf-8")
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "preflight": [{"action": "assert.file_exists", "path": str(marker)}],
+            "steps": [
+                {"action": "wait.for_user", "prompt": "Continue?"},
+                {"action": "app.launch", "command": "demo.exe"},
+            ],
+            "verify": [{"action": "assert.path_exists", "path": str(marker)}],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+
+    result = CliRunner().invoke(app, ["run", "demo"], input="y\n")
+
+    assert result.exit_code == 0
+    assert "Runbook summary:" in result.output
+    assert "Preflight: passed (1 passed, 0 failed)" in result.output
+    assert "Actions completed: 2" in result.output
+    assert "Assertions: 2 passed, 0 failed" in result.output
+    assert "Human prompts answered: 1" in result.output
+    assert "Final status: success" in result.output
+    assert "Stopped/interrupted: none" in result.output
+    assert "Last step: #4 assert.path_exists (success)" in result.output
+
+
 def test_exception_text_is_rich_escaped(monkeypatch):
     def raise_error(*_args, **_kwargs):
         raise DependencyMissingError("install ritualist[gui]")
@@ -416,6 +449,14 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     assert "Gaming Mode" in result.output
     assert "interrupted" in result.output
     assert "Ritualist exited before finalizing this run." in result.output
+    assert "Runbook summary:" in result.output
+    assert "Preflight: not configured (0 passed, 0 failed)" in result.output
+    assert "Actions completed: 1" in result.output
+    assert "Assertions: 0 passed, 0 failed" in result.output
+    assert "Human prompts answered: 0" in result.output
+    assert "Final status: interrupted" in result.output
+    assert "Stopped/interrupted: interrupted" in result.output
+    assert "Last step: #1 Open music (success)" in result.output
     assert "Open music" in result.output
     assert "opened URL" in result.output
 
