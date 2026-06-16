@@ -87,7 +87,7 @@ def test_primitive_registry_maps_all_default_actions() -> None:
     action_registry = create_default_registry()
     primitive_registry = create_primitive_registry(action_registry)
 
-    assert len(primitive_registry.specs()) == len(action_registry.action_types())
+    assert len(primitive_registry.specs()) >= len(action_registry.action_types())
     for action_name in action_registry.action_types():
         spec = primitive_registry.spec_for_action(action_name)
         assert spec.action_name == action_name

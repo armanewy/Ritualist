@@ -43,6 +43,7 @@ from .paths import (
     runs_dir,
 )
 from .primitives import PrimitiveSpec, create_primitive_registry
+from .primitive_runtime import run_read_only_primitive
 from .policy import (
     PolicyFinding,
     PolicyProfile,
@@ -70,10 +71,12 @@ perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gat
 pack_app = typer.Typer(help="Export, import, and review portable local recipe packs.")
 primitive_app = typer.Typer(help="Inspect primitive kernel metadata.")
 policy_app = typer.Typer(help="Inspect primitive policy and local pack governance.")
+diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
 app.add_typer(policy_app, name="policy")
+app.add_typer(diagnostics_app, name="diagnostics")
 console = Console()
 
 
@@ -233,6 +236,40 @@ def primitive_families(
     console.print(table)
 
 
+@primitive_app.command("run")
+def primitive_run(
+    primitive_id: Annotated[str, typer.Argument(help="Read-only primitive id to run.")],
+    params: Annotated[
+        list[str] | None,
+        typer.Option("--param", "-p", help="Primitive parameter in KEY=VALUE form."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Describe the primitive without reading host state."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable execution result."),
+    ] = False,
+) -> None:
+    """Run a read-only primitive directly."""
+    try:
+        result = run_read_only_primitive(
+            primitive_id,
+            parameters=_parse_primitive_params(params or []),
+            dry_run=dry_run,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=result.to_dict())
+        return
+    _print_primitive_result(result)
+    if result.status == "failed":
+        raise typer.Exit(1)
+
+
 def _print_primitive_spec(spec: PrimitiveSpec) -> None:
     table = Table(title=f"Primitive: {escape(spec.primitive_id)}")
     table.add_column("Field", no_wrap=True)
@@ -266,6 +303,79 @@ def _print_primitive_spec(spec: PrimitiveSpec) -> None:
                 "yes" if parameter.sensitive else "no",
             )
         console.print(parameter_table)
+
+
+def _print_primitive_result(result: object) -> None:
+    console.print(f"status: {escape(str(result.status))}")
+    console.print(f"message: {escape(str(result.message))}")
+    if getattr(result, "details", None):
+        console.print("[bold]details[/]")
+        console.print_json(data=result.details)
+    artifacts = getattr(result, "artifacts", ())
+    if artifacts:
+        table = Table(title="Artifacts")
+        table.add_column("Type")
+        table.add_column("Name")
+        table.add_column("Path")
+        table.add_column("Redacted")
+        for artifact in artifacts:
+            table.add_row(
+                escape(str(artifact.artifact_type)),
+                escape(str(artifact.name)),
+                escape(str(artifact.path or "")),
+                "yes" if artifact.redacted else "no",
+            )
+        console.print(table)
+
+
+@diagnostics_app.command("collect")
+def diagnostics_collect(
+    preset: Annotated[
+        str,
+        typer.Option("--preset", help="Diagnostics preset: minimal, support, or gamer-crash."),
+    ] = "minimal",
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--out", help="Optional output directory for diagnostics artifacts."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Describe collection without writing artifacts."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable execution result."),
+    ] = False,
+) -> None:
+    """Collect a redacted local diagnostics bundle."""
+    preset_map = {
+        "minimal": "diagnostics.bundle.collect_minimal",
+        "support": "diagnostics.bundle.collect_support",
+        "gamer-crash": "diagnostics.bundle.collect_gamer_crash",
+        "gamer_crash": "diagnostics.bundle.collect_gamer_crash",
+    }
+    primitive_id = preset_map.get(preset.casefold())
+    if primitive_id is None:
+        console.print("[red]Error:[/] preset must be minimal, support, or gamer-crash")
+        raise typer.Exit(1)
+    parameters: dict[str, object] = {}
+    if output_dir is not None:
+        parameters["output_dir"] = str(output_dir)
+    try:
+        result = run_read_only_primitive(
+            primitive_id,
+            parameters=parameters,
+            dry_run=dry_run,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=result.to_dict())
+        return
+    _print_primitive_result(result)
+    if result.status == "failed":
+        raise typer.Exit(1)
 
 
 @policy_app.command("show")
@@ -927,24 +1037,21 @@ def inspect_window(
 ) -> None:
     """Inspect visible labels in matching Windows UI Automation windows."""
     try:
-        from .adapters.windows_uia import WindowsUIAutomationAdapter
-
-        inspections = WindowsUIAutomationAdapter().inspect_windows(
-            title_contains=title_contains,
-            limit=limit,
-            control_type=control_type,
+        result = run_read_only_primitive(
+            "uia.element.list_labels",
+            parameters={
+                "window_title_contains": title_contains,
+                "limit": limit,
+                **({"control_type": control_type} if control_type else {}),
+            },
         )
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
+    inspections = list(result.details.get("windows", []))
 
     if json_output:
-        console.print_json(
-            data=[
-                {"title": inspection.title, "labels": inspection.labels}
-                for inspection in inspections
-            ]
-        )
+        console.print_json(data=inspections)
         return
 
     if not inspections:
@@ -952,10 +1059,11 @@ def inspect_window(
         return
 
     for inspection in inspections:
-        console.print(f"[bold]Window:[/] {escape(inspection.title)}")
+        console.print(f"[bold]Window:[/] {escape(str(inspection.get('title', '')))}")
         console.print("[bold]Visible labels:[/]")
-        if inspection.labels:
-            for label in inspection.labels:
+        labels = inspection.get("labels", [])
+        if labels:
+            for label in labels:
                 console.print(f"- {escape(label)}")
         else:
             console.print("- [dim](none found)[/]")
@@ -1142,6 +1250,31 @@ def _parse_vars(values: list[str]) -> dict[str, str]:
             raise typer.BadParameter("template variable key cannot be empty")
         parsed[key] = raw
     return parsed
+
+
+def _parse_primitive_params(values: list[str]) -> dict[str, object]:
+    parsed: dict[str, object] = {}
+    for value in values:
+        if "=" not in value:
+            raise typer.BadParameter(f"expected KEY=VALUE, got {value!r}")
+        key, raw = value.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter("primitive parameter key cannot be empty")
+        parsed[key] = _parse_primitive_value(raw)
+    return parsed
+
+
+def _parse_primitive_value(raw: str) -> object:
+    text = raw.strip()
+    if not text:
+        return ""
+    if text[0] in "[{\"" or text in {"true", "false", "null"} or text[:1].isdigit():
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return raw
+    return raw
 
 
 def _print_steps(recipe: object) -> None:

@@ -105,6 +105,22 @@ class FakeBrowserAdapter(RecordingAdapter):
 
 
 class FakeWindowAdapter(RecordingAdapter):
+    def list_windows(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.record("list_windows", **kwargs)
+        default = [
+            {
+                "title": kwargs.get("title_contains") or "Active Window",
+                "process_id": 1234,
+                "bounds": {"x": 10, "y": 20, "width": 300, "height": 200},
+            }
+        ]
+        value = self.responses.get("list_windows", default)
+        if isinstance(value, list) and value and isinstance(value[0], list):
+            if len(value) > 1:
+                return list(value.pop(0))
+            return list(value[0])
+        return list(value) if isinstance(value, list) else []
+
     def foreground_window_title(self) -> str:
         self.record("foreground_window_title")
         return str(self.response("foreground_window_title", "Active Window"))

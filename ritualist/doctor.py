@@ -534,6 +534,38 @@ def _check_capability(capability: str) -> DoctorCheck:
             section=check.section,
             details={"module": "psutil", "capability": capability},
         )
+    if capability == "hardware_inventory":
+        if sys.platform != "win32":
+            return DoctorCheck(
+                "error",
+                capability,
+                "hardware inventory primitives require Windows",
+                section="Capabilities",
+                details={"capability": capability},
+            )
+        return DoctorCheck(
+            "ok",
+            capability,
+            "read-only hardware inventory is available",
+            section="Capabilities",
+            details={"capability": capability},
+        )
+    if capability == "network_connectivity":
+        return DoctorCheck(
+            "ok",
+            capability,
+            "read-only network connectivity probes are available",
+            section="Capabilities",
+            details={"capability": capability},
+        )
+    if capability == "diagnostics_collect":
+        return DoctorCheck(
+            "ok",
+            capability,
+            "redacted diagnostics bundle collection is available",
+            section="Capabilities",
+            details={"capability": capability},
+        )
     return DoctorCheck(
         "error",
         capability,

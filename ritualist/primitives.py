@@ -55,6 +55,9 @@ class PrimitiveCapability(str, Enum):
     REGISTRY_READ = "registry_read"
     REGISTRY_WRITE = "registry_write"
     PROCESS_INSPECTION = "process_inspection"
+    HARDWARE_INVENTORY = "hardware_inventory"
+    NETWORK_CONNECTIVITY = "network_connectivity"
+    DIAGNOSTICS_COLLECT = "diagnostics_collect"
 
 
 @dataclass(frozen=True)
@@ -302,6 +305,9 @@ class PrimitiveRegistry:
         if spec.action_name:
             self._action_to_primitive[spec.action_name] = primitive_id
 
+    def has(self, primitive_id: str) -> bool:
+        return primitive_id in self._specs
+
     def primitive_ids(self) -> list[str]:
         return sorted(self._specs)
 
@@ -341,7 +347,12 @@ def create_primitive_registry(action_registry: ActionRegistry | None = None) -> 
                 description=catalog_entry.description,
             )
         )
+    _register_read_only_primitives(registry)
     return registry
+
+
+def read_only_primitive_ids() -> tuple[str, ...]:
+    return tuple(spec.primitive_id for spec in _read_only_primitive_specs())
 
 
 def primitive_spec_from_action_metadata(
@@ -472,6 +483,211 @@ def _adapter_binding_for(action_name: str, family_name: str) -> PrimitiveAdapter
     if action_name.startswith(("assert.file", "assert.path", "wait.for_file")):
         return PrimitiveAdapterBinding("filesystem", "local_path", "Local filesystem read adapter")
     return PrimitiveAdapterBinding("runtime", "built_in", "Ritualist runtime adapter")
+
+
+def _register_read_only_primitives(registry: PrimitiveRegistry) -> None:
+    for spec in _read_only_primitive_specs():
+        if not registry.has(spec.primitive_id):
+            registry.register(spec)
+
+
+def _read_only_primitive_specs() -> tuple[PrimitiveSpec, ...]:
+    specs: list[PrimitiveSpec] = []
+    specs.extend(
+        _read_only_specs(
+            "app.process",
+            {
+                "list": "List visible local processes without command lines.",
+                "find": "Find local processes by structured name match.",
+                "is_running": "Check whether a local process is running.",
+                "wait_running": "Wait until a local process appears.",
+                "wait_exit": "Wait until a local process exits.",
+            },
+            capabilities=(PrimitiveCapability.PROCESS_INSPECTION,),
+            adapter=PrimitiveAdapterBinding("psutil", "process_inspection", "Local process inventory"),
+            parameters={
+                "find": (_optional("name"), _optional("contains")),
+                "is_running": (_optional("name"), _optional("pid")),
+                "wait_running": (_optional("name"), _optional("pid"), _optional("timeout_seconds")),
+                "wait_exit": (_optional("name"), _optional("pid"), _optional("timeout_seconds")),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "window.topology",
+            {
+                "list_windows": "List top-level desktop windows and available bounds.",
+                "find_window": "Find a top-level desktop window by title or process.",
+                "get_bounds": "Read bounds for a matching top-level desktop window.",
+                "get_foreground": "Read the current foreground window title.",
+                "monitor_list": "List monitor work-area bounds.",
+            },
+            capabilities=(PrimitiveCapability.WINDOWS_UIA, PrimitiveCapability.WINDOW_MANAGEMENT),
+            platforms=("windows",),
+            adapter=PrimitiveAdapterBinding("window_manager", "desktop_window", "Read-only window inventory"),
+            parameters={
+                "list_windows": (_optional("title_contains"), _optional("process_name")),
+                "find_window": (_optional("title_contains"), _optional("process_name")),
+                "get_bounds": (_optional("title_contains"), _optional("process_name")),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "uia.element",
+            {
+                "list_labels": "List visible labels inside matching windows.",
+                "find_text": "Find visible text inside a scoped desktop window.",
+                "find_control": "Find a visible UI Automation control by label/type.",
+                "candidate_dump": "Dump visible candidate labels for diagnostics.",
+            },
+            capabilities=(PrimitiveCapability.WINDOWS_UIA,),
+            platforms=("windows",),
+            adapter=PrimitiveAdapterBinding("windows_uia", "desktop_uia", "Windows UI Automation read adapter"),
+            parameters={
+                "list_labels": (
+                    _required("window_title_contains"),
+                    _optional("control_type"),
+                    _optional("limit"),
+                ),
+                "find_text": (
+                    _required("window_title_contains"),
+                    _required("text"),
+                    _optional("control_type"),
+                    _optional("exact"),
+                ),
+                "find_control": (
+                    _required("window_title_contains"),
+                    _required("text"),
+                    _optional("control_type"),
+                    _optional("exact"),
+                ),
+                "candidate_dump": (
+                    _required("window_title_contains"),
+                    _optional("control_type"),
+                    _optional("limit"),
+                ),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "browser.assert",
+            {
+                "title_matches": "Check current managed browser page title.",
+                "url_matches": "Check current managed browser page URL.",
+            },
+            capabilities=(PrimitiveCapability.PLAYWRIGHT, PrimitiveCapability.BROWSER_CONTROL),
+            adapter=PrimitiveAdapterBinding("playwright", "managed_browser", "Ritualist browser read adapter"),
+            parameters={
+                "title_matches": (_optional("title"), _optional("title_contains")),
+                "url_matches": (_optional("url"), _optional("url_contains")),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "hardware.inventory",
+            {
+                "snapshot": "Collect a redacted hardware inventory snapshot.",
+                "bios": "Read basic BIOS/platform fields when available.",
+                "cpu": "Read CPU model/count information.",
+                "gpu": "Read GPU inventory when available without shell scripts.",
+                "motherboard": "Read motherboard inventory when available without shell scripts.",
+                "disks": "Read disk capacity summaries.",
+                "network_adapters": "Read network adapter inventory summaries.",
+                "pnp_devices": "Read Plug and Play inventory when available without shell scripts.",
+            },
+            capabilities=(PrimitiveCapability.HARDWARE_INVENTORY,),
+            platforms=("windows",),
+            adapter=PrimitiveAdapterBinding("local_inventory", "hardware_read", "Read-only hardware inventory"),
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "network.connectivity",
+            {
+                "snapshot": "Collect a local network connectivity snapshot.",
+                "dns": "Resolve DNS for a target host.",
+                "tcp": "Probe TCP connectivity without sending application data.",
+                "route_hint": "Infer local route choice for a target address.",
+                "profile": "Read local network profile summary.",
+            },
+            capabilities=(PrimitiveCapability.NETWORK_CONNECTIVITY,),
+            adapter=PrimitiveAdapterBinding("python_socket", "network_read", "Read-only network connectivity probes"),
+            parameters={
+                "dns": (_required("host"),),
+                "tcp": (_required("host"), _required("port"), _optional("timeout_seconds")),
+                "route_hint": (_required("host"), _optional("port")),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "diagnostics.bundle",
+            {
+                "collect_minimal": "Collect a minimal redacted local diagnostics bundle.",
+                "collect_support": "Collect a support diagnostics bundle without secret classes.",
+                "collect_gamer_crash": "Collect a gamer crash diagnostics bundle without screenshots or secrets.",
+            },
+            capabilities=(PrimitiveCapability.DIAGNOSTICS_COLLECT,),
+            adapter=PrimitiveAdapterBinding("diagnostics", "redacted_bundle", "Ritualist diagnostics artifact writer"),
+            artifact_behavior="JSON, text, checksum, redaction manifest, and zip bundle",
+            parameters={
+                "collect_minimal": (_optional("output_dir"),),
+                "collect_support": (_optional("output_dir"),),
+                "collect_gamer_crash": (_optional("output_dir"),),
+            },
+        )
+    )
+    return tuple(specs)
+
+
+def _read_only_specs(
+    family: str,
+    verbs: dict[str, str],
+    *,
+    capabilities: tuple[PrimitiveCapability, ...],
+    adapter: PrimitiveAdapterBinding,
+    platforms: tuple[PlatformName, ...] = ("windows", "macos", "linux"),
+    parameters: dict[str, tuple[PrimitiveParameter, ...]] | None = None,
+    artifact_behavior: str = "none",
+) -> tuple[PrimitiveSpec, ...]:
+    specs: list[PrimitiveSpec] = []
+    for verb, description in verbs.items():
+        specs.append(
+            PrimitiveSpec(
+                family=PrimitiveFamily(family),
+                verb=PrimitiveVerb(verb),
+                display_name=_primitive_display_name(family, verb),
+                description=description,
+                required_capabilities=capabilities,
+                supported_platforms=platforms,
+                risk=PrimitiveRisk.READ_ONLY,
+                confirmation_policy="never",
+                allowed_in_imported_packs=True,
+                adapter_binding=adapter,
+                parameters=(parameters or {}).get(verb, ()),
+                dry_run_behavior="describe read-only primitive without probing host state",
+                artifact_behavior=artifact_behavior,
+                verification_behavior="read-only result status and details",
+            )
+        )
+    return tuple(specs)
+
+
+def _required(name: str) -> PrimitiveParameter:
+    return PrimitiveParameter(name=name, required=True)
+
+
+def _optional(name: str) -> PrimitiveParameter:
+    return PrimitiveParameter(name=name, required=False)
+
+
+def _primitive_display_name(family: str, verb: str) -> str:
+    words = [*family.split("."), *verb.split("_")]
+    return " ".join(word.capitalize() for word in words if word)
 
 
 def _parameters_from_metadata(metadata: ActionMetadata) -> tuple[PrimitiveParameter, ...]:

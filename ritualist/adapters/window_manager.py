@@ -10,6 +10,39 @@ from ritualist.overlay import ScreenRect, TargetRegion
 
 
 class WindowsWindowManager:
+    def list_windows(
+        self,
+        *,
+        title_contains: str | None = None,
+        process_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        _ensure_windows()
+        try:
+            from pywinauto import Desktop
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "window listing requires pywinauto; install ritualist[windows]"
+            ) from exc
+
+        process_ids = _matching_process_ids(process_name)
+        title_pattern = re.compile(re.escape(title_contains), re.IGNORECASE) if title_contains else None
+        rows: list[dict[str, Any]] = []
+        for window in Desktop(backend="uia").windows():
+            title = _safe_window_text(window)
+            if title_pattern and not title_pattern.search(title):
+                continue
+            process_id = _safe_process_id(window)
+            if process_ids is not None and process_id not in process_ids:
+                continue
+            rows.append(
+                {
+                    "title": title,
+                    "process_id": process_id,
+                    "bounds": _screen_rect_to_dict(_window_rect(window)),
+                }
+            )
+        return rows
+
     def foreground_window_title(self) -> str:
         _ensure_windows()
         try:
@@ -358,6 +391,17 @@ def _screen_rect_from_object(rect: Any) -> ScreenRect | None:
     if width <= 0 or height <= 0:
         return None
     return ScreenRect(x=left, y=top, width=width, height=height)
+
+
+def _screen_rect_to_dict(rect: ScreenRect | None) -> dict[str, int] | None:
+    if rect is None:
+        return None
+    return {
+        "x": rect.x,
+        "y": rect.y,
+        "width": rect.width,
+        "height": rect.height,
+    }
 
 
 def _screen_rect_from_sequence(rect: Any) -> ScreenRect | None:
