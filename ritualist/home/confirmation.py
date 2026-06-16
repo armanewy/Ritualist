@@ -175,6 +175,8 @@ def _place_dialog(dialog: Any, request: ConfirmationRequest | str, app: Any, poi
 
 
 def _proceed_label(request: ConfirmationRequest | str) -> str:
-    if isinstance(request, ConfirmationRequest) and request.target_text:
+    if isinstance(request, ConfirmationRequest) and (
+        request.target_text or request.target_role or request.target_test_id
+    ):
         return "Click target"
     return "Proceed"

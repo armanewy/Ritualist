@@ -54,6 +54,7 @@ def test_home_card_fields_are_stable_for_qml_bridge():
         "description",
         "status",
         "last_run_status",
+        "last_run_message",
         "doctor_status",
         "accent",
         "image",
@@ -288,6 +289,7 @@ def test_installed_recipe_card_includes_cached_last_run_status(tmp_path):
                 "recipe_name": "History Recipe",
                 "status": "stopped",
                 "final_state": "failed",
+                "final_message": "Battle.net path is missing.",
             }
         ),
         encoding="utf-8",
@@ -301,6 +303,7 @@ def test_installed_recipe_card_includes_cached_last_run_status(tmp_path):
     card = cards[0]
 
     assert card.last_run_status is HomeLastRunStatus.FAILED
+    assert card.last_run_message == "Battle.net path is missing."
     assert card.status is HomeCardStatus.FAILED
 
 
@@ -612,12 +615,14 @@ def test_home_model_updates_card_from_runtime_event():
             "card_id": card.id,
             "status": "success",
             "last_run_status": "success",
+            "last_run_message": "Run completed",
             "description": "Finished without touching the GUI thread.",
         }
     )
 
     assert finished.status is HomeCardStatus.SUCCESS
     assert finished.last_run_status is HomeLastRunStatus.SUCCESS
+    assert finished.last_run_message == "Run completed"
     assert finished.description == "Finished without touching the GUI thread."
 
 

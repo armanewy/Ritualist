@@ -140,6 +140,18 @@ Window {
         return subtitle
     }
 
+    function detailLastRunText() {
+        var status = String(root.detailCard.last_run_status || "").trim()
+        var message = String(root.detailCard.last_run_message || "").trim()
+        if (!status || status === "none") {
+            return ""
+        }
+        if (message) {
+            return "Last run: " + status + " - " + message
+        }
+        return "Last run: " + status
+    }
+
     function refreshHomePayload() {
         var previousCardId = ""
         if (cardModel.count > 0 && selectedCard >= 0 && selectedCard < cardModel.count) {
@@ -846,6 +858,15 @@ Window {
                                         elide: Text.ElideRight
                                     }
 
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: (last_run_message || "") ? ("Last: " + last_run_status + " - " + last_run_message) : ""
+                                        visible: text !== ""
+                                        color: "#c0cad8"
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: cardSlot.waitActive ? 48 : 0
@@ -1146,7 +1167,7 @@ Window {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28
         width: Math.min(parent.width - 56, 760)
-        height: 168
+        height: 188
         radius: 8
         color: "#10151e"
         border.color: "#35506a"
@@ -1188,7 +1209,17 @@ Window {
                     color: "#d7e0eb"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 5
+                    maximumLineCount: 4
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.detailLastRunText()
+                    visible: text !== ""
+                    color: "#c0cad8"
+                    font.pixelSize: 12
+                    maximumLineCount: 1
                     elide: Text.ElideRight
                 }
             }

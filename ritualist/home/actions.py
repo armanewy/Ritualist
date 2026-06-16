@@ -273,6 +273,7 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             card_id=card_id,
             status=_home_status_for_run_state(state),
             last_run_status=_last_run_status_for_run_state(state),
+            last_run_message=str(getattr(event, "message", "") or ""),
             subtitle=f"Run {state}",
             description=str(getattr(event, "message", "") or ""),
             **_clear_wait_fields(),

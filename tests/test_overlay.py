@@ -282,6 +282,8 @@ def test_format_confirmation_request_includes_visual_target_context():
         action="desktop.click_text",
         step_name="Ask before clicking Play",
         recipe_name="Gaming Mode",
+        target_scope="desktop",
+        target_type="text",
         window_title="Battle.net",
         target_text="Play",
         control_type="Button",
@@ -293,8 +295,36 @@ def test_format_confirmation_request_includes_visual_target_context():
     assert "Recipe: Gaming Mode" in formatted
     assert "Step: Ask before clicking Play" in formatted
     assert "Window: Battle.net" in formatted
+    assert "Target scope: desktop" in formatted
+    assert "Target type: text" in formatted
     assert "Target: Play (Button)" in formatted
     assert "Safety:" not in formatted
+
+
+def test_format_confirmation_request_includes_browser_target_context():
+    request = ConfirmationRequest(
+        prompt="Run 'Confirm checkout' (browser.click_role)?",
+        action="browser.click_role",
+        step_name="Confirm checkout",
+        recipe_name="Browser Runbook",
+        target_scope="browser",
+        target_type="role",
+        browser_title="Checkout",
+        browser_url="https://shop.example.test/cart",
+        target_text="Confirm order",
+        target_role="button",
+        safety_message="Clicking browser target 'Confirm order' requires explicit confirmation.",
+    )
+
+    formatted = format_confirmation_request(request)
+
+    assert "Browser page: Checkout" in formatted
+    assert "Browser URL: https://shop.example.test/cart" in formatted
+    assert "Target scope: browser" in formatted
+    assert "Target type: role" in formatted
+    assert "Role: button" in formatted
+    assert "Target: Confirm order" in formatted
+    assert "Safety: Clicking browser target 'Confirm order' requires explicit confirmation." in formatted
 
 
 def test_format_confirmation_request_includes_control_without_target_text():

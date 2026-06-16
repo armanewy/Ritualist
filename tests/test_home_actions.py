@@ -181,6 +181,7 @@ def test_home_runtime_events_update_card_state():
     assert home_event.card_id == "gaming_mode"
     assert home_event.status is HomeCardStatus.SUCCESS
     assert home_event.last_run_status is HomeLastRunStatus.SUCCESS
+    assert home_event.last_run_message == "run completed"
 
 
 def test_home_runtime_heartbeat_maps_waiting_details():

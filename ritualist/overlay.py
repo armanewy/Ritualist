@@ -42,8 +42,14 @@ class ConfirmationRequest:
     action: str
     step_name: str
     recipe_name: str | None = None
+    target_scope: str | None = None
+    target_type: str | None = None
     window_title: str | None = None
+    browser_title: str | None = None
+    browser_url: str | None = None
     target_text: str | None = None
+    target_role: str | None = None
+    target_test_id: str | None = None
     control_type: str | None = None
     target_rect: ScreenRect | None = None
     safety_message: str | None = None
@@ -134,6 +140,18 @@ def format_confirmation_request(request: ConfirmationRequest | str) -> str:
     )
     if request.window_title:
         lines.append(f"Window: {request.window_title}")
+    if request.browser_title:
+        lines.append(f"Browser page: {request.browser_title}")
+    if request.browser_url:
+        lines.append(f"Browser URL: {request.browser_url}")
+    if request.target_scope:
+        lines.append(f"Target scope: {request.target_scope}")
+    if request.target_type:
+        lines.append(f"Target type: {request.target_type}")
+    if request.target_role:
+        lines.append(f"Role: {request.target_role}")
+    if request.target_test_id:
+        lines.append(f"Test id: {request.target_test_id}")
     if request.target_text:
         target = request.target_text
         if request.control_type:

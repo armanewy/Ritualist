@@ -97,6 +97,9 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "Number(categoryModel.get(nextCategory).count || 0) === 0" in qml
     assert "Recent activity" in qml
     assert "detailSubtitleText" in qml
+    assert "detailLastRunText" in qml
+    assert "last_run_message" in qml
+    assert "Last run:" in qml
     assert "statusDwellTimer" in qml
     assert "Math.max(100, root.minStatusDwellMs)" in qml
 

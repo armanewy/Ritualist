@@ -56,6 +56,7 @@ class HomeCard:
     description: str = ""
     status: HomeCardStatus = HomeCardStatus.READY
     last_run_status: HomeLastRunStatus = HomeLastRunStatus.NONE
+    last_run_message: str = ""
     doctor_status: HomeDoctorStatus = HomeDoctorStatus.NOT_CHECKED
     accent: str = "#3dd6a5"
     image: str = ""
@@ -78,6 +79,7 @@ class HomeRuntimeEvent:
     description: str | None = None
     status: HomeCardStatus | None = None
     last_run_status: HomeLastRunStatus | None = None
+    last_run_message: str | None = None
     doctor_status: HomeDoctorStatus | None = None
     accent: str | None = None
     image: str | None = None
@@ -348,6 +350,7 @@ class HomeRunHistoryCache:
     base_dir: Path | None = None
     process_checker: Any | None = None
     _last_status_by_recipe_id: dict[str, HomeLastRunStatus] = field(default_factory=dict)
+    _last_message_by_recipe_id: dict[str, str] = field(default_factory=dict)
     _last_summary_by_recipe_id: dict[str, Any] = field(default_factory=dict)
     _loaded: bool = False
 
@@ -360,14 +363,18 @@ class HomeRunHistoryCache:
             process_checker=self.process_checker,
         )
         latest: dict[str, HomeLastRunStatus] = {}
+        messages: dict[str, str] = {}
         summaries: dict[str, Any] = {}
         for record in list_recent_runs(limit=self.limit, base_dir=self.base_dir):
             recipe_id = _optional_string(record.metadata.get("recipe_id"))
             if not recipe_id or recipe_id in latest:
                 continue
             latest[recipe_id] = _last_run_status_from_metadata(record.metadata)
-            summaries[recipe_id] = summarize_run_record(record)
+            summary = summarize_run_record(record)
+            summaries[recipe_id] = summary
+            messages[recipe_id] = _last_run_message_from_record(record.metadata, summary)
         self._last_status_by_recipe_id = latest
+        self._last_message_by_recipe_id = messages
         self._last_summary_by_recipe_id = summaries
         self._loaded = True
 
@@ -380,6 +387,11 @@ class HomeRunHistoryCache:
         if not self._loaded:
             self.refresh()
         return self._last_summary_by_recipe_id.get(recipe_id)
+
+    def get_message(self, recipe_id: str) -> str:
+        if not self._loaded:
+            self.refresh()
+        return self._last_message_by_recipe_id.get(recipe_id, "")
 
 
 def create_installed_home_model(
@@ -412,7 +424,15 @@ def load_installed_home_cards(
     for path, recipe, _error in rows:
         if recipe is None:
             continue
-        cards.append(_recipe_home_card(recipe, history.get(str(recipe.id)), recipe_path=path))
+        recipe_id = str(recipe.id)
+        cards.append(
+            _recipe_home_card(
+                recipe,
+                history.get(recipe_id),
+                last_run_message=history.get_message(recipe_id),
+                recipe_path=path,
+            )
+        )
     return cards
 
 
@@ -424,6 +444,7 @@ def _runtime_event_from_mapping(event: Mapping[str, Any]) -> HomeRuntimeEvent:
         description=_optional_string(event.get("description")),
         status=_optional_enum(HomeCardStatus, event.get("status")),
         last_run_status=_optional_enum(HomeLastRunStatus, event.get("last_run_status")),
+        last_run_message=_optional_string(event.get("last_run_message")),
         doctor_status=_optional_enum(HomeDoctorStatus, event.get("doctor_status")),
         accent=_optional_string(event.get("accent")),
         image=_optional_string(event.get("image")),
@@ -440,6 +461,7 @@ def _recipe_home_card(
     recipe: Any,
     last_run_status: HomeLastRunStatus,
     *,
+    last_run_message: str = "",
     recipe_path: Path | None = None,
 ) -> HomeCard:
     recipe_id = str(recipe.id)
@@ -457,6 +479,7 @@ def _recipe_home_card(
         description=description,
         status=_card_status_from_last_run(last_run_status),
         last_run_status=last_run_status,
+        last_run_message=last_run_message,
         doctor_status=HomeDoctorStatus.NOT_CHECKED,
         accent=_display_string(getattr(card_metadata, "accent", None), fallback=DEFAULT_RECIPE_ACCENT),
         image=_recipe_thumbnail_url(getattr(card_metadata, "image", None), recipe_path=recipe_path),
@@ -548,6 +571,17 @@ def _last_run_status_from_metadata(metadata: Mapping[str, Any]) -> HomeLastRunSt
     if status in {"running", "waiting", "paused", "confirming", "stopping"}:
         return HomeLastRunStatus.RUNNING
     return HomeLastRunStatus.NONE
+
+
+def _last_run_message_from_record(metadata: Mapping[str, Any], summary: Any) -> str:
+    final_message = str(metadata.get("final_message") or "").strip()
+    if final_message:
+        return final_message
+    last_step = str(getattr(summary, "last_step", "") or "").strip()
+    if last_step:
+        return last_step
+    final_status = str(getattr(summary, "final_status", "") or "").strip()
+    return final_status
 
 
 def _card_status_from_last_run(last_run_status: HomeLastRunStatus) -> HomeCardStatus:

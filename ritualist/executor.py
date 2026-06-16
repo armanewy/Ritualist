@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .actions.base import (
     ActionOutcome,
@@ -968,17 +969,41 @@ class WorkflowExecutor:
         step: ExecutableStep,
         region: TargetRegion | None,
     ) -> ConfirmationRequest:
+        browser_context = self._browser_confirmation_context(step)
         return ConfirmationRequest(
             prompt=f"Run '{step.display_name}' ({step.action})?",
             action=step.action,
             step_name=step.display_name,
             recipe_name=recipe.name,
+            target_scope=_confirmation_target_scope(step),
+            target_type=_confirmation_target_type(step),
             window_title=_confirmation_window_title(step, region),
+            browser_title=browser_context.get("title"),
+            browser_url=browser_context.get("url"),
             target_text=_confirmation_target_text(step, region),
+            target_role=_confirmation_target_role(step),
+            target_test_id=_confirmation_target_test_id(step),
             control_type=region.control_type if region and region.control_type else getattr(step, "control_type", None),
             target_rect=region.rect if region else None,
             safety_message=_confirmation_safety_message(step),
         )
+
+    def _browser_confirmation_context(self, step: ExecutableStep) -> dict[str, str]:
+        if not _is_browser_click_step(step):
+            return {}
+        page_context = getattr(self.adapters.browser, "page_context", None)
+        if page_context is None:
+            return {}
+        try:
+            raw = page_context()
+        except Exception as exc:  # noqa: BLE001 - context must not break confirmation safety.
+            self.logger.debug("browser confirmation context unavailable: %s", exc)
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        title = str(raw.get("title") or "").strip()
+        url = _redact_url(str(raw.get("url") or "").strip())
+        return {key: value for key, value in {"title": title, "url": url}.items() if value}
 
 
 def _deny_confirmation(prompt: ConfirmationRequest | str) -> bool:
@@ -1255,6 +1280,34 @@ def _confirmation_window_title(step: ExecutableStep, region: TargetRegion | None
     return None
 
 
+def _confirmation_target_scope(step: ExecutableStep) -> str | None:
+    if isinstance(step, DesktopClickTextStep):
+        return "desktop"
+    if _is_browser_click_step(step):
+        return "browser"
+    if step.action.startswith("input."):
+        return "input"
+    if step.action.startswith("window."):
+        return "window"
+    return None
+
+
+def _confirmation_target_type(step: ExecutableStep) -> str | None:
+    if isinstance(step, DesktopClickTextStep):
+        return "text"
+    if isinstance(step, BrowserClickTextStep):
+        return "text"
+    if isinstance(step, BrowserClickRoleStep):
+        return "role"
+    if isinstance(step, BrowserClickTestIdStep):
+        return "test_id"
+    if step.action.startswith("window."):
+        return "window"
+    if step.action.startswith("input."):
+        return "keyboard"
+    return None
+
+
 def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None) -> str | None:
     if region and region.target_text:
         return region.target_text
@@ -1264,6 +1317,18 @@ def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None)
         return step.text
     if isinstance(step, BrowserClickRoleStep):
         return step.accessible_name
+    if isinstance(step, BrowserClickTestIdStep):
+        return step.test_id
+    return None
+
+
+def _confirmation_target_role(step: ExecutableStep) -> str | None:
+    if isinstance(step, BrowserClickRoleStep):
+        return step.role
+    return None
+
+
+def _confirmation_target_test_id(step: ExecutableStep) -> str | None:
     if isinstance(step, BrowserClickTestIdStep):
         return step.test_id
     return None
@@ -1299,8 +1364,14 @@ def _confirmation_metadata(
     request_fields = (
         ("step_name", getattr(prompt, "step_name", None)),
         ("recipe_name", getattr(prompt, "recipe_name", None)),
+        ("target_scope", getattr(prompt, "target_scope", None)),
+        ("target_type", getattr(prompt, "target_type", None)),
         ("window_title", getattr(prompt, "window_title", None)),
+        ("browser_title", getattr(prompt, "browser_title", None)),
+        ("browser_url", getattr(prompt, "browser_url", None)),
         ("target_text", getattr(prompt, "target_text", None)),
+        ("target_role", getattr(prompt, "target_role", None)),
+        ("target_test_id", getattr(prompt, "target_test_id", None)),
         ("control_type", getattr(prompt, "control_type", None)),
     )
     for key, value in request_fields:
@@ -1351,6 +1422,10 @@ def _browser_click_target(step: ExecutableStep) -> str | None:
     return None
 
 
+def _is_browser_click_step(step: ExecutableStep) -> bool:
+    return isinstance(step, (BrowserClickTextStep, BrowserClickRoleStep, BrowserClickTestIdStep))
+
+
 def _browser_element_label(step: ExecutableStep) -> str:
     text = getattr(step, "text", None)
     if text:
@@ -1359,3 +1434,32 @@ def _browser_element_label(step: ExecutableStep) -> str:
     if role:
         return f"role {role} named {getattr(step, 'accessible_name', '')}"
     return f"test id {getattr(step, 'test_id', '')}"
+
+
+def _redact_url(raw_url: str) -> str:
+    if not raw_url:
+        return ""
+    try:
+        parts = urlsplit(raw_url)
+    except ValueError:
+        return "[unavailable]"
+    if not parts.scheme or not parts.netloc:
+        return raw_url.split("?", 1)[0].split("#", 1)[0]
+    try:
+        port = parts.port
+    except ValueError:
+        return "[unavailable]"
+    hostname = parts.hostname
+    if not hostname:
+        return "[unavailable]"
+    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
+    netloc = f"{host}:{port}" if port is not None else host
+    return urlunsplit((parts.scheme, netloc, _safe_url_path(parts.path), "", ""))
+
+
+def _safe_url_path(path: str) -> str:
+    lowered = path.casefold()
+    sensitive_markers = ("token", "secret", "password", "passwd", "credential", "session")
+    if any(marker in lowered for marker in sensitive_markers):
+        return "/[redacted]"
+    return path

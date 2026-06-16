@@ -95,6 +95,14 @@ class FakeBrowserAdapter(RecordingAdapter):
     def click_test_id(self, **kwargs: Any) -> None:
         self.record("click_test_id", **kwargs)
 
+    def page_context(self) -> dict[str, str]:
+        self.record("page_context")
+        value = self.response(
+            "page_context",
+            {"title": "Example Page", "url": "https://example.test/current"},
+        )
+        return dict(value) if isinstance(value, dict) else {}
+
 
 class FakeWindowAdapter(RecordingAdapter):
     def foreground_window_title(self) -> str:

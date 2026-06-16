@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from ritualist.errors import DependencyMissingError, RitualistError
 from ritualist.models import SAFE_ID_PATTERN
@@ -159,6 +160,17 @@ class PlaywrightBrowserAdapter:
         locator.wait_for(state="visible", timeout=timeout_seconds * 1000)
         locator.click(timeout=timeout_seconds * 1000)
 
+    def page_context(self) -> dict[str, str]:
+        if self._page is None:
+            return {}
+        title = str(self._page.title() or "")
+        url = _redact_url(str(getattr(self._page, "url", "") or ""))
+        return {
+            key: value
+            for key, value in {"title": title, "url": url}.items()
+            if value
+        }
+
     def close(self) -> None:
         if self._context is not None:
             self._context.close()
@@ -263,4 +275,33 @@ def _locator_visible(locator: Any, *, timeout_seconds: float) -> bool:
 def _profile_dir(*, browser: str, profile: str) -> Path:
     path = browser_profiles_dir() / browser / profile
     path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _redact_url(raw_url: str) -> str:
+    if not raw_url:
+        return ""
+    try:
+        parts = urlsplit(raw_url)
+    except ValueError:
+        return "[unavailable]"
+    if not parts.scheme or not parts.netloc:
+        return raw_url.split("?", 1)[0].split("#", 1)[0]
+    try:
+        port = parts.port
+    except ValueError:
+        return "[unavailable]"
+    hostname = parts.hostname
+    if not hostname:
+        return "[unavailable]"
+    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
+    netloc = f"{host}:{port}" if port is not None else host
+    return urlunsplit((parts.scheme, netloc, _safe_path(parts.path), "", ""))
+
+
+def _safe_path(path: str) -> str:
+    lowered = path.casefold()
+    sensitive_markers = ("token", "secret", "password", "passwd", "credential", "session")
+    if any(marker in lowered for marker in sensitive_markers):
+        return "/[redacted]"
     return path

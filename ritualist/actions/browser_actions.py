@@ -367,8 +367,6 @@ def _cooperate(context: ActionContext) -> None:
         context.heartbeat()
     if context.runtime_control is not None:
         context.runtime_control.heartbeat()
-    if context.heartbeat is not None:
-        context.heartbeat()
 
 
 def _element_target(step: BrowserElementVisibleStep) -> str:

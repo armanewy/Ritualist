@@ -4,8 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ritualist.home.confirmation import placement_for_dialog
-from ritualist.overlay import ScreenRect
+from ritualist.home.confirmation import _proceed_label, placement_for_dialog
+from ritualist.overlay import ConfirmationRequest, ScreenRect
 
 
 def test_confirmation_dialog_places_near_target_when_room_exists():
@@ -73,3 +73,30 @@ if loaded:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_native_home_confirmation_presenter_uses_top_level_always_on_top_dialog():
+    source = (
+        Path(__file__).resolve().parents[1] / "ritualist" / "home" / "confirmation.py"
+    ).read_text(encoding="utf-8")
+
+    assert "dialog = QDialog()" in source
+    assert "dialog.setModal(False)" in source
+    assert "WindowStaysOnTopHint" in source
+    assert "WindowType.Window" in source
+    assert "_place_dialog(dialog, request" in source
+    assert "Skip if supported" in source
+    assert "Cancel Ritual" in source
+
+
+def test_home_confirmation_proceed_label_uses_browser_target_metadata():
+    request = ConfirmationRequest(
+        prompt="Run step?",
+        action="browser.click_test_id",
+        step_name="Click test id",
+        target_scope="browser",
+        target_type="test_id",
+        target_test_id="confirm-order",
+    )
+
+    assert _proceed_label(request) == "Click target"

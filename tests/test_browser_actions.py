@@ -189,6 +189,10 @@ def test_declined_risky_browser_click_stops_before_clicking():
         }
     )
     fakes = FakeAdapters()
+    fakes.browser.responses["page_context"] = {
+        "title": "Checkout",
+        "url": "https://user:pass@shop.example.test:8443/reset/password-token?token=secret#payment",
+    }
 
     summary = WorkflowExecutor(
         adapters=fakes.bundle(),
@@ -198,10 +202,48 @@ def test_declined_risky_browser_click_stops_before_clicking():
 
     assert not summary.success
     assert summary.results[-1].status == "cancelled"
-    assert [call[0] for call in fakes.browser.calls] == ["open_url", "close"]
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "page_context", "close"]
     assert requested[0].action == "browser.click_text"
+    assert requested[0].target_scope == "browser"
+    assert requested[0].target_type == "text"
     assert requested[0].target_text == "Buy now"
+    assert requested[0].browser_title == "Checkout"
+    assert requested[0].browser_url == "https://shop.example.test:8443/[redacted]"
+    assert "token" not in requested[0].browser_url
+    assert "password" not in requested[0].browser_url
+    assert "user" not in requested[0].browser_url
+    assert "pass" not in requested[0].browser_url
     assert "requires explicit confirmation" in (requested[0].safety_message or "")
+
+
+def test_risky_browser_role_confirmation_includes_role_metadata():
+    requested: list[ConfirmationRequest] = []
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_click",
+            "name": "Browser Click",
+            "steps": [
+                {
+                    "action": "browser.click_role",
+                    "role": "button",
+                    "accessible_name": "Confirm order",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        config=AppConfig(),
+        confirmer=lambda prompt: requested.append(prompt) or False,
+    ).run(recipe)
+
+    assert not summary.success
+    assert requested[0].target_scope == "browser"
+    assert requested[0].target_type == "role"
+    assert requested[0].target_role == "button"
+    assert requested[0].target_text == "Confirm order"
 
 
 def test_browser_click_dry_run_does_not_click():
@@ -310,6 +352,28 @@ def test_pause_resume_during_browser_wait_is_cooperative():
     assert pause_started.is_set()
     assert control.is_paused() is False
     assert heartbeats >= 2
+
+
+def test_browser_wait_heartbeat_is_not_duplicated_per_poll_cycle(monkeypatch):
+    fakes = FakeAdapters()
+    fakes.browser.responses["text_visible"] = False
+    heartbeats = 0
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+
+    context = _context(fakes, control=RuntimeControl(), heartbeat=heartbeat)
+    ticks = iter([0.0, 1.0])
+    monkeypatch.setattr("ritualist.actions.browser_actions.time.monotonic", lambda: next(ticks))
+    step = BrowserWaitTextStep.model_validate(
+        {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 1}
+    )
+
+    with pytest.raises(Exception, match="timed out"):
+        BrowserWaitTextHandler().run(step, context)
+
+    assert heartbeats == 1
 
 
 def _context(
