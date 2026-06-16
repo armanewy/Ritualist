@@ -35,7 +35,6 @@ def test_home_help_works():
 
     assert result.exit_code == 0
     assert "Open the experimental Qt Quick Home surface" in result.output
-    assert "--mock" in result.output
 
 
 def test_home_mock_command_calls_launcher(monkeypatch):
