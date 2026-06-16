@@ -20,8 +20,10 @@ from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
 from .models import (
+    Condition,
     DesktopClickTextStep,
     ExecutableStep,
+    FlowIfStep,
     Recipe,
     WindowMatchMixin,
     WindowTitleScopeMixin,
@@ -35,6 +37,7 @@ from .overlay import (
     OverlayController,
     TargetRegion,
 )
+from .predicates import PredicateResult, evaluate_condition
 from .runtime_control import RuntimeControl, RuntimeStoppedError
 from .runtime_models import (
     ConfirmationRequested,
@@ -121,7 +124,7 @@ class WorkflowExecutor:
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
         execution_plan = _execution_plan(recipe)
-        total = len(execution_plan)
+        total = _count_plan_steps(execution_plan, include_all_branches=self.dry_run)
         self._browser_keep_open_active = False
         self._browser_used = False
         self._paused_step_index = None
@@ -139,48 +142,189 @@ class WorkflowExecutor:
             runtime_control=self.runtime_control,
         )
 
-        for index, (phase, step) in enumerate(execution_plan, start=1):
-            self._heartbeat(index, step.display_name, step_state=StepState.PENDING)
-            try:
-                self._checkpoint_control()
-            except RuntimeStoppedError as exc:
-                self._change_run_state(RunState.STOPPING, message=str(exc))
-                result = StepResult(
-                    index=index,
-                    step_name=step.display_name,
-                    action=step.action,
-                    status="cancelled",
-                    message="run stopped by user before step",
-                    started_at=_now(),
-                    ended_at=_now(),
-                    phase=phase,
-                    optional=step.optional,
-                    dry_run=self.dry_run,
-                )
-                results.append(result)
-                if self.run_logger is not None:
-                    self.run_logger.write_step(result)
-                self._emit_step_finished(result, step)
-                self._emit(index, total, step, "cancelled", result.message)
-                break
-            started_at = _now()
-            self._start_step(index, phase, step)
-            self._emit(index, total, step, "running", step_started_at=started_at)
-            status = "success"
-            message = ""
-            result_metadata: dict[str, Any] = {}
-            dry_run_step = False
+        self._run_plan(
+            execution_plan,
+            context=context,
+            recipe=recipe,
+            results=results,
+            total=total,
+        )
 
+        summary = RunSummary(
+            recipe_id=recipe.id,
+            recipe_name=recipe.name,
+            results=results,
+            run_dir=getattr(self.run_logger, "run_dir", None),
+        )
+        final_state = _final_run_state(
+            summary,
+            steps_total=len(results),
+            stop_requested=self.runtime_control.is_stopping(),
+        )
+        self._change_run_state(final_state, message=_run_finished_message(final_state))
+        if self.run_logger is not None:
+            self._finish_run_logger(summary=summary, final_state=final_state)
+        self._emit_run_finished(summary, final_state)
+        self._cleanup_browser_adapter()
+        if self.strict and not summary.success:
+            raise ExecutionStoppedError("workflow stopped before completion", results)
+        return summary
+
+    def _run_plan(
+        self,
+        plan: list[tuple[str, ExecutableStep]],
+        *,
+        context: ActionContext,
+        recipe: Recipe,
+        results: list[StepResult],
+        total: int,
+    ) -> bool:
+        for phase, step in plan:
+            index = len(results) + 1
+            result, branch_steps, timeout_steps = self._run_single_step(
+                index,
+                total,
+                phase,
+                step,
+                context=context,
+                recipe=recipe,
+            )
+            results.append(result)
+            if self.run_logger is not None:
+                self.run_logger.write_step(result)
+            self._emit_step_finished(result, step)
+            self._emit(index, total, step, result.status, result.message, step_started_at=result.started_at)
+
+            if branch_steps and result.status in {"success", "dry-run"}:
+                branch_phase = _flow_branch_phase(phase, result.metadata)
+                if not self._run_plan(
+                    [(branch_phase, branch_step) for branch_step in branch_steps],
+                    context=context,
+                    recipe=recipe,
+                    results=results,
+                    total=total,
+                ):
+                    return False
+
+            dry_run_timeout_path = self.dry_run and result.status == "dry-run"
+            if timeout_steps and (result.status in {"failed", "skipped"} or dry_run_timeout_path):
+                if not self._run_plan(
+                    [(f"{phase}:on_timeout", timeout_step) for timeout_step in timeout_steps],
+                    context=context,
+                    recipe=recipe,
+                    results=results,
+                    total=total,
+                ):
+                    return False
+
+            if result.status in {"failed", "cancelled"}:
+                return False
+        return True
+
+    def _run_single_step(
+        self,
+        index: int,
+        total: int,
+        phase: str,
+        step: ExecutableStep,
+        *,
+        context: ActionContext,
+        recipe: Recipe,
+    ) -> tuple[StepResult, list[ExecutableStep], list[ExecutableStep]]:
+        self._heartbeat(index, step.display_name, step_state=StepState.PENDING)
+        try:
+            self._checkpoint_control()
+        except RuntimeStoppedError as exc:
+            self._change_run_state(RunState.STOPPING, message=str(exc))
+            result = StepResult(
+                index=index,
+                step_name=step.display_name,
+                action=step.action,
+                status="cancelled",
+                message="run stopped by user before step",
+                started_at=_now(),
+                ended_at=_now(),
+                phase=phase,
+                optional=step.optional,
+                dry_run=self.dry_run,
+            )
+            return result, [], []
+
+        started_at = _now()
+        self._start_step(index, phase, step)
+        self._emit(index, total, step, "running", step_started_at=started_at)
+        context.heartbeat = (
+            lambda step_id=index, step_name=step.display_name, active_step=step: self._heartbeat(
+                step_id,
+                step_name,
+                run_state=_active_run_state_for_step(active_step),
+                step_state=_active_step_state_for_step(active_step),
+                step=active_step,
+                step_started_at=started_at,
+            )
+        )
+
+        status = "success"
+        message = ""
+        result_metadata: dict[str, Any] = {}
+        dry_run_step = False
+        branch_steps: list[ExecutableStep] = []
+        timeout_steps: list[ExecutableStep] = []
+
+        try:
+            condition = getattr(step, "when", None)
             if self.dry_run:
-                status = "dry-run"
-                message = _dry_run_message(step)
+                if condition is not None:
+                    result_metadata["condition"] = {
+                        "evaluated": False,
+                        "message": "condition is not evaluated during dry-run",
+                    }
                 dry_run_step = True
+                if isinstance(step, FlowIfStep):
+                    result_metadata["branch"] = "all"
+                    branch_steps = [*step.then, *step.else_]
+                    message = "would evaluate condition and dry-run possible branches"
+                else:
+                    message = _dry_run_message(step)
+                    if _is_wait_step(step):
+                        timeout_steps = list(getattr(step, "on_timeout", []) or [])
+                status = "dry-run"
                 self.logger.info("dry-run step %s/%s: %s", index, total, step.display_name)
                 self._emit_log_message(
                     "info",
                     f"dry-run step {index}/{total}: {step.display_name}",
                     step_index=index,
                 )
+            elif condition is not None:
+                condition_result = evaluate_condition(condition, context)
+                result_metadata["condition"] = condition_result.to_metadata()
+                if _condition_uses_browser(condition):
+                    self._browser_used = True
+                if not condition_result.matched:
+                    status = "skipped"
+                    message = f"condition not matched: {condition_result.message}"
+                    return (
+                        self._step_result(
+                            index,
+                            phase,
+                            step,
+                            status=status,
+                            message=message,
+                            started_at=started_at,
+                            dry_run=dry_run_step,
+                            metadata=result_metadata,
+                        ),
+                        [],
+                        [],
+                    )
+
+            if self.dry_run:
+                pass
+            elif isinstance(step, FlowIfStep):
+                flow_result, branch_steps = self._evaluate_flow_if(step, context)
+                result_metadata["condition"] = flow_result.to_metadata()
+                result_metadata["branch"] = "then" if flow_result.matched else "else"
+                message = f"condition {'matched' if flow_result.matched else 'did not match'}; running {result_metadata['branch']} branch"
             else:
                 wait_overlay = None
                 try:
@@ -204,16 +348,6 @@ class WorkflowExecutor:
                     handler = self.registry.get(step.action)
                     if _uses_browser_adapter(step):
                         self._browser_used = True
-                    context.heartbeat = (
-                        lambda step_id=index, step_name=step.display_name, active_step=step: self._heartbeat(
-                            step_id,
-                            step_name,
-                            run_state=_active_run_state_for_step(active_step),
-                            step_state=_active_step_state_for_step(active_step),
-                            step=active_step,
-                            step_started_at=started_at,
-                        )
-                    )
                     if _is_wait_step(step):
                         self._enter_waiting_step(index, phase, step, started_at=started_at)
                     self.logger.info("starting step %s/%s: %s", index, total, step.display_name)
@@ -223,7 +357,8 @@ class WorkflowExecutor:
                         step_index=index,
                     )
                     outcome = handler.run(step, context)
-                    message, result_metadata = _normalize_action_outcome(outcome)
+                    message, action_metadata = _normalize_action_outcome(outcome)
+                    result_metadata.update(action_metadata)
                     if _step_requests_keep_open(step):
                         self._browser_keep_open_active = True
                     self._checkpoint_control()
@@ -233,78 +368,89 @@ class WorkflowExecutor:
                         f"finished step {index}/{total}: {step.display_name}",
                         step_index=index,
                     )
-                except RuntimeStoppedError as exc:
-                    status = "cancelled"
-                    message = str(exc)
-                    self._change_run_state(RunState.STOPPING, message=message)
-                except UserCancelledError as exc:
-                    status = "cancelled"
-                    message = str(exc)
-                except Exception as exc:  # noqa: BLE001 - convert adapter failures to run results.
-                    if step.optional:
-                        status = "skipped"
-                        message = f"optional step failed: {exc}"
-                        self.logger.warning(message)
-                        self._emit_log_message(
-                            "warning",
-                            f"optional step failed: {step.display_name}",
-                            step_index=index,
-                        )
-                    else:
-                        status = "failed"
-                        message = str(exc)
-                        self.logger.exception("step failed: %s", step.display_name)
-                        self._emit_log_message(
-                            "error",
-                            f"step failed: {step.display_name}",
-                            step_index=index,
-                        )
                 finally:
                     if wait_overlay is not None:
                         wait_overlay.close()
                     self._clear_transient_step_metadata()
+        except RuntimeStoppedError as exc:
+            status = "cancelled"
+            message = str(exc)
+            self._change_run_state(RunState.STOPPING, message=message)
+        except UserCancelledError as exc:
+            status = "cancelled"
+            message = str(exc)
+        except Exception as exc:  # noqa: BLE001 - convert adapter failures to run results.
+            if step.optional:
+                status = "skipped"
+                message = f"optional step failed: {exc}"
+                self.logger.warning(message)
+                self._emit_log_message(
+                    "warning",
+                    f"optional step failed: {step.display_name}",
+                    step_index=index,
+                )
+            else:
+                status = "failed"
+                message = str(exc)
+                self.logger.exception("step failed: %s", step.display_name)
+                self._emit_log_message(
+                    "error",
+                    f"step failed: {step.display_name}",
+                    step_index=index,
+                )
+            if _is_timeout_failure(step, message):
+                timeout_steps = list(getattr(step, "on_timeout", []) or [])
 
-            result = StepResult(
-                index=index,
-                step_name=step.display_name,
-                action=step.action,
+        return (
+            self._step_result(
+                index,
+                phase,
+                step,
                 status=status,
                 message=message,
                 started_at=started_at,
-                ended_at=_now(),
-                phase=phase,
-                optional=step.optional,
                 dry_run=dry_run_step,
                 metadata=result_metadata,
-            )
-            results.append(result)
-            if self.run_logger is not None:
-                self.run_logger.write_step(result)
-            self._emit_step_finished(result, step)
-            self._emit(index, total, step, status, message, step_started_at=started_at)
-
-            if status in {"failed", "cancelled"}:
-                break
-
-        summary = RunSummary(
-            recipe_id=recipe.id,
-            recipe_name=recipe.name,
-            results=results,
-            run_dir=getattr(self.run_logger, "run_dir", None),
+            ),
+            branch_steps,
+            timeout_steps,
         )
-        final_state = _final_run_state(
-            summary,
-            steps_total=total,
-            stop_requested=self.runtime_control.is_stopping(),
+
+    def _step_result(
+        self,
+        index: int,
+        phase: str,
+        step: ExecutableStep,
+        *,
+        status: str,
+        message: str,
+        started_at: datetime,
+        dry_run: bool,
+        metadata: dict[str, Any],
+    ) -> StepResult:
+        return StepResult(
+            index=index,
+            step_name=step.display_name,
+            action=step.action,
+            status=status,
+            message=message,
+            started_at=started_at,
+            ended_at=_now(),
+            phase=phase,
+            optional=step.optional,
+            dry_run=dry_run,
+            metadata=metadata,
         )
-        self._change_run_state(final_state, message=_run_finished_message(final_state))
-        if self.run_logger is not None:
-            self._finish_run_logger(summary=summary, final_state=final_state)
-        self._emit_run_finished(summary, final_state)
-        self._cleanup_browser_adapter()
-        if self.strict and not summary.success:
-            raise ExecutionStoppedError("workflow stopped before completion", results)
-        return summary
+
+    def _evaluate_flow_if(
+        self,
+        step: FlowIfStep,
+        context: ActionContext,
+    ) -> tuple[PredicateResult, list[ExecutableStep]]:
+        result = evaluate_condition(step.condition, context)
+        if _condition_uses_browser(step.condition):
+            self._browser_used = True
+        return result, list(step.then if result.matched else step.else_)
 
     def _emit(
         self,
@@ -841,6 +987,57 @@ def _execution_plan(recipe: Recipe) -> list[tuple[str, ExecutableStep]]:
         *[("steps", step) for step in recipe.steps],
         *[("verify", step) for step in recipe.verify],
     ]
+
+
+def _count_plan_steps(
+    plan: list[tuple[str, ExecutableStep]],
+    *,
+    include_all_branches: bool = False,
+) -> int:
+    return sum(_count_step(step, include_all_branches=include_all_branches) for _phase, step in plan)
+
+
+def _count_step(step: ExecutableStep, *, include_all_branches: bool = False) -> int:
+    count = 1
+    if isinstance(step, FlowIfStep):
+        then_count = sum(
+            _count_step(child, include_all_branches=include_all_branches)
+            for child in step.then
+        )
+        else_count = sum(
+            _count_step(child, include_all_branches=include_all_branches)
+            for child in step.else_
+        )
+        count += then_count + else_count if include_all_branches else max(then_count, else_count)
+    timeout_steps = getattr(step, "on_timeout", None) or []
+    count += sum(
+        _count_step(child, include_all_branches=include_all_branches)
+        for child in timeout_steps
+    )
+    return count
+
+
+def _flow_branch_phase(phase: str, metadata: dict[str, Any]) -> str:
+    branch = metadata.get("branch")
+    if branch in {"then", "else"}:
+        return f"{phase}:{branch}"
+    return phase
+
+
+def _is_timeout_failure(step: ExecutableStep, message: str) -> bool:
+    return _is_wait_step(step) and "timed out" in message.casefold()
+
+
+def _condition_uses_browser(condition: Condition) -> bool:
+    if condition.type == "browser.text_visible":
+        return True
+    if condition.all is not None:
+        return any(_condition_uses_browser(child) for child in condition.all)
+    if condition.any is not None:
+        return any(_condition_uses_browser(child) for child in condition.any)
+    if condition.not_ is not None:
+        return _condition_uses_browser(condition.not_)
+    return False
 
 
 def _now() -> datetime:

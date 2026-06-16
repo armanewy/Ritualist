@@ -9,7 +9,7 @@ from typing import Any
 from .actions.metadata import ActionMetadata
 from .actions.registry import ActionRegistry, create_default_registry
 from .adapters.shell import resolve_local_command_path
-from .models import Recipe
+from .models import Condition, FlowIfStep, Recipe
 from .paths import browser_profiles_dir
 
 
@@ -338,7 +338,39 @@ def _required_capabilities(
             capabilities.update(registry.metadata(action_type).required_capabilities)
         except KeyError:
             continue
+    for step in recipe.execution_steps:
+        capabilities.update(_step_condition_capabilities(step))
     return sorted(capabilities)
+
+
+def _step_condition_capabilities(step: Any) -> set[str]:
+    capabilities: set[str] = set()
+    when = getattr(step, "when", None)
+    if when is not None:
+        capabilities.update(_condition_capabilities(when))
+    if isinstance(step, FlowIfStep):
+        capabilities.update(_condition_capabilities(step.condition))
+    return capabilities
+
+
+def _condition_capabilities(condition: Condition) -> set[str]:
+    if condition.all is not None:
+        return set().union(*(_condition_capabilities(child) for child in condition.all))
+    if condition.any is not None:
+        return set().union(*(_condition_capabilities(child) for child in condition.any))
+    if condition.not_ is not None:
+        return _condition_capabilities(condition.not_)
+    if condition.type in {"file.exists", "path.exists"}:
+        return {"file_read"}
+    if condition.type == "process.running":
+        return {"process_inspection"}
+    if condition.type == "window.exists":
+        return {"windows_uia", "window_management"}
+    if condition.type == "window.text_visible":
+        return {"windows_uia"}
+    if condition.type == "browser.text_visible":
+        return {"playwright", "browser_control"}
+    return set()
 
 
 def _check_capability(capability: str) -> DoctorCheck:
@@ -508,7 +540,7 @@ def _module_available(module: str) -> bool:
 
 def _check_browser_profiles(recipe: Recipe) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
-    for step in recipe.steps:
+    for step in recipe.execution_steps:
         if step.action != "browser.open":
             continue
         path = browser_profiles_dir() / step.browser / step.profile
@@ -547,7 +579,7 @@ def _nearest_existing_parent(path) -> Any:
 
 def _check_app_launch_paths(recipe: Recipe) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
-    for step in recipe.steps:
+    for step in recipe.execution_steps:
         if step.action != "app.launch":
             continue
         path = resolve_local_command_path(step.command)

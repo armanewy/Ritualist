@@ -133,3 +133,55 @@ def test_recipe_id_must_be_safe(tmp_path):
 
     with pytest.raises(RecipeValidationError, match="safe filename-like"):
         load_recipe(path)
+
+
+def test_nested_flow_clicking_play_still_requires_confirmation(tmp_path):
+    path = tmp_path / "unsafe_nested.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: unsafe_nested
+            name: Unsafe Nested
+            steps:
+              - action: flow.if
+                condition:
+                  type: window.text_visible
+                  window_title_contains: Battle.net
+                  text: Play
+                then:
+                  - action: desktop.click_text
+                    text: Play
+                    window_title_contains: Battle.net
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError, match="requires_confirmation"):
+        load_recipe(path)
+
+
+def test_wait_on_timeout_clicking_play_still_requires_confirmation(tmp_path):
+    path = tmp_path / "unsafe_timeout.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: unsafe_timeout
+            name: Unsafe Timeout
+            steps:
+              - action: wait.for_file
+                path: missing.txt
+                timeout_seconds: 1
+                on_timeout:
+                  - action: desktop.click_text
+                    text: Play
+                    window_title_contains: Battle.net
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError, match="requires_confirmation"):
+        load_recipe(path)

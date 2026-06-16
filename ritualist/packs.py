@@ -394,11 +394,19 @@ def build_pack_manifest(
     registry = registry or create_default_registry()
     actions = _unique_preserving_order(_collect_recipe_actions(raw_recipe))
     capabilities = _unique_preserving_order(
-        capability
-        for action in actions
-        for capability in registry.metadata(action).required_capabilities
+        [
+            *(
+                capability
+                for action in actions
+                for capability in registry.metadata(action).required_capabilities
+            ),
+            *_collect_condition_capabilities(raw_recipe),
+        ]
     )
-    supported_os = _supported_os_for_actions(actions, registry)
+    supported_os = _supported_os_for_capabilities(
+        _supported_os_for_actions(actions, registry),
+        capabilities,
+    )
     variables = _manifest_variable_declarations(raw_recipe, missing_variables)
     variables.update(extra_variable_declarations or {})
     return PackManifest(
@@ -778,15 +786,86 @@ def _collect_recipe_actions(raw: Mapping[str, Any]) -> list[str]:
             continue
         if not isinstance(steps, list):
             continue
-        for index, step in enumerate(steps):
-            if not isinstance(step, Mapping):
-                continue
-            action = step.get("action")
-            if action is None:
-                continue
+        actions.extend(_collect_step_actions(steps, path=section))
+    return actions
+
+
+def _collect_condition_capabilities(raw: Mapping[str, Any]) -> list[str]:
+    capabilities: list[str] = []
+    for section in ("preflight", "steps", "verify"):
+        steps = raw.get(section, [])
+        if not isinstance(steps, list):
+            continue
+        capabilities.extend(_collect_step_condition_capabilities(steps))
+    return _unique_preserving_order(capabilities)
+
+
+def _collect_step_condition_capabilities(steps: list[Any]) -> list[str]:
+    capabilities: list[str] = []
+    for step in steps:
+        if not isinstance(step, Mapping):
+            continue
+        when = step.get("when")
+        if isinstance(when, Mapping):
+            capabilities.extend(_condition_capabilities(when))
+        condition = step.get("condition")
+        if isinstance(condition, Mapping):
+            capabilities.extend(_condition_capabilities(condition))
+        for child_key in ("then", "else", "on_timeout"):
+            children = step.get(child_key)
+            if isinstance(children, list):
+                capabilities.extend(_collect_step_condition_capabilities(children))
+    return capabilities
+
+
+def _condition_capabilities(condition: Mapping[str, Any]) -> list[str]:
+    if isinstance(condition.get("all"), list):
+        return [
+            capability
+            for child in condition["all"]
+            if isinstance(child, Mapping)
+            for capability in _condition_capabilities(child)
+        ]
+    if isinstance(condition.get("any"), list):
+        return [
+            capability
+            for child in condition["any"]
+            if isinstance(child, Mapping)
+            for capability in _condition_capabilities(child)
+        ]
+    if isinstance(condition.get("not"), Mapping):
+        return _condition_capabilities(condition["not"])
+    predicate_type = condition.get("type")
+    if predicate_type in {"file.exists", "path.exists"}:
+        return ["file_read"]
+    if predicate_type == "process.running":
+        return ["process_inspection"]
+    if predicate_type == "window.exists":
+        return ["windows_uia", "window_management"]
+    if predicate_type == "window.text_visible":
+        return ["windows_uia"]
+    if predicate_type == "browser.text_visible":
+        return ["playwright", "browser_control"]
+    return []
+
+
+def _collect_step_actions(steps: list[Any], *, path: str) -> list[str]:
+    actions: list[str] = []
+    for index, step in enumerate(steps):
+        if not isinstance(step, Mapping):
+            continue
+        action = step.get("action")
+        if action is not None:
             if not isinstance(action, str):
-                raise PackValidationError(f"{section}[{index}].action must be a string")
+                raise PackValidationError(f"{path}[{index}].action must be a string")
             actions.append(action)
+        for child_key in ("then", "else", "on_timeout"):
+            children = step.get(child_key)
+            if children is None:
+                continue
+            if not isinstance(children, list):
+                continue
+            actions.extend(_collect_step_actions(children, path=f"{path}[{index}].{child_key}"))
     return actions
 
 
@@ -1057,6 +1136,19 @@ def _supported_os_for_actions(actions: list[str], registry: ActionRegistry) -> l
     for action in actions[1:]:
         supported &= set(registry.metadata(action).supported_platforms)
     return sorted(supported) if supported else sorted(ALLOWED_PLATFORMS)
+
+
+def _supported_os_for_capabilities(supported_os: list[str], capabilities: list[str]) -> list[str]:
+    windows_only = {
+        "windows_uia",
+        "window_management",
+        "keyboard_input",
+        "registry_read",
+        "registry_write",
+    }
+    if not windows_only.intersection(capabilities):
+        return supported_os
+    return ["windows"] if "windows" in supported_os else supported_os
 
 
 def _unique_preserving_order(values) -> list[str]:

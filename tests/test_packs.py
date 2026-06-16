@@ -329,6 +329,62 @@ def test_gaming_mode_sample_exports_and_validates_as_pack(tmp_path):
     assert pack.recipe.id == "gaming_mode"
 
 
+def test_pack_export_includes_nested_flow_actions_and_condition_capabilities(tmp_path):
+    recipe_path = tmp_path / "flow.yaml"
+    recipe_path.write_text(
+        """
+version: "0.1"
+id: flow_demo
+name: Flow Demo
+steps:
+  - action: flow.if
+    condition:
+      type: window.text_visible
+      window_title_contains: Battle.net
+      text: Play
+    then:
+      - action: notify.toast
+        title: Ready
+        message: Play is visible.
+    else:
+      - action: wait.for_file
+        path: marker.txt
+""".lstrip(),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "flow.ritualistpack"
+
+    pack = validate_pack(export_recipe_pack(recipe_path, out_path).output_path)
+
+    assert pack.manifest.required_actions == ["flow.if", "notify.toast", "wait.for_file"]
+    assert "windows_uia" in pack.manifest.required_capabilities
+    assert "file_read" in pack.manifest.required_capabilities
+    assert pack.manifest.supported_os == ["windows"]
+
+
+def test_validate_pack_rejects_nested_coordinate_click_actions(tmp_path):
+    manifest = _manifest(
+        required_actions=["flow.if", "desktop.click_coordinates"],
+        required_capabilities=[],
+    )
+    recipe = {
+        "version": "0.1",
+        "id": "demo_recipe",
+        "name": "Demo",
+        "steps": [
+            {
+                "action": "flow.if",
+                "condition": {"type": "path.exists", "path": "marker.txt"},
+                "then": [{"action": "desktop.click_coordinates", "x": 1, "y": 2}],
+            }
+        ],
+    }
+    pack_path = _write_pack(tmp_path, manifest=manifest, recipe=recipe)
+
+    with pytest.raises(PackValidationError, match="coordinate click actions"):
+        validate_pack(pack_path)
+
+
 def test_pack_import_quarantines_disabled_and_enable_copies_recipe(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"

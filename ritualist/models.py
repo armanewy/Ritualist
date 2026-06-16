@@ -3,11 +3,57 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from .errors import SafetyError
 
 SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+PredicateType = Literal[
+    "file.exists",
+    "path.exists",
+    "process.running",
+    "window.exists",
+    "window.text_visible",
+    "browser.text_visible",
+]
+
+
+class Condition(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: PredicateType | None = None
+    all: list["Condition"] | None = None
+    any: list["Condition"] | None = None
+    not_: "Condition | None" = Field(default=None, alias="not")
+    path: str | None = None
+    process_name: str | None = None
+    title_contains: str | None = None
+    window_title_contains: str | None = None
+    text: str | None = None
+    control_type: str | None = None
+    exact: bool = True
+
+    @model_validator(mode="after")
+    def validate_condition_shape(self) -> "Condition":
+        operators = [
+            self.type is not None,
+            self.all is not None,
+            self.any is not None,
+            self.not_ is not None,
+        ]
+        if sum(operators) != 1:
+            raise ValueError("condition must contain exactly one of type, all, any, or not")
+        if self.all is not None and not self.all:
+            raise ValueError("condition.all must contain at least one condition")
+        if self.any is not None and not self.any:
+            raise ValueError("condition.any must contain at least one condition")
+        if self.type is not None:
+            _validate_predicate_fields(self)
+        else:
+            _validate_composition_fields(self)
+        return self
 
 
 class StepBase(BaseModel):
@@ -17,6 +63,7 @@ class StepBase(BaseModel):
     optional: bool = False
     requires_confirmation: bool = False
     timeout_seconds: float | None = Field(default=None, gt=0)
+    when: Condition | None = None
 
     @property
     def display_name(self) -> str:
@@ -132,6 +179,12 @@ class WindowSnapBottomStep(WindowTitleScopeMixin, StepBase):
 
 class WindowWaitStep(WindowMatchMixin, StepBase):
     action: Literal["window.wait"]
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WindowWaitStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class DesktopClickTextStep(StepBase):
@@ -237,34 +290,106 @@ def _required_text(field_name: str, value: str) -> str:
 class WaitSecondsStep(StepBase):
     action: Literal["wait.seconds"]
     seconds: float = Field(gt=0)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitSecondsStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForUserStep(StepBase):
     action: Literal["wait.for_user"]
     prompt: str = Field(min_length=1)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForUserStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForFileStep(StepBase):
     action: Literal["wait.for_file"]
     path: str = Field(min_length=1)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForFileStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForProcessStep(StepBase):
     action: Literal["wait.for_process"]
     process_name: str = Field(min_length=1)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForProcessStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForProcessExitStep(StepBase):
     action: Literal["wait.for_process_exit"]
     process_name: str = Field(min_length=1)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForProcessExitStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForWindowStep(WindowMatchMixin, StepBase):
     action: Literal["wait.for_window"]
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForWindowStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class WaitForWindowGoneStep(WindowMatchMixin, StepBase):
     action: Literal["wait.for_window_gone"]
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "WaitForWindowGoneStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
+
+
+class NotifyToastStep(StepBase):
+    action: Literal["notify.toast"]
+    title: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+
+
+class NotifySoundStep(StepBase):
+    action: Literal["notify.sound"]
+    path: str | None = None
+
+
+class NotifyBeepStep(StepBase):
+    action: Literal["notify.beep"]
+
+
+class FlowIfStep(StepBase):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    action: Literal["flow.if"]
+    condition: Condition
+    then: list[Any] = Field(default_factory=list)
+    else_: list[Any] = Field(default_factory=list, alias="else")
+
+    @model_validator(mode="after")
+    def validate_branch_steps(self) -> "FlowIfStep":
+        self.then = _validate_workflow_step_list(self.then, field_name="then")
+        self.else_ = _validate_workflow_step_list(self.else_, field_name="else")
+        return self
 
 
 class AssertFileExistsStep(StepBase):
@@ -354,7 +479,18 @@ WorkflowStep = Annotated[
     | WaitForProcessStep
     | WaitForProcessExitStep
     | WaitForWindowStep
-    | WaitForWindowGoneStep,
+    | WaitForWindowGoneStep
+    | AssertFileExistsStep
+    | AssertPathExistsStep
+    | AssertProcessRunningStep
+    | AssertWindowExistsStep
+    | AssertWindowTextVisibleStep
+    | AssertBrowserTextVisibleStep
+    | AssertRegistryValueStep
+    | NotifyToastStep
+    | NotifySoundStep
+    | NotifyBeepStep
+    | FlowIfStep,
     Field(discriminator="action"),
 ]
 
@@ -431,7 +567,11 @@ class Recipe(BaseModel):
 
     @property
     def execution_steps(self) -> list[ExecutableStep]:
-        return [*self.preflight, *self.steps, *self.verify]
+        return [
+            *self.preflight,
+            *_flatten_workflow_steps(self.steps),
+            *self.verify,
+        ]
 
     @field_validator("version")
     @classmethod
@@ -449,3 +589,79 @@ class Recipe(BaseModel):
                 "(letters, numbers, hyphen, underscore)"
             )
         return value
+
+
+_PREDICATE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "file.exists": ("path",),
+    "path.exists": ("path",),
+    "process.running": ("process_name",),
+    "window.exists": (),
+    "window.text_visible": ("window_title_contains", "text"),
+    "browser.text_visible": ("text",),
+}
+
+_PREDICATE_ALLOWED_FIELDS: dict[str, set[str]] = {
+    "file.exists": {"path"},
+    "path.exists": {"path"},
+    "process.running": {"process_name"},
+    "window.exists": {"title_contains", "process_name"},
+    "window.text_visible": {"window_title_contains", "text", "control_type", "exact"},
+    "browser.text_visible": {"text", "exact"},
+}
+
+
+def _validate_predicate_fields(condition: Condition) -> None:
+    predicate_type = condition.type
+    if predicate_type is None:
+        return
+    required = _PREDICATE_REQUIRED_FIELDS[predicate_type]
+    for field_name in required:
+        value = getattr(condition, field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"condition {predicate_type} requires {field_name}")
+    if predicate_type == "window.exists" and not (
+        condition.title_contains or condition.process_name
+    ):
+        raise ValueError("condition window.exists requires title_contains or process_name")
+    allowed = _PREDICATE_ALLOWED_FIELDS[predicate_type]
+    for field_name in _provided_condition_fields(condition) - {"type"}:
+        if field_name not in allowed:
+            raise ValueError(f"condition {predicate_type} does not support {field_name}")
+    if condition.control_type is not None and not condition.control_type.strip():
+        raise ValueError("condition control_type must not be blank")
+
+
+def _validate_composition_fields(condition: Condition) -> None:
+    operator = "all" if condition.all is not None else "any" if condition.any is not None else "not"
+    provided = _provided_condition_fields(condition)
+    if provided - {operator}:
+        unsupported = ", ".join(sorted(provided - {operator}))
+        raise ValueError(f"condition.{operator} does not support {unsupported}")
+
+
+def _provided_condition_fields(condition: Condition) -> set[str]:
+    fields: set[str] = set()
+    for field_name in condition.model_fields_set:
+        fields.add("not" if field_name == "not_" else field_name)
+    return fields
+
+
+def _validate_workflow_step_list(raw_steps: list[Any], *, field_name: str) -> list[Any]:
+    if not raw_steps:
+        return []
+    try:
+        return TypeAdapter(list[WorkflowStep]).validate_python(raw_steps)
+    except Exception as exc:  # noqa: BLE001 - preserve pydantic context in message.
+        raise ValueError(f"{field_name} must contain valid Ritualist steps: {exc}") from exc
+
+
+def _flatten_workflow_steps(steps: list[Any]) -> list[ExecutableStep]:
+    flattened: list[ExecutableStep] = []
+    for step in steps:
+        flattened.append(step)
+        if isinstance(step, FlowIfStep):
+            flattened.extend(_flatten_workflow_steps(step.then))
+            flattened.extend(_flatten_workflow_steps(step.else_))
+        timeout_steps = getattr(step, "on_timeout", None) or []
+        flattened.extend(_flatten_workflow_steps(timeout_steps))
+    return flattened

@@ -28,6 +28,8 @@ CategoryName = Literal[
     "human",
     "input",
     "note",
+    "notify",
+    "flow",
     "wait",
     "window",
 ]

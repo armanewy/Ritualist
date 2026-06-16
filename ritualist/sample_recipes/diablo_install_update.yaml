@@ -1,0 +1,93 @@
+version: "0.1"
+id: diablo_install_update
+name: Diablo Install Or Update Placeholder
+description: Demonstrates safe branching around Play, Install, and Update labels in Battle.net.
+home:
+  category: Gaming
+  card:
+    title: Diablo Install Or Update
+    subtitle: Branching placeholder
+    image: ""
+    accent: ""
+variables:
+  battle_net_window: Battle.net
+environment:
+  os:
+    - windows
+  required_capabilities:
+    - windows_uia
+    - window_management
+  expected_windows:
+    - title_contains: "{{ battle_net_window }}"
+  expected_labels:
+    - window_title_contains: "{{ battle_net_window }}"
+      text: Play
+steps:
+  - name: Wait for Battle.net
+    action: window.wait
+    title_contains: "{{ battle_net_window }}"
+    timeout_seconds: 60
+    on_timeout:
+      - action: notify.toast
+        title: Battle.net not found
+        message: Open Battle.net before running this placeholder.
+
+  - name: Branch on Diablo readiness
+    action: flow.if
+    condition:
+      type: window.text_visible
+      window_title_contains: "{{ battle_net_window }}"
+      text: Play
+    then:
+      - action: notify.toast
+        title: Ready
+        message: Play is visible.
+    else:
+      - name: Install or update if available
+        action: flow.if
+        condition:
+          any:
+            - type: window.text_visible
+              window_title_contains: "{{ battle_net_window }}"
+              text: Install
+            - type: window.text_visible
+              window_title_contains: "{{ battle_net_window }}"
+              text: Update
+        then:
+          - name: Ask before Install
+            action: desktop.click_text
+            when:
+              type: window.text_visible
+              window_title_contains: "{{ battle_net_window }}"
+              text: Install
+            window_title_contains: "{{ battle_net_window }}"
+            text: Install
+            requires_confirmation: true
+            timeout_seconds: 20
+
+          - name: Ask before Update
+            action: desktop.click_text
+            when:
+              type: window.text_visible
+              window_title_contains: "{{ battle_net_window }}"
+              text: Update
+            window_title_contains: "{{ battle_net_window }}"
+            text: Update
+            requires_confirmation: true
+            timeout_seconds: 20
+
+          - name: Wait until Play appears
+            action: assert.window_text_visible
+            window_title_contains: "{{ battle_net_window }}"
+            text: Play
+            timeout_seconds: 3600
+
+          - action: notify.sound
+
+          - action: notify.toast
+            title: Ready
+            message: Play is visible.
+        else:
+          - action: notify.toast
+            title: Not ready
+            message: Play, Install, and Update were not visible in Battle.net.

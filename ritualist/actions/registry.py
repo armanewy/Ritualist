@@ -43,8 +43,10 @@ def create_default_registry() -> ActionRegistry:
     from .browser_actions import BrowserMediaHandler, BrowserOpenHandler
     from .confirm_actions import ConfirmAskHandler
     from .desktop_actions import DesktopClickTextHandler
+    from .flow_actions import create_flow_handlers
     from .human_actions import create_human_handlers
     from .input_actions import InputHotkeyHandler
+    from .notify_actions import create_notification_handlers
     from .wait_actions import create_wait_handlers
     from .window_actions import (
         WindowFocusHandler,
@@ -82,6 +84,8 @@ def create_default_registry() -> ActionRegistry:
         InputHotkeyHandler(),
         ConfirmAskHandler(),
         *create_human_handlers(),
+        *create_notification_handlers(),
+        *create_flow_handlers(),
         *create_wait_handlers(),
     ):
         registry.register(handler)
