@@ -577,6 +577,35 @@ def test_reconcile_running_run_with_active_pid_is_left_running(tmp_path):
     assert updated["status"] == "running"
 
 
+def test_reconcile_running_run_with_unknown_process_and_stale_heartbeat_marks_interrupted(tmp_path):
+    run_dir = tmp_path / "20260615T181500Z_gaming_mode"
+    run_dir.mkdir()
+    metadata = {
+        "recipe_id": "gaming_mode",
+        "recipe_name": "Gaming Mode",
+        "status": "running",
+        "process_id": 424242,
+        "process_start_time": None,
+        "started_at": "2026-06-15T18:15:00+00:00",
+        "last_heartbeat_at": "2000-01-01T00:00:00+00:00",
+        "last_step_name": "Waiting for operator",
+    }
+    (run_dir / "run.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (run_dir / "steps.jsonl").write_text("", encoding="utf-8")
+
+    repaired = reconcile_running_runs(
+        base_dir=tmp_path,
+        process_checker=lambda _pid: (None, None),
+    )
+
+    assert [repair.run_id for repair in repaired] == ["20260615T181500Z_gaming_mode"]
+    updated = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert updated["status"] == "interrupted"
+    assert updated["final_state"] == "interrupted"
+    assert "process status" in updated["interruption_reason"]
+    assert "heartbeat" in updated["interruption_reason"]
+
+
 def test_reconcile_legacy_running_run_without_pid_marks_interrupted(tmp_path):
     run_dir = tmp_path / "20260615T175615Z_gaming_mode"
     run_dir.mkdir()

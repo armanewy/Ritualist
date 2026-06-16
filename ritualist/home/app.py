@@ -319,10 +319,28 @@ def run_home(*, mock: bool = False) -> int:
         def _confirm(self, card_id: str, prompt: object) -> bool:
             self._confirmation_event.clear()
             self.confirmationRequested.emit(card_id, prompt)
+            self._heartbeat_home_confirmation()
             while not self._confirmation_event.wait(timeout=5):
+                self._heartbeat_home_confirmation()
                 if self._runtime_control is not None:
                     self._runtime_control.raise_if_stopped()
+            self._heartbeat_home_confirmation()
             return self._confirmation_result
+
+        def _heartbeat_home_confirmation(self) -> None:
+            if self._runtime_control is not None:
+                self._runtime_control.heartbeat()
+            executor = getattr(self._dispatcher.service, "_last_executor", None)
+            run_logger = getattr(executor, "run_logger", None)
+            if run_logger is None:
+                return
+            record_run_state = getattr(run_logger, "record_run_state", None)
+            if record_run_state is not None:
+                record_run_state("confirming", event="confirmation.waiting", message="confirmation pending")
+                return
+            heartbeat = getattr(run_logger, "heartbeat", None)
+            if heartbeat is not None:
+                heartbeat()
 
         def _complete_action_future(self, card_id: str, future: Future[object]) -> None:
             try:

@@ -35,7 +35,7 @@ class HomeConfig:
 class AppConfig:
     default_browser: str = "chromium"
     log_level: str = "INFO"
-    log_file: Path = default_log_file()
+    log_file: Path = field(default_factory=default_log_file)
     ui: UIConfig = field(default_factory=UIConfig)
     home: HomeConfig = field(default_factory=HomeConfig)
 

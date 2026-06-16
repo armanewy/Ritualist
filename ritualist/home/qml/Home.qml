@@ -678,7 +678,7 @@ Window {
                             property string cardId: model.id || ""
                             property string cardStatus: model.status || status
                             property bool waitActive: (model.wait_action || "") !== ""
-                            property bool keepOpenActive: (model.keep_open_active || "") === "true"
+                            property bool keepOpenActive: model.keep_open_active === true || (model.keep_open_active || "") === "true"
 
                             Rectangle {
                                 id: card

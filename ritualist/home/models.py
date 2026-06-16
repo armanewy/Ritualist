@@ -66,8 +66,8 @@ class HomeCard:
     wait_timeout_seconds: str = ""
     keep_open_active: bool = False
 
-    def to_qml(self) -> dict[str, str]:
-        return {field.name: _qml_string(getattr(self, field.name)) for field in fields(self)}
+    def to_qml(self) -> dict[str, object]:
+        return {field.name: _qml_value(getattr(self, field.name)) for field in fields(self)}
 
 
 @dataclass(frozen=True)
@@ -98,8 +98,11 @@ class HomeModel:
     cards: list[HomeCard] = field(default_factory=list)
     categories: tuple[HomeCategory | str, ...] = field(default_factory=lambda: HOME_CATEGORIES)
 
+    _card_index_by_id: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+
     def __post_init__(self) -> None:
         self.categories = resolve_home_categories(self.categories)
+        self._rebuild_card_index()
 
     def get_card(self, card_id: str) -> HomeCard:
         return self.cards[self._card_index(card_id)]
@@ -127,10 +130,20 @@ class HomeModel:
         }
 
     def _card_index(self, card_id: str) -> int:
-        for index, card in enumerate(self.cards):
-            if card.id == card_id:
-                return index
-        raise KeyError(card_id)
+        try:
+            return self._card_index_by_id[card_id]
+        except KeyError:
+            # The card list is intentionally public for simple model construction in
+            # tests and view-model code. Rebuild lazily so direct list replacement or
+            # append operations do not leave runtime event routing permanently stale.
+            self._rebuild_card_index()
+            try:
+                return self._card_index_by_id[card_id]
+            except KeyError as exc:
+                raise KeyError(card_id) from exc
+
+    def _rebuild_card_index(self) -> None:
+        self._card_index_by_id = {card.id: index for index, card in enumerate(self.cards)}
 
 
 class HomeEventBridge:
@@ -542,11 +555,11 @@ def _home_category_label(value: object) -> str:
     return str(value).strip()
 
 
-def _qml_string(value: object) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
+def _qml_value(value: object) -> object:
     if isinstance(value, StrEnum):
         return value.value
+    if isinstance(value, bool | int | float):
+        return value
     if value is None:
         return ""
     return str(value)

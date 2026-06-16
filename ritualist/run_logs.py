@@ -85,9 +85,9 @@ class RunLogWriter:
 
     def start(self, recipe: Recipe, *, dry_run: bool) -> None:
         started_at = _now_iso()
-        self.run_dir = self._create_run_dir(recipe.id)
-        self._run_json = self.run_dir / "run.json"
-        self._steps_jsonl = self.run_dir / "steps.jsonl"
+        run_dir = self._create_run_dir(recipe.id)
+        self._run_json = run_dir / "run.json"
+        self._steps_jsonl = run_dir / "steps.jsonl"
         self._metadata = {
             "recipe_id": recipe.id,
             "recipe_name": recipe.name,
@@ -133,6 +133,7 @@ class RunLogWriter:
         }
         self._write_run_json()
         self._steps_jsonl.write_text("", encoding="utf-8")
+        self.run_dir = run_dir
 
     def heartbeat(
         self,
@@ -320,10 +321,7 @@ class RunLogWriter:
             return
         self._last_heartbeat_write_at = self._monotonic_clock()
         self._refresh_operator_note_metadata()
-        self._run_json.write_text(
-            json.dumps(self._metadata, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+        _atomic_write_json(self._run_json, self._metadata)
 
     def _heartbeat_due(self) -> bool:
         if self._last_heartbeat_write_at is None:
@@ -837,10 +835,16 @@ def _read_run_metadata(path: Path) -> dict[str, Any] | None:
 
 
 def _write_run_metadata(path: Path, metadata: dict[str, Any]) -> None:
-    (path / "run.json").write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
+    _atomic_write_json(path / "run.json", metadata)
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    tmp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    tmp_path.replace(path)
 
 
 def _append_metadata_run_state(
@@ -909,15 +913,25 @@ def _interruption_reason(
         process_exists is True
         and recorded_start_time is not None
         and process_start_time is not None
-        and abs(float(recorded_start_time) - float(process_start_time)) > 1
+        and _process_start_time_mismatch(recorded_start_time, process_start_time)
     ):
         return f"recorded process {pid} belongs to a different process start time"
 
     heartbeat = _parse_iso_datetime(metadata.get("last_heartbeat_at"))
-    if process_exists is False and _is_stale(heartbeat, stale_after):
-        return f"heartbeat is older than {stale_after}"
+    if process_exists is None and _is_stale(heartbeat, stale_after):
+        return (
+            f"process status for {pid} could not be determined and "
+            f"heartbeat is older than {stale_after}"
+        )
     return None
 
+
+
+def _process_start_time_mismatch(recorded_start_time: Any, actual_start_time: float) -> bool:
+    try:
+        return abs(float(recorded_start_time) - float(actual_start_time)) > 1
+    except (TypeError, ValueError):
+        return True
 
 def _interrupted_message(metadata: dict[str, Any], path: Path) -> str:
     last_step = metadata.get("last_step_name") or _last_logged_step_name(path)

@@ -613,7 +613,20 @@ def test_home_model_updates_wait_and_keep_open_state():
     assert keep_open.keep_open_active is True
     assert keep_open.wait_action == ""
     assert keep_open.wait_target == ""
-    assert model.get_card(card.id).to_qml()["keep_open_active"] == "true"
+    assert model.get_card(card.id).to_qml()["keep_open_active"] is True
+
+
+def test_home_model_runtime_updates_survive_direct_card_append():
+    model = HomeModel(cards=[HomeCard(id="one", title="One", category="Gaming")])
+    model.cards.append(HomeCard(id="two", title="Two", category="Gaming"))
+
+    updated = model.apply_runtime_event(
+        HomeRuntimeEvent(card_id="two", status=HomeCardStatus.RUNNING, subtitle="Indexed")
+    )
+
+    assert updated.id == "two"
+    assert updated.status is HomeCardStatus.RUNNING
+    assert updated.subtitle == "Indexed"
 
 
 def test_home_model_rejects_unknown_runtime_event_card_id():
@@ -621,6 +634,17 @@ def test_home_model_rejects_unknown_runtime_event_card_id():
 
     with pytest.raises(KeyError):
         model.apply_runtime_event({"card_id": "missing-card", "status": "running"})
+
+
+def test_home_model_rebuilds_card_index_after_external_card_replacement():
+    model = create_mock_home_model()
+    original = model.cards[0]
+    replacement = HomeCard(id="new-card", title="New Card", category="Gaming")
+    model.cards = [replacement, *model.cards[1:]]
+
+    assert model.get_card("new-card") == replacement
+    with pytest.raises(KeyError):
+        model.get_card(original.id)
 
 
 def test_home_cards_serialize_to_qml_safe_payloads():
@@ -632,7 +656,11 @@ def test_home_cards_serialize_to_qml_safe_payloads():
     assert len(cards_payload) == len(model.cards)
     assert tuple(cards_payload[0]) == _card_field_names()
     assert cards_payload[0] == model.cards[0].to_qml()
-    assert all(isinstance(value, str) for value in cards_payload[0].values())
+    assert isinstance(cards_payload[0]["keep_open_active"], bool)
+    assert all(
+        isinstance(value, str | bool | int | float)
+        for value in cards_payload[0].values()
+    )
     json.dumps(payload)
 
 

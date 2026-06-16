@@ -108,6 +108,16 @@ def test_home_runtime_control_is_active_before_action_state_signal():
     )
 
 
+
+
+def test_home_confirmation_wait_refreshes_run_logger_heartbeat():
+    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "def _heartbeat_home_confirmation" in source
+    assert 'record_run_state("confirming", event="confirmation.waiting"' in source
+
+
 def test_home_command_import_does_not_load_pyside6():
     repo_root = Path(__file__).resolve().parents[1]
     code = """

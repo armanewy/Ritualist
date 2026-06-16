@@ -325,7 +325,7 @@ def test_false_adapter_assertion_result_fails_without_mutating():
     assert {call[0] for call in fakes.window.calls} == {"window_exists"}
 
 
-def test_registry_assertion_is_windows_only(monkeypatch):
+def test_registry_assertion_is_windows_only(monkeypatch, tmp_path):
     monkeypatch.setattr("ritualist.actions.assert_actions.sys.platform", "linux")
     step = AssertRegistryValueStep.model_validate(
         {
@@ -337,7 +337,7 @@ def test_registry_assertion_is_windows_only(monkeypatch):
 
     summary = WorkflowExecutor(
         adapters=FakeAdapters().bundle(),
-        config=AppConfig(),
+        config=AppConfig(log_file=tmp_path / "ritualist.log"),
     ).run(
         Recipe.model_validate(
             {

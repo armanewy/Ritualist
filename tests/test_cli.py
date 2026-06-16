@@ -795,7 +795,7 @@ def test_doctor_fails_on_error_and_preserves_dependency_extras(monkeypatch):
             "steps": [{"action": "browser.open", "url": "https://example.test"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
     monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
 
     result = CliRunner().invoke(app, ["doctor", "gaming_mode"])
@@ -812,7 +812,7 @@ def test_doctor_no_strict_prints_errors_but_exits_zero(monkeypatch):
             "steps": [{"action": "browser.open", "url": "https://example.test"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
     monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
 
     result = CliRunner().invoke(app, ["doctor", "gaming_mode", "--no-strict"])

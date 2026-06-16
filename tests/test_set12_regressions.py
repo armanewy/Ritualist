@@ -227,7 +227,7 @@ def test_bundled_gaming_mode_generates_home_card_from_sample_metadata(tmp_path):
     assert card.category == "Gaming"
     assert card.subtitle == "YouTube ambience + Battle.net"
     assert card.description.startswith("Open a looping video")
-    assert card.to_qml()["keep_open_active"] == "false"
+    assert card.to_qml()["keep_open_active"] is False
 
 
 def test_wait_action_pause_resume_keeps_timeout_budget_and_continues_next_step():
