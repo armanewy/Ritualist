@@ -70,6 +70,11 @@ from .run_logs import (
     summarize_step_results,
 )
 from .runtime_control import RuntimeControl
+from .target_resolution import (
+    compile_target_start_plan,
+    resolve_target,
+    target_plan_payload,
+)
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
@@ -78,12 +83,14 @@ primitive_app = typer.Typer(help="Inspect primitive kernel metadata.")
 policy_app = typer.Typer(help="Inspect primitive policy and local pack governance.")
 diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts.")
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
+target_app = typer.Typer(help="Discover and preview local target start plans.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
 app.add_typer(policy_app, name="policy")
 app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
+app.add_typer(target_app, name="target")
 console = Console()
 
 
@@ -379,6 +386,91 @@ def _print_plan_preview(plan: object, doctor: object) -> None:
         console.print("[bold]Plan Doctor[/]")
         for check in notable:
             console.print(f"- {escape(check.section)}: {escape(check.message)}")
+
+
+def _print_target_resolution(resolution: object) -> None:
+    target = getattr(resolution, "target", None)
+    title = f"Target: {getattr(target, 'display_name', None) or getattr(resolution, 'query', '')}"
+    table = Table(title=escape(title))
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("state", escape(str(getattr(resolution, "state").value)))
+    table.add_row("matched", escape(str(getattr(resolution, "matched_alias", "") or "")))
+    table.add_row("candidates", str(len(getattr(resolution, "candidates", ()))))
+    console.print(table)
+
+    candidates = getattr(resolution, "candidates", ())
+    if candidates:
+        candidate_table = Table(title="Candidates")
+        candidate_table.add_column("State", no_wrap=True)
+        candidate_table.add_column("Provider", no_wrap=True)
+        candidate_table.add_column("Label", overflow="fold")
+        candidate_table.add_column("Path/Command", overflow="fold")
+        for candidate in candidates:
+            command = getattr(candidate, "command", None) or getattr(candidate, "path", None) or ""
+            candidate_table.add_row(
+                escape(candidate.state.value),
+                escape(candidate.provider),
+                escape(candidate.label),
+                escape(str(command)),
+            )
+        console.print(candidate_table)
+
+    diagnostics = getattr(resolution, "diagnostics", ())
+    if diagnostics:
+        console.print("[bold]Diagnostics[/]")
+        for item in diagnostics:
+            console.print(f"- {escape(str(item))}")
+    suggestions = getattr(resolution, "suggestions", ())
+    if suggestions:
+        console.print("[bold]Suggestions[/]")
+        for item in suggestions:
+            console.print(f"- {escape(str(item))}")
+
+
+@target_app.command("discover")
+def target_discover(
+    target: Annotated[str, typer.Argument(help="Target id or alias, such as diablo_iv.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable target resolution."),
+    ] = False,
+) -> None:
+    """Discover local ways a catalog target can be started without mutating state."""
+    try:
+        resolution = resolve_target(target)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=resolution.to_dict())
+        return
+    _print_target_resolution(resolution)
+
+
+@target_app.command("plan")
+def target_plan(
+    target: Annotated[str, typer.Argument(help="Target id or alias, such as diablo_iv.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable target plan."),
+    ] = False,
+) -> None:
+    """Compile a target start request into a side-effect-free primitive plan preview."""
+    try:
+        resolution = resolve_target(target)
+        plan = compile_target_start_plan(target, resolution=resolution)
+        doctor = build_plan_doctor_report(plan)
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=target_plan_payload(resolution, plan, doctor))
+        return
+    _print_target_resolution(resolution)
+    _print_plan_preview(plan, doctor)
+    if doctor.compatibility == "incompatible":
+        raise typer.Exit(1)
 
 
 @diagnostics_app.command("collect")

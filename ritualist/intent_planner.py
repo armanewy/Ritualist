@@ -141,9 +141,16 @@ def compile_intent_to_plan(
     verification: list[str] = []
     cleanup: list[str] = []
 
-    if intent.kind == "diagnostics.collect":
+    if intent.kind == "target.start":
+        target_ref = _target_reference_from_intent(intent)
+        if target_ref:
+            from .target_resolution import compile_target_start_plan
+
+            return compile_target_start_plan(target_ref, primitive_registry=registry)
+        unresolved.append("target.start requires a target id or name")
+    elif intent.kind == "diagnostics.collect":
         _compile_diagnostics_intent(intent, registry=registry, steps=steps, artifacts=artifacts, verification=verification)
-    elif intent.kind in {"workspace.prepare", "target.start", "stream.prepare"}:
+    elif intent.kind in {"workspace.prepare", "stream.prepare"}:
         _compile_workspace_intent(intent, registry=registry, steps=steps, unresolved=unresolved)
     elif intent.kind in {"system.repair", "package.provision"}:
         unresolved.append(
@@ -681,7 +688,7 @@ def _set_missing_variable_for_plan(variables: dict[str, Any], name: str, value: 
 
 
 def _looks_like_intent(raw: dict[str, Any]) -> bool:
-    return "intent_id" in raw or ("kind" in raw and "steps" not in raw)
+    return "intent_id" in raw or "intent" in raw or ("kind" in raw and "steps" not in raw)
 
 
 def _looks_like_path_reference(value: str) -> bool:
@@ -690,8 +697,16 @@ def _looks_like_path_reference(value: str) -> bool:
 
 
 def _intent_from_mapping(raw: dict[str, Any]) -> IntentSpec:
+    normalized = dict(raw)
+    if "intent" in normalized and "kind" not in normalized:
+        normalized["kind"] = normalized.pop("intent")
+    if "intent_id" not in normalized and "kind" in normalized:
+        normalized["intent_id"] = _intent_id_from_parts(
+            str(normalized.get("kind") or "intent"),
+            str(normalized.get("target") or "preview"),
+        )
     try:
-        return IntentSpec.model_validate(raw)
+        return IntentSpec.model_validate(normalized)
     except ValidationError as exc:
         raise RitualistError(str(exc)) from exc
 
@@ -710,6 +725,26 @@ def _intent_from_kind(kind: str) -> IntentSpec:
         requested_outcome=f"Preview deterministic plan for {cleaned}.",
         user_visible_summary=f"Preview deterministic plan for {cleaned}.",
     )
+
+
+def _target_reference_from_intent(intent: IntentSpec) -> str:
+    if isinstance(intent.target, str):
+        return intent.target.strip()
+    if isinstance(intent.target, dict):
+        for key in ("id", "target_id", "name"):
+            value = intent.target.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
+def _intent_id_from_parts(kind: str, target: str) -> str:
+    raw = f"{kind}_{target}".replace(".", "_").replace("-", "_")
+    candidate = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in raw).strip("_")
+    candidate = "_".join(part for part in candidate.split("_") if part)
+    if SAFE_ID_PATTERN.fullmatch(candidate):
+        return candidate[:80]
+    return "intent_preview"
 
 
 def _list_of_mappings(value: object) -> list[dict[str, Any]]:
