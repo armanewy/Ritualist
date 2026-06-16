@@ -8,7 +8,7 @@ Ritualist v0.1.0-alpha.1 is an alpha release of a local Windows personal workflo
 - Dry-run recipes from the CLI or GUI.
 - Initialize local app directories and install the bundled `gaming_mode` sample.
 - Discover installed recipes by id.
-- Launch and use the GUI from development or the packaged Windows executable.
+- Launch Home from the packaged Windows executable, with the classic GUI available by flag.
 - Run Doctor checks without side effects.
 - Inspect Windows UI Automation windows with `inspect-window`.
 - Keep browser media open with recipe-level `keep_open: true` or CLI `--keep-alive`.
@@ -34,7 +34,9 @@ The output is:
 dist\Ritualist\Ritualist.exe
 ```
 
-The packaged app launches the GUI. It does not run any ritual automatically.
+The packaged app launches Home by default. It does not run any ritual automatically.
+Use `dist\Ritualist\Ritualist.exe --classic-gui` for About / Diagnostics,
+Initialize App, and the classic utility workflow.
 
 ## Home Alpha Dogfood
 
@@ -42,7 +44,7 @@ Home is an alpha dashboard for local recipes. It should be dogfooded from both t
 
 ```text
 1. Launch dist\Ritualist\Ritualist.exe
-2. Open Home
+2. Confirm Home opens
 3. Run python -m ritualist home --mock from the development checkout
 4. Run gaming_mode from Home
 5. Pause a visible window.wait action, then resume it
@@ -56,20 +58,21 @@ Home is an alpha dashboard for local recipes. It should be dogfooded from both t
 Use this sequence for the first packaged `gaming_mode` trace:
 
 ```text
-1. Launch dist\Ritualist\Ritualist.exe
-2. Open About / Diagnostics and copy diagnostics
-3. Initialize App
-4. Refresh Recipes
-5. Select gaming_mode
-6. Click Doctor
-7. Dry Run
-8. Run
-9. Confirm YouTube opens and loops
-10. Confirm Battle.net launches
-11. Confirm Diablo IV is selected
-12. Decline Play once
-13. Confirm the run appears as stopped
-14. Run again and accept Play only if you actually want to
+1. Launch dist\Ritualist\Ritualist.exe and confirm Home opens
+2. Launch dist\Ritualist\Ritualist.exe --classic-gui
+3. Open About / Diagnostics and copy diagnostics
+4. Initialize App
+5. Refresh Recipes
+6. Select gaming_mode
+7. Click Doctor
+8. Dry Run
+9. Run
+10. Confirm YouTube opens and loops
+11. Confirm Battle.net launches
+12. Confirm Diablo IV is selected
+13. Decline Play once
+14. Confirm the run appears as stopped
+15. Run again and accept Play only if you actually want to
 ```
 
 ## Known Limitations

@@ -14,7 +14,8 @@ Use this checklist for a local v0.1.0-alpha.1 release build.
 
 ## Packaged App Smoke
 
-- [ ] Launch `dist\Ritualist\Ritualist.exe`.
+- [ ] Launch `dist\Ritualist\Ritualist.exe` and confirm Home opens.
+- [ ] Launch `dist\Ritualist\Ritualist.exe --classic-gui`.
 - [ ] Open About / Diagnostics.
 - [ ] Confirm diagnostics reports version `0.1.0-alpha.1`.
 - [ ] Copy diagnostics and save it with the release notes.
@@ -27,7 +28,7 @@ Use this checklist for a local v0.1.0-alpha.1 release build.
 ## Home Alpha Dogfood
 
 - [ ] Launch the packaged app with `dist\Ritualist\Ritualist.exe`.
-- [ ] Open Home from the packaged app.
+- [ ] Confirm Home opens by default.
 - [ ] Run mock Home with `python -m ritualist home --mock`.
 - [ ] Run `gaming_mode` from Home.
 - [ ] Pause a visible `window.wait` action from Home, then resume it.
@@ -61,7 +62,7 @@ Use this checklist for a local v0.1.0-alpha.1 release build.
 - [ ] Wait until the Play confirmation is visible.
 - [ ] Kill `Ritualist.exe` from Task Manager or PowerShell.
 - [ ] Relaunch `dist\Ritualist\Ritualist.exe`.
-- [ ] Confirm startup or Refresh Recipes reconciles the abandoned run.
+- [ ] Confirm Home startup or Refresh reconciles the abandoned run.
 - [ ] Run `python -m ritualist runs` and confirm the abandoned run is `interrupted`.
 - [ ] Run `python -m ritualist show-run <run-id>` and confirm `final_message` explains that Ritualist exited before finalizing the run.
 
