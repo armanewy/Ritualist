@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -64,13 +66,22 @@ class RunbookSummary:
 
 
 class RunLogWriter:
-    def __init__(self, *, base_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        base_dir: Path | None = None,
+        heartbeat_flush_interval_seconds: float = 1.0,
+        monotonic_clock: Callable[[], float] | None = None,
+    ) -> None:
         self.base_dir = base_dir or runs_dir()
         self.run_dir: Path | None = None
         self._run_json: Path | None = None
         self._steps_jsonl: Path | None = None
         self._metadata: dict[str, Any] = {}
         self._run_writer_id = str(uuid.uuid4())
+        self._heartbeat_flush_interval_seconds = max(0.0, heartbeat_flush_interval_seconds)
+        self._monotonic_clock = monotonic_clock or time.monotonic
+        self._last_heartbeat_write_at: float | None = None
 
     def start(self, recipe: Recipe, *, dry_run: bool) -> None:
         started_at = _now_iso()
@@ -140,18 +151,24 @@ class RunLogWriter:
         if step_id is not None or step_name is not None:
             resolved_step_state = step_state or "running"
             resolved_run_state = run_state or "running"
-            if self._metadata.get("current_step_state") != resolved_step_state:
+            step_state_changed = self._metadata.get("current_step_state") != resolved_step_state
+            run_state_changed = self._metadata.get("current_run_state") != resolved_run_state
+            if step_state_changed:
                 self._metadata["current_step_state"] = resolved_step_state
-            if self._metadata.get("current_run_state") != resolved_run_state:
+            if run_state_changed:
                 self._set_run_state(resolved_run_state, event="run.state_changed")
-            self._append_event_summary(
-                "heartbeat",
-                run_state=resolved_run_state,
-                step_state=resolved_step_state,
-                step_id=step_id,
-                step_name=step_name,
-            )
-        self._write_run_json()
+            force_write = step_state_changed or run_state_changed
+            if force_write or self._heartbeat_due():
+                self._append_event_summary(
+                    "heartbeat",
+                    run_state=resolved_run_state,
+                    step_state=resolved_step_state,
+                    step_id=step_id,
+                    step_name=step_name,
+                )
+                self._write_run_json(force=True)
+            return
+        self._write_run_json(force=False)
 
     def write_step(self, result: StepResult) -> None:
         if self._steps_jsonl is None:
@@ -196,7 +213,7 @@ class RunLogWriter:
         if self._run_json is None:
             return
         resolved_final_state = final_state or ("success" if success else "stopped")
-        self._metadata["status"] = "success" if resolved_final_state == "success" else "stopped"
+        self._metadata["status"] = _terminal_status(resolved_final_state, success=success)
         self._metadata["ended_at"] = _now_iso()
         self._metadata["last_heartbeat_at"] = self._metadata["ended_at"]
         self._metadata["final_message"] = None
@@ -296,13 +313,24 @@ class RunLogWriter:
         candidate.mkdir(parents=True, exist_ok=False)
         return candidate
 
-    def _write_run_json(self) -> None:
+    def _write_run_json(self, *, force: bool = True) -> None:
         if self._run_json is None:
             return
+        if not force and not self._heartbeat_due():
+            return
+        self._last_heartbeat_write_at = self._monotonic_clock()
         self._refresh_operator_note_metadata()
         self._run_json.write_text(
             json.dumps(self._metadata, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
+        )
+
+    def _heartbeat_due(self) -> bool:
+        if self._last_heartbeat_write_at is None:
+            return True
+        return (
+            self._monotonic_clock() - self._last_heartbeat_write_at
+            >= self._heartbeat_flush_interval_seconds
         )
 
     def _refresh_operator_note_metadata(self) -> None:
@@ -407,6 +435,12 @@ def _runtime_step_state(status: str) -> str:
     if status == "dry-run":
         return "success"
     return status
+
+
+def _terminal_status(final_state: str, *, success: bool) -> str:
+    if final_state in {"success", "failed", "stopped", "interrupted"}:
+        return final_state
+    return "success" if success else "stopped"
 
 
 def _event_for_step_state(state: str) -> str:

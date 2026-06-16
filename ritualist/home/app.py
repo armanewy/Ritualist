@@ -331,7 +331,8 @@ def run_home(*, mock: bool = False) -> int:
 
         def _publish_event(self, event: HomeRuntimeEvent) -> None:
             self._bridge.queue_runtime_event(event)
-            self._apply_events(self._bridge.flush())
+            if _should_flush_home_event(event):
+                self._apply_events(self._bridge.flush())
 
         def _set_action_busy(self, busy: bool) -> None:
             if self._action_busy == busy:
@@ -462,8 +463,8 @@ def run_home(*, mock: bool = False) -> int:
         if not engine.rootObjects():
             raise RitualistError(f"Home UI failed to load: {qml_path}")
 
+    drain_timer.start()
     if emitter is not None:
-        drain_timer.start()
         emitter.start()
         app.aboutToQuit.connect(emitter.stop)
     else:
@@ -491,6 +492,16 @@ def _doctor_status(compatibility: str) -> HomeCardStatus:
     if compatibility == "incompatible":
         return HomeCardStatus.FAILED
     return HomeCardStatus.WARNING
+
+
+def _should_flush_home_event(event: HomeRuntimeEvent) -> bool:
+    if event.last_run_status is not None:
+        return True
+    if event.status is HomeCardStatus.FAILED:
+        return True
+    if event.subtitle == "Confirmation required":
+        return True
+    return False
 
 
 def _create_overlay_controller() -> object | None:

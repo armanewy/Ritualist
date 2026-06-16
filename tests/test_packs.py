@@ -274,6 +274,42 @@ steps:
     assert recipe["steps"][1]["path"] == "{{ steps_1_path }}"
 
 
+def test_pack_export_does_not_leak_local_paths_or_profile_locations(tmp_path):
+    recipe_path = tmp_path / "privacy.yaml"
+    recipe_path.write_text(
+        """
+version: "0.1"
+id: privacy_demo
+name: Privacy Demo
+variables:
+  battle_net_app: C:\\Users\\aoztu\\AppData\\Local\\Battle.net\\Battle.net Launcher.exe
+  install_root: C:\\Program Files\\Vendor\\App.exe
+  browser_profile: /home/aoztu/.config/ritualist/browser-profiles/chromium/default
+steps:
+  - action: app.launch
+    command: "{{ battle_net_app }}"
+  - action: wait.for_file
+    path: /Users/aoztu/private-marker.txt
+""".lstrip(),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "privacy.ritualistpack"
+
+    export_recipe_pack(recipe_path, out_path)
+
+    with ZipFile(out_path) as archive:
+        packed_text = archive.read(MANIFEST_NAME).decode("utf-8") + archive.read(RECIPE_NAME).decode(
+            "utf-8"
+        )
+
+    assert "C:\\Users" not in packed_text
+    assert "AppData" not in packed_text
+    assert "Program Files" not in packed_text
+    assert "/Users/" not in packed_text
+    assert "/home/" not in packed_text
+    assert "browser-profiles" not in packed_text
+
+
 def test_gaming_mode_sample_exports_and_validates_as_pack(tmp_path):
     sample_path = (
         Path(__file__).resolve().parents[1]

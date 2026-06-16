@@ -10,7 +10,18 @@ from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
 from ritualist.overlay import ScreenRect, TargetRegion
 from ritualist.runtime_control import RuntimeControl
-from ritualist.runtime_models import Heartbeat, RunFinished, RunState, StepFinished, StepState
+from ritualist.runtime_models import (
+    ConfirmationRequested,
+    ConfirmationResolved,
+    Heartbeat,
+    RunFinished,
+    RunState,
+    StepFinished,
+    StepPaused,
+    StepResumed,
+    StepState,
+    StepWaiting,
+)
 
 
 def test_executor_runs_steps_in_order():
@@ -376,6 +387,7 @@ def test_executor_emits_wait_status_metadata():
         for event in runtime_events
         if isinstance(event, Heartbeat) and event.run_state == RunState.WAITING
     )
+    waiting_event = next(event for event in runtime_events if isinstance(event, StepWaiting))
 
     assert summary.success
     assert waiting_status.wait_action == "wait.seconds"
@@ -385,6 +397,93 @@ def test_executor_emits_wait_status_metadata():
     assert waiting_heartbeat.action == "wait.seconds"
     assert waiting_heartbeat.wait_target == "0.01s"
     assert waiting_heartbeat.wait_timeout_seconds == 0.2
+    assert waiting_event.action == "wait.seconds"
+    assert waiting_event.target == "0.01s"
+    assert waiting_event.timeout_seconds == 0.2
+
+
+def test_executor_emits_confirmation_events_when_confirmation_declined():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                }
+            ],
+        }
+    )
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: False,
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    requested = next(event for event in runtime_events if isinstance(event, ConfirmationRequested))
+    resolved = next(event for event in runtime_events if isinstance(event, ConfirmationResolved))
+
+    assert not summary.success
+    assert requested.step_name == "Ask before clicking Play"
+    assert requested.action == "desktop.click_text"
+    assert resolved.confirmation_id == requested.confirmation_id
+    assert resolved.approved is False
+    assert resolved.state is StepState.CANCELLED
+    assert runtime_events[-1].state is RunState.STOPPED
+
+
+def test_executor_emits_wait_for_user_confirmation_events():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "wait.for_user", "prompt": "Continue?"}],
+        }
+    )
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: True,
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert summary.success
+    assert any(isinstance(event, StepWaiting) for event in runtime_events)
+    assert any(isinstance(event, ConfirmationRequested) for event in runtime_events)
+    assert any(
+        isinstance(event, ConfirmationResolved) and event.approved is True
+        for event in runtime_events
+    )
+
+
+def test_executor_emits_pause_and_resume_events_during_wait():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+        }
+    )
+    registry = ActionRegistry()
+    registry.register(_PauseResumeWaitHandler())
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        registry=registry,
+        adapters=FakeAdapters().bundle(),
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert summary.success
+    assert any(isinstance(event, StepPaused) for event in runtime_events)
+    assert any(isinstance(event, StepResumed) for event in runtime_events)
 
 
 def test_executor_emits_skipped_runtime_step_for_optional_failure():
@@ -418,6 +517,71 @@ def test_executor_emits_skipped_runtime_step_for_optional_failure():
         StepState.SUCCESS,
     ]
     assert runtime_events[-1].state == RunState.SUCCESS
+
+
+def test_browser_adapter_closes_after_non_keep_open_browser_run():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "browser.open", "url": "https://example.test"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert fakes.browser.closed is True
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "close"]
+
+
+def test_browser_adapter_stays_open_after_keep_open_browser_run():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert fakes.browser.closed is False
+    assert [call[0] for call in fakes.browser.calls] == ["open_url"]
+
+
+def test_browser_adapter_stays_open_when_later_step_fails_after_keep_open():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "keep_open": True,
+                },
+                {"action": "app.launch", "command": "demo.exe"},
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.shell.failures["launch"] = RuntimeError("missing app")
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert not summary.success
+    assert fakes.browser.closed is False
+    assert [call[0] for call in fakes.browser.calls] == ["open_url"]
 
 
 def test_executor_stops_before_step_with_runtime_control():
@@ -503,3 +667,26 @@ class _StoppingAppLaunchHandler:
         context.runtime_control.stop()
         context.runtime_control.heartbeat()
         return "unreachable"
+
+
+class _PauseResumeWaitHandler:
+    action_type = "wait.seconds"
+    metadata = ActionMetadata(
+        action_name=action_type,
+        schema_version="0.1",
+        category="wait",
+        required_params=("seconds",),
+        optional_params=("timeout_seconds", "name", "optional"),
+        required_capabilities=(),
+        supported_platforms=ALL_PLATFORMS,
+        side_effect_level="read_only",
+        confirmation_policy="never",
+        allowed_in_imported_packs=True,
+    )
+
+    def run(self, step, context: ActionContext) -> str:
+        context.runtime_control.pause()
+        context.heartbeat()
+        context.runtime_control.resume()
+        context.heartbeat()
+        return "paused and resumed"

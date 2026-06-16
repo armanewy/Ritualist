@@ -17,6 +17,17 @@ from ritualist.run_logs import (
 )
 
 
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
 def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):
     recipe = Recipe.model_validate(
         {
@@ -286,7 +297,10 @@ def test_run_log_writer_maps_dry_run_status_to_runtime_step_state(tmp_path):
     ]
     assert steps[0]["status"] == "dry-run"
     assert run_json["current_step_state"] == "success"
-    assert run_json["event_summaries"][-2]["step_state"] == "success"
+    step_finished = [
+        entry for entry in run_json["event_summaries"] if entry["event"] == "step.finished"
+    ][-1]
+    assert step_finished["step_state"] == "success"
 
 
 def test_run_log_writer_redacts_failed_browser_url(tmp_path):
@@ -326,9 +340,38 @@ def test_run_log_writer_records_failed_final_state_for_required_failure(tmp_path
     assert not summary.success
     assert summary.run_dir is not None
     run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
-    assert run_json["status"] == "stopped"
+    assert run_json["status"] == "failed"
     assert run_json["final_state"] == "failed"
     assert run_json["current_run_state"] == "failed"
+
+
+def test_run_log_writer_throttles_steady_heartbeat_writes(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    clock = FakeClock()
+    writer = RunLogWriter(base_dir=tmp_path, monotonic_clock=clock)
+
+    writer.start(recipe, dry_run=False)
+    assert writer.run_dir is not None
+    run_json = writer.run_dir / "run.json"
+    writer.heartbeat(step_id=1, step_name="app.launch", run_state="running", step_state="running")
+    first = run_json.read_text(encoding="utf-8")
+
+    clock.advance(0.2)
+    writer.heartbeat(step_id=1, step_name="app.launch", run_state="running", step_state="running")
+    second = run_json.read_text(encoding="utf-8")
+
+    clock.advance(1.0)
+    writer.heartbeat(step_id=1, step_name="app.launch", run_state="running", step_state="running")
+    third = run_json.read_text(encoding="utf-8")
+
+    assert second == first
+    assert third != second
 
 
 def test_run_log_writer_counts_preflight_and_verify_steps(tmp_path):

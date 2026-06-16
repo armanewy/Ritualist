@@ -305,6 +305,8 @@ def _wait_until(
 
 
 def _cooperate(context: ActionContext) -> None:
+    if context.heartbeat is not None:
+        context.heartbeat()
     if context.runtime_control is not None:
         context.runtime_control.heartbeat()
     if context.heartbeat is not None:

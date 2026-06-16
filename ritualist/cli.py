@@ -433,7 +433,7 @@ def perf_fake_run(
                     "steps_completed": len(summary.results),
                     "confirmations": confirmations,
                     "shell_calls": len(fakes.shell.calls),
-                    "browser_calls": len(fakes.browser.calls),
+                    "browser_calls": sum(1 for call in fakes.browser.calls if call[0] != "close"),
                     "window_calls": len(fakes.window.calls),
                     "desktop_calls": len(fakes.desktop.calls),
                     "input_calls": len(fakes.input.calls),

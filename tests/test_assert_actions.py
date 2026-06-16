@@ -3,12 +3,18 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
+import pytest
+
 from ritualist.adapters.fake import FakeAdapters
+from ritualist.actions.assert_actions import AssertFileExistsHandler, AssertPathExistsHandler
+from ritualist.actions.base import ActionContext
 from ritualist.actions.metadata import ALL_PLATFORMS, WINDOWS_ONLY
 from ritualist.actions.registry import create_default_registry
 from ritualist.config import AppConfig
 from ritualist.executor import WorkflowExecutor
-from ritualist.models import AssertRegistryValueStep, Recipe
+from ritualist.models import AssertFileExistsStep, AssertPathExistsStep, AssertRegistryValueStep, Recipe
+from ritualist.overlay import NullOverlayController
+from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
 
 
 ASSERTION_METADATA = {
@@ -166,7 +172,78 @@ def test_process_window_and_browser_assertions_are_read_only():
     assert summary.success
     assert [call[0] for call in fakes.shell.calls] == ["process_running"]
     assert [call[0] for call in fakes.window.calls] == ["window_exists"]
-    assert [call[0] for call in fakes.browser.calls] == ["open_url", "text_visible"]
+    assert [call[0] for call in fakes.browser.calls] == ["open_url", "text_visible", "close"]
+
+
+def test_file_assertion_timeout_respects_runtime_stop(tmp_path):
+    control = RuntimeControl()
+    heartbeats = 0
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        control.stop()
+
+    context = ActionContext(
+        adapters=FakeAdapters().bundle(),
+        dry_run=False,
+        logger=__import__("logging").getLogger("test"),
+        confirm=lambda _request: True,
+        recipe=Recipe.model_validate(
+            {
+                "id": "run",
+                "name": "Run",
+                "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+            }
+        ),
+        config=AppConfig(),
+        overlay=NullOverlayController(),
+        runtime_control=control,
+        heartbeat=heartbeat,
+    )
+    step = AssertFileExistsStep.model_validate(
+        {"action": "assert.file_exists", "path": str(tmp_path / "missing"), "timeout_seconds": 5}
+    )
+
+    with pytest.raises(RuntimeStoppedError):
+        AssertFileExistsHandler().run(step, context)
+
+    assert heartbeats == 1
+
+
+def test_path_assertion_timeout_emits_heartbeats(tmp_path):
+    control = RuntimeControl()
+    heartbeats = 0
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+
+    context = ActionContext(
+        adapters=FakeAdapters().bundle(),
+        dry_run=False,
+        logger=__import__("logging").getLogger("test"),
+        confirm=lambda _request: True,
+        recipe=Recipe.model_validate(
+            {
+                "id": "run",
+                "name": "Run",
+                "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+            }
+        ),
+        config=AppConfig(),
+        overlay=NullOverlayController(),
+        runtime_control=control,
+        heartbeat=heartbeat,
+    )
+    step = AssertPathExistsStep.model_validate(
+        {"action": "assert.path_exists", "path": str(tmp_path / "missing"), "timeout_seconds": 0.01}
+    )
+
+    with pytest.raises(Exception, match="path does not exist"):
+        AssertPathExistsHandler().run(step, context)
+
+    assert heartbeats >= 2
 
 
 def test_false_adapter_assertion_result_fails_without_mutating():
@@ -175,7 +252,13 @@ def test_false_adapter_assertion_result_fails_without_mutating():
             "id": "run",
             "name": "Run",
             "steps": [{"action": "app.launch", "command": "demo.exe"}],
-            "verify": [{"action": "assert.window_exists", "title_contains": "Vendor App"}],
+            "verify": [
+                {
+                    "action": "assert.window_exists",
+                    "title_contains": "Vendor App",
+                    "timeout_seconds": 0.01,
+                }
+            ],
         }
     )
     fakes = FakeAdapters()
@@ -186,7 +269,8 @@ def test_false_adapter_assertion_result_fails_without_mutating():
     assert not summary.success
     assert summary.results[-1].status == "failed"
     assert "window not found" in summary.results[-1].message
-    assert [call[0] for call in fakes.window.calls] == ["window_exists"]
+    assert [call[0] for call in fakes.window.calls]
+    assert {call[0] for call in fakes.window.calls} == {"window_exists"}
 
 
 def test_registry_assertion_is_windows_only(monkeypatch):

@@ -158,7 +158,10 @@ class InputHotkeyStep(StepBase):
     @field_validator("keys")
     @classmethod
     def normalize_keys(cls, value: list[str]) -> list[str]:
-        return [key.strip() for key in value if key.strip()]
+        cleaned = [key.strip() for key in value if key.strip()]
+        if not cleaned:
+            raise ValueError("keys must contain at least one non-empty key")
+        return cleaned
 
 
 class ConfirmAskStep(StepBase):

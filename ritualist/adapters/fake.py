@@ -43,6 +43,8 @@ class FakeShellAdapter(RecordingAdapter):
 
 
 class FakeBrowserAdapter(RecordingAdapter):
+    closed: bool = False
+
     def open_url(
         self,
         url: str,
@@ -60,6 +62,10 @@ class FakeBrowserAdapter(RecordingAdapter):
             new_window=new_window,
             keep_open=keep_open,
         )
+
+    def close(self) -> None:
+        self.closed = True
+        self.record("close")
 
     def configure_media(self, **kwargs: Any) -> None:
         self.record("configure_media", **kwargs)

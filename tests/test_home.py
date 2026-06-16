@@ -87,6 +87,8 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "property bool runtimeActive" in qml
     assert "cellHeight: 382" in qml
     assert "confirmationModalBlocker" in qml
+    assert "detailPanel" in qml
+    assert "openCardDetails" in qml
     assert "root.confirmationPending" in qml
     assert "height: 176" in qml
     assert "maximumLineCount: 7" in qml
@@ -155,6 +157,27 @@ def test_fake_events_are_coalesced_to_latest_status():
     assert card.status is HomeCardStatus.WARNING
     assert card.subtitle == "latest status"
     assert bridge.applied_count == 1
+
+
+def test_home_event_bridge_coalesces_repeated_heartbeat_style_updates():
+    clock = FakeClock()
+    model = create_mock_home_model()
+    bridge = HomeEventBridge(model, target_hz=30, clock=clock)
+
+    for index in range(20):
+        bridge.queue_runtime_event(
+            HomeRuntimeEvent(
+                card_id="gaming-001",
+                status=HomeCardStatus.RUNNING,
+                subtitle=f"heartbeat {index}",
+            )
+        )
+
+    clock.advance(bridge.interval_seconds)
+    applied = bridge.apply_due()
+
+    assert len(applied) == 1
+    assert model.get_card("gaming-001").subtitle == "heartbeat 19"
 
 
 def test_fake_emitter_updates_model_through_bridge():

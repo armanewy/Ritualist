@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 
@@ -279,11 +280,49 @@ def test_home_run_history_maps_active_run_substates_to_running(tmp_path):
     run_dir.mkdir(parents=True)
     (run_dir / "run.json").write_text(
         json.dumps(
+                {
+                    "recipe_id": "history_recipe",
+                    "recipe_name": "History Recipe",
+                    "status": "running",
+                    "process_id": 123,
+                    "process_start_time": 1.0,
+                    "current_run_state": "waiting",
+                }
+            ),
+        encoding="utf-8",
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "history_recipe.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(
+            base_dir=tmp_path / "runs",
+            process_checker=lambda _pid: (True, 1.0),
+        ),
+    )
+
+    assert cards[0].last_run_status is HomeLastRunStatus.RUNNING
+    assert cards[0].status is HomeCardStatus.RUNNING
+
+
+def test_home_run_history_reconciles_stale_running_runs_before_cards(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "history_recipe",
+            "name": "History Recipe",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
             {
                 "recipe_id": "history_recipe",
                 "recipe_name": "History Recipe",
                 "status": "running",
-                "current_run_state": "waiting",
+                "process_id": 999999,
+                "last_heartbeat_at": "2026-06-15T12:00:00+00:00",
+                "last_step_name": "Ask before clicking Play",
             }
         ),
         encoding="utf-8",
@@ -291,11 +330,82 @@ def test_home_run_history_maps_active_run_substates_to_running(tmp_path):
 
     cards = load_installed_home_cards(
         recipe_rows=[(tmp_path / "history_recipe.yaml", recipe, None)],
-        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+        run_history_cache=HomeRunHistoryCache(
+            base_dir=tmp_path / "runs",
+            process_checker=lambda _pid: (False, None),
+        ),
+    )
+
+    assert cards[0].last_run_status is HomeLastRunStatus.INTERRUPTED
+    assert cards[0].status is HomeCardStatus.WARNING
+
+
+def test_home_run_history_keeps_active_running_runs_running(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "history_recipe",
+            "name": "History Recipe",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "history_recipe",
+                "recipe_name": "History Recipe",
+                "status": "running",
+                "process_id": 123,
+                "process_start_time": 1.0,
+                "current_run_state": "waiting",
+                "last_heartbeat_at": "2026-06-15T12:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "history_recipe.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(
+            base_dir=tmp_path / "runs",
+            process_checker=lambda _pid: (True, 1.0),
+        ),
     )
 
     assert cards[0].last_run_status is HomeLastRunStatus.RUNNING
     assert cards[0].status is HomeCardStatus.RUNNING
+
+
+def test_home_card_relative_image_resolves_next_to_recipe(tmp_path, monkeypatch):
+    recipe_path = tmp_path / "recipes" / "card_recipe.yaml"
+    image_path = recipe_path.parent / "assets" / "card.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"not decoded in this test")
+    recipe = Recipe.model_validate(
+        {
+            "id": "card_recipe",
+            "name": "Card Recipe",
+            "home": {"card": {"image": "assets/card.png"}},
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    seen: list[Path] = []
+
+    class FakeThumbnailCache:
+        def ensure_thumbnail(self, source):
+            seen.append(Path(source))
+            return SimpleNamespace(thumbnail_url="file:///thumb.png")
+
+    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(recipe_path, recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+
+    assert seen == [image_path]
+    assert cards[0].image == "file:///thumb.png"
 
 
 def test_home_run_history_cache_keeps_latest_runbook_summary(tmp_path):

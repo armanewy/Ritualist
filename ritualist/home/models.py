@@ -277,13 +277,19 @@ class HomeRunHistoryCache:
 
     limit: int = 100
     base_dir: Path | None = None
+    process_checker: Any | None = None
     _last_status_by_recipe_id: dict[str, HomeLastRunStatus] = field(default_factory=dict)
     _last_summary_by_recipe_id: dict[str, Any] = field(default_factory=dict)
     _loaded: bool = False
 
     def refresh(self) -> None:
-        from ritualist.run_logs import list_recent_runs, summarize_run_record
+        from ritualist.run_logs import list_recent_runs, reconcile_running_runs, summarize_run_record
 
+        reconcile_running_runs(
+            limit=self.limit,
+            base_dir=self.base_dir,
+            process_checker=self.process_checker,
+        )
         latest: dict[str, HomeLastRunStatus] = {}
         summaries: dict[str, Any] = {}
         for record in list_recent_runs(limit=self.limit, base_dir=self.base_dir):
@@ -334,10 +340,10 @@ def load_installed_home_cards(
 
     history = run_history_cache or HomeRunHistoryCache()
     cards: list[HomeCard] = []
-    for _path, recipe, _error in rows:
+    for path, recipe, _error in rows:
         if recipe is None:
             continue
-        cards.append(_recipe_home_card(recipe, history.get(str(recipe.id))))
+        cards.append(_recipe_home_card(recipe, history.get(str(recipe.id)), recipe_path=path))
     return cards
 
 
@@ -361,7 +367,12 @@ def _runtime_event_from_mapping(event: Mapping[str, Any]) -> HomeRuntimeEvent:
     )
 
 
-def _recipe_home_card(recipe: Any, last_run_status: HomeLastRunStatus) -> HomeCard:
+def _recipe_home_card(
+    recipe: Any,
+    last_run_status: HomeLastRunStatus,
+    *,
+    recipe_path: Path | None = None,
+) -> HomeCard:
     recipe_id = str(recipe.id)
     card_metadata = _recipe_home_card_metadata(recipe)
     title = _display_string(
@@ -379,7 +390,7 @@ def _recipe_home_card(recipe: Any, last_run_status: HomeLastRunStatus) -> HomeCa
         last_run_status=last_run_status,
         doctor_status=HomeDoctorStatus.NOT_CHECKED,
         accent=_display_string(getattr(card_metadata, "accent", None), fallback=DEFAULT_RECIPE_ACCENT),
-        image=_recipe_thumbnail_url(getattr(card_metadata, "image", None)),
+        image=_recipe_thumbnail_url(getattr(card_metadata, "image", None), recipe_path=recipe_path),
     )
 
 
@@ -412,13 +423,22 @@ def _recipe_home_card_metadata(recipe: Any) -> Any | None:
     return getattr(home, "card", None)
 
 
-def _recipe_thumbnail_url(image_path: object) -> str:
+def _recipe_thumbnail_url(image_path: object, *, recipe_path: Path | None = None) -> str:
     raw = str(image_path or "").strip()
     if not raw:
         return ""
     from ritualist.home.assets import HomeThumbnailCache
 
-    return HomeThumbnailCache().ensure_thumbnail(raw).thumbnail_url
+    return HomeThumbnailCache().ensure_thumbnail(_resolve_recipe_image_path(raw, recipe_path)).thumbnail_url
+
+
+def _resolve_recipe_image_path(raw: str, recipe_path: Path | None) -> str | Path:
+    if "://" in raw:
+        return raw
+    path = Path(raw)
+    if path.is_absolute() or recipe_path is None:
+        return path
+    return recipe_path.parent / path
 
 
 def _display_string(value: object, *, fallback: str) -> str:

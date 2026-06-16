@@ -37,6 +37,8 @@ from .overlay import (
 )
 from .runtime_control import RuntimeControl, RuntimeStoppedError
 from .runtime_models import (
+    ConfirmationRequested,
+    ConfirmationResolved,
     Heartbeat,
     LogMessage,
     RunFinished,
@@ -45,8 +47,11 @@ from .runtime_models import (
     RunStateChanged,
     RuntimeEvent,
     StepFinished,
+    StepPaused,
+    StepResumed,
     StepStarted,
     StepState,
+    StepWaiting,
 )
 
 
@@ -109,11 +114,17 @@ class WorkflowExecutor:
         self._event_sequence = 0
         self._run_started_at: datetime | None = None
         self._run_state = RunState.IDLE
+        self._paused_step_index: int | None = None
+        self._browser_keep_open_active = False
+        self._browser_used = False
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
         execution_plan = _execution_plan(recipe)
         total = len(execution_plan)
+        self._browser_keep_open_active = False
+        self._browser_used = False
+        self._paused_step_index = None
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
         self._start_runtime_run(recipe, total)
@@ -176,14 +187,23 @@ class WorkflowExecutor:
                     wait_overlay = self._start_wait_overlay(step)
                     preview_region = self._find_preview_region(step)
                     self._show_action_preview(step, preview_region)
+                    context.confirm = (
+                        lambda prompt, step_id=index, phase_name=phase, active_step=step: self._confirm(
+                            prompt,
+                            step_id=step_id,
+                            phase=phase_name,
+                            step=active_step,
+                        )
+                    )
                     if step.requires_confirmation:
                         prompt = self._confirmation_request(recipe, step, preview_region)
-                        self._heartbeat(index, step.display_name)
-                        if not self.confirmer(prompt):
+                        if not self._confirm(prompt, step_id=index, phase=phase, step=step):
                             raise UserCancelledError("user declined confirmation")
 
                     self._checkpoint_control()
                     handler = self.registry.get(step.action)
+                    if _uses_browser_adapter(step):
+                        self._browser_used = True
                     context.heartbeat = (
                         lambda step_id=index, step_name=step.display_name, active_step=step: self._heartbeat(
                             step_id,
@@ -194,6 +214,8 @@ class WorkflowExecutor:
                             step_started_at=started_at,
                         )
                     )
+                    if _is_wait_step(step):
+                        self._enter_waiting_step(index, phase, step, started_at=started_at)
                     self.logger.info("starting step %s/%s: %s", index, total, step.display_name)
                     self._emit_log_message(
                         "info",
@@ -202,6 +224,8 @@ class WorkflowExecutor:
                     )
                     outcome = handler.run(step, context)
                     message, result_metadata = _normalize_action_outcome(outcome)
+                    if _step_requests_keep_open(step):
+                        self._browser_keep_open_active = True
                     self._checkpoint_control()
                     self.logger.info("finished step %s/%s: %s", index, total, step.display_name)
                     self._emit_log_message(
@@ -238,6 +262,7 @@ class WorkflowExecutor:
                 finally:
                     if wait_overlay is not None:
                         wait_overlay.close()
+                    self._clear_transient_step_metadata()
 
             result = StepResult(
                 index=index,
@@ -276,6 +301,7 @@ class WorkflowExecutor:
         if self.run_logger is not None:
             self._finish_run_logger(summary=summary, final_state=final_state)
         self._emit_run_finished(summary, final_state)
+        self._cleanup_browser_adapter()
         if self.strict and not summary.success:
             raise ExecutionStoppedError("workflow stopped before completion", results)
         return summary
@@ -363,6 +389,49 @@ class WorkflowExecutor:
             )
         )
 
+    def _enter_waiting_step(
+        self,
+        index: int,
+        phase: str,
+        step: ExecutableStep,
+        *,
+        started_at: datetime,
+    ) -> None:
+        target = _wait_target_label(step)
+        timeout = _wait_timeout_seconds(step)
+        metadata = {
+            "action": step.action,
+            "target": target,
+            "timeout_seconds": timeout,
+            "started_at": started_at.isoformat(),
+        }
+        self._change_run_state(RunState.WAITING, message=f"waiting for {target}")
+        record_step_state = getattr(self.run_logger, "record_step_state", None)
+        if record_step_state is not None:
+            record_step_state(
+                "waiting",
+                step_id=index,
+                step_name=step.display_name,
+                action=step.action,
+                phase=phase,
+                metadata=metadata,
+            )
+        set_wait_metadata = getattr(self.run_logger, "set_wait_metadata", None)
+        if set_wait_metadata is not None:
+            set_wait_metadata(metadata)
+        self._emit_runtime_event(
+            StepWaiting(
+                **self._runtime_event_fields(),
+                step_index=index,
+                step_name=step.display_name,
+                action=step.action,
+                reason="waiting",
+                target=target,
+                timeout_seconds=timeout,
+                started_at=started_at,
+            )
+        )
+
     def _emit_step_finished(self, result: StepResult, step: ExecutableStep) -> None:
         self._emit_runtime_event(
             StepFinished(
@@ -382,6 +451,9 @@ class WorkflowExecutor:
             return
         previous_state = self._run_state
         self._run_state = state
+        record_run_state = getattr(self.run_logger, "record_run_state", None)
+        if record_run_state is not None:
+            record_run_state(state.value, event="run.state_changed", message=message)
         self._emit_runtime_event(
             RunStateChanged(
                 **self._runtime_event_fields(),
@@ -430,6 +502,12 @@ class WorkflowExecutor:
         step: ExecutableStep | None = None,
         step_started_at: datetime | None = None,
     ) -> None:
+        self._sync_paused_step(
+            step_id,
+            step_name=step_name,
+            step=step,
+            step_state=step_state,
+        )
         if self.run_logger is None:
             self._emit_heartbeat(
                 step_id,
@@ -458,6 +536,76 @@ class WorkflowExecutor:
             step_state=step_state,
             step=step,
             step_started_at=step_started_at,
+        )
+
+    def _sync_paused_step(
+        self,
+        step_id: int,
+        *,
+        step_name: str,
+        step: ExecutableStep | None,
+        step_state: StepState,
+    ) -> None:
+        if self.runtime_control.is_paused() and not self.runtime_control.is_stopping():
+            if self._paused_step_index == step_id:
+                return
+            self._paused_step_index = step_id
+            self._change_run_state(RunState.PAUSED, message="run paused")
+            metadata = {
+                "step_id": step_id,
+                "step_name": step_name,
+                "action": getattr(step, "action", None),
+            }
+            record_step_state = getattr(self.run_logger, "record_step_state", None)
+            if record_step_state is not None:
+                record_step_state(
+                    "paused",
+                    step_id=step_id,
+                    step_name=step_name,
+                    action=getattr(step, "action", None),
+                    metadata=metadata,
+                )
+            set_paused_metadata = getattr(self.run_logger, "set_paused_metadata", None)
+            if set_paused_metadata is not None:
+                set_paused_metadata(metadata)
+            self._emit_runtime_event(
+                StepPaused(
+                    **self._runtime_event_fields(),
+                    step_index=step_id,
+                    step_name=step_name,
+                    action=getattr(step, "action", "") or "",
+                    reason="run paused",
+                )
+            )
+            return
+
+        if self._paused_step_index != step_id:
+            return
+        self._paused_step_index = None
+        resumed_state = StepState.WAITING if step_state == StepState.WAITING else StepState.RUNNING
+        record_step_state = getattr(self.run_logger, "record_step_state", None)
+        if record_step_state is not None:
+            record_step_state(
+                resumed_state.value,
+                step_id=step_id,
+                step_name=step_name,
+                action=getattr(step, "action", None),
+            )
+        set_paused_metadata = getattr(self.run_logger, "set_paused_metadata", None)
+        if set_paused_metadata is not None:
+            set_paused_metadata(None)
+        self._emit_runtime_event(
+            StepResumed(
+                **self._runtime_event_fields(),
+                step_index=step_id,
+                step_name=step_name,
+                action=getattr(step, "action", "") or "",
+                state=resumed_state,
+            )
+        )
+        self._change_run_state(
+            RunState.WAITING if resumed_state == StepState.WAITING else RunState.RUNNING,
+            message="run resumed",
         )
 
     def _emit_heartbeat(
@@ -504,6 +652,91 @@ class WorkflowExecutor:
             finish(success=summary.success, final_state=final_state.value)
         except TypeError:
             finish(success=summary.success)
+
+    def _confirm(
+        self,
+        prompt: ConfirmationRequest | str,
+        *,
+        step_id: int,
+        phase: str,
+        step: ExecutableStep,
+    ) -> bool:
+        confirmation_id = uuid.uuid4().hex
+        prompt_text = _confirmation_prompt_text(prompt)
+        metadata = _confirmation_metadata(prompt, step=step, confirmation_id=confirmation_id)
+        self._change_run_state(RunState.CONFIRMING, message="confirmation requested")
+        record_step_state = getattr(self.run_logger, "record_step_state", None)
+        if record_step_state is not None:
+            record_step_state(
+                "confirming",
+                step_id=step_id,
+                step_name=step.display_name,
+                action=step.action,
+                phase=phase,
+                metadata=metadata,
+            )
+        set_confirming_metadata = getattr(self.run_logger, "set_confirming_metadata", None)
+        if set_confirming_metadata is not None:
+            set_confirming_metadata(metadata)
+        self._emit_runtime_event(
+            ConfirmationRequested(
+                **self._runtime_event_fields(),
+                confirmation_id=confirmation_id,
+                step_index=step_id,
+                step_name=step.display_name,
+                action=step.action,
+                prompt=prompt_text,
+            )
+        )
+        approved = bool(self.confirmer(prompt))
+        resolved_state = StepState.RUNNING if approved else StepState.CANCELLED
+        self._emit_runtime_event(
+            ConfirmationResolved(
+                **self._runtime_event_fields(),
+                confirmation_id=confirmation_id,
+                step_index=step_id,
+                step_name=step.display_name,
+                action=step.action,
+                approved=approved,
+                state=resolved_state,
+                message="approved" if approved else "declined",
+            )
+        )
+        if set_confirming_metadata is not None:
+            set_confirming_metadata(None)
+        if approved:
+            if record_step_state is not None:
+                record_step_state(
+                    "running",
+                    step_id=step_id,
+                    step_name=step.display_name,
+                    action=step.action,
+                    phase=phase,
+                )
+            self._change_run_state(RunState.RUNNING, message="confirmation approved")
+        else:
+            self._change_run_state(RunState.STOPPING, message="confirmation declined")
+        return approved
+
+    def _clear_transient_step_metadata(self) -> None:
+        metadata = getattr(self.run_logger, "_metadata", {}) if self.run_logger is not None else {}
+        set_wait_metadata = getattr(self.run_logger, "set_wait_metadata", None)
+        if set_wait_metadata is not None and metadata.get("wait_metadata") is not None:
+            set_wait_metadata(None)
+        set_paused_metadata = getattr(self.run_logger, "set_paused_metadata", None)
+        if set_paused_metadata is not None and metadata.get("paused_metadata") is not None:
+            set_paused_metadata(None)
+
+    def _cleanup_browser_adapter(self) -> None:
+        if self.dry_run or self._browser_keep_open_active or not self._browser_used:
+            return
+        close = getattr(getattr(self.adapters, "browser", None), "close", None)
+        if close is None:
+            return
+        try:
+            close()
+        except Exception as exc:  # noqa: BLE001 - cleanup must not mask run results.
+            self.logger.debug("browser adapter cleanup failed: %s", exc)
 
     def _start_wait_overlay(self, step: ExecutableStep) -> Any:
         if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):
@@ -671,6 +904,10 @@ def _step_requests_keep_open(step: ExecutableStep) -> bool:
     return step.action == "browser.open" and bool(getattr(step, "keep_open", False))
 
 
+def _uses_browser_adapter(step: ExecutableStep) -> bool:
+    return step.action.startswith("browser.") or step.action == "assert.browser_text_visible"
+
+
 def _wait_target_label(step: ExecutableStep) -> str:
     action = step.action
     if action == "wait.seconds":
@@ -796,6 +1033,35 @@ def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None)
     if isinstance(step, DesktopClickTextStep):
         return step.text
     return None
+
+
+def _confirmation_prompt_text(prompt: ConfirmationRequest | str) -> str:
+    if isinstance(prompt, ConfirmationRequest):
+        return prompt.prompt
+    return str(prompt)
+
+
+def _confirmation_metadata(
+    prompt: ConfirmationRequest | str,
+    *,
+    step: ExecutableStep,
+    confirmation_id: str,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "confirmation_id": confirmation_id,
+        "action": getattr(prompt, "action", None) or step.action,
+    }
+    request_fields = (
+        ("step_name", getattr(prompt, "step_name", None)),
+        ("recipe_name", getattr(prompt, "recipe_name", None)),
+        ("window_title", getattr(prompt, "window_title", None)),
+        ("target_text", getattr(prompt, "target_text", None)),
+        ("control_type", getattr(prompt, "control_type", None)),
+    )
+    for key, value in request_fields:
+        if value:
+            metadata[key] = value
+    return metadata
 
 
 def _dry_run_message(step: ExecutableStep) -> str:

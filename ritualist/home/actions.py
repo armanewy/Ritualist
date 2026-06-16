@@ -205,6 +205,39 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             wait_timeout_seconds=_seconds_string(getattr(event, "timeout_seconds", None)),
         )
 
+    if event_type == "step.paused":
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.WARNING,
+            subtitle=f"Paused: {getattr(event, 'step_index', '')}",
+            description=str(getattr(event, "step_name", "") or ""),
+        )
+
+    if event_type == "step.resumed":
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.RUNNING,
+            subtitle=f"Resumed: {getattr(event, 'step_index', '')}",
+            description=str(getattr(event, "step_name", "") or ""),
+        )
+
+    if event_type == "confirmation.requested":
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.WARNING,
+            subtitle="Confirmation required",
+            description=str(getattr(event, "prompt", "") or ""),
+        )
+
+    if event_type == "confirmation.resolved":
+        approved = bool(getattr(event, "approved", False))
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.RUNNING if approved else HomeCardStatus.WARNING,
+            subtitle="Confirmation approved" if approved else "Confirmation declined",
+            description=str(getattr(event, "message", "") or ""),
+        )
+
     if event_type == "step.started":
         return HomeRuntimeEvent(
             card_id=card_id,

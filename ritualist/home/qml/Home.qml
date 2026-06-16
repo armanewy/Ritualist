@@ -27,6 +27,8 @@ Window {
     property bool runtimePaused: homeController ? homeController.runtimePaused : false
     property bool confirmationPending: homeController ? homeController.confirmationPending : false
     property string confirmationPrompt: homeController ? homeController.confirmationPrompt : ""
+    property bool detailOpen: false
+    property var detailCard: ({})
 
     function allCards() {
         if (!homePayload || !homePayload.cards) {
@@ -100,7 +102,13 @@ Window {
             return
         }
         var card = cardModel.get(selectedCard)
-        footerText = card.title + " opened"
+        openCardDetails(card)
+    }
+
+    function openCardDetails(card) {
+        detailCard = card
+        detailOpen = true
+        footerText = card.title + " details"
     }
 
     function refreshHomePayload() {
@@ -319,7 +327,11 @@ Window {
                 }
                 event.accepted = true
             } else if (event.key === Qt.Key_Escape) {
-                root.close()
+                if (root.detailOpen) {
+                    root.detailOpen = false
+                } else {
+                    root.close()
+                }
                 event.accepted = true
             } else if (event.key === Qt.Key_Left) {
                 if (!root.railActive && root.selectedCard % grid.columns === 0) {
@@ -658,7 +670,7 @@ Window {
                                     onClicked: {
                                         root.railActive = false
                                         root.setSelectedCard(cardSlot.cardIndex)
-                                        root.footerText = title + " opened"
+                                        root.openCardDetails(cardModel.get(cardSlot.cardIndex))
                                     }
                                 }
 
@@ -971,6 +983,87 @@ Window {
                     anchors.centerIn: parent
                     text: "Cancel"
                     color: "#ffeef1"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: detailPanel
+
+        visible: root.detailOpen && !root.confirmationPending
+        z: 80
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 28
+        width: Math.min(parent.width - 56, 760)
+        height: 168
+        radius: 8
+        color: "#10151e"
+        border.color: "#35506a"
+        border.width: 1
+        opacity: 0.96
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 6
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.detailCard.title || "Recipe"
+                    color: "#f2f5f8"
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.detailCard.subtitle || ""
+                    color: "#aebbd0"
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: root.detailCard.description || ""
+                    color: "#d7e0eb"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 5
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 88
+                Layout.preferredHeight: 38
+                radius: 6
+                color: closeDetailPointer.containsMouse ? "#253244" : "#1b2532"
+                border.color: "#50667e"
+
+                MouseArea {
+                    id: closeDetailPointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.detailOpen = false
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Close"
+                    color: "#e6edf7"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }

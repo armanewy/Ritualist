@@ -39,7 +39,7 @@ class AssertFileExistsHandler:
 
     def run(self, step: AssertFileExistsStep, context: ActionContext) -> str:
         path = _expand_path(step.path)
-        if not _wait_until(lambda: path.is_file(), timeout_seconds=step.timeout_seconds):
+        if not _wait_until(lambda: path.is_file(), timeout_seconds=step.timeout_seconds, context=context):
             if path.exists():
                 raise RitualistError(f"assert.file_exists failed: path is not a file: {path}")
             raise RitualistError(f"assert.file_exists failed: file does not exist: {path}")
@@ -63,7 +63,7 @@ class AssertPathExistsHandler:
 
     def run(self, step: AssertPathExistsStep, context: ActionContext) -> str:
         path = _expand_path(step.path)
-        if not _wait_until(path.exists, timeout_seconds=step.timeout_seconds):
+        if not _wait_until(path.exists, timeout_seconds=step.timeout_seconds, context=context):
             raise RitualistError(f"assert.path_exists failed: path does not exist: {path}")
         return f"path exists: {path}"
 
@@ -85,10 +85,22 @@ class AssertProcessRunningHandler:
 
     def run(self, step: AssertProcessRunningStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 0
-        if not context.adapters.shell.process_running(
-            step.process_name,
-            timeout_seconds=timeout,
-        ):
+        if timeout > 0:
+            found = _wait_until(
+                lambda: context.adapters.shell.process_running(
+                    step.process_name,
+                    timeout_seconds=0,
+                ),
+                timeout_seconds=timeout,
+                context=context,
+            )
+        else:
+            _cooperate(context)
+            found = context.adapters.shell.process_running(
+                step.process_name,
+                timeout_seconds=0,
+            )
+        if not found:
             raise RitualistError(
                 f"assert.process_running failed: process is not running: {step.process_name}"
             )
@@ -112,10 +124,14 @@ class AssertWindowExistsHandler:
 
     def run(self, step: AssertWindowExistsStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
-        if not context.adapters.window.window_exists(
-            title_contains=step.title_contains,
-            process_name=step.process_name,
+        if not _wait_until(
+            lambda: context.adapters.window.window_exists(
+                title_contains=step.title_contains,
+                process_name=step.process_name,
+                timeout_seconds=0,
+            ),
             timeout_seconds=timeout,
+            context=context,
         ):
             target = step.title_contains or step.process_name or "window"
             raise RitualistError(f"assert.window_exists failed: window not found: {target}")
@@ -139,12 +155,16 @@ class AssertWindowTextVisibleHandler:
 
     def run(self, step: AssertWindowTextVisibleStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
-        if not context.adapters.desktop.text_visible(
-            text=step.text,
-            window_title_contains=step.window_title_contains,
-            control_type=step.control_type,
-            exact=step.exact,
+        if not _wait_until(
+            lambda: context.adapters.desktop.text_visible(
+                text=step.text,
+                window_title_contains=step.window_title_contains,
+                control_type=step.control_type,
+                exact=step.exact,
+                timeout_seconds=0,
+            ),
             timeout_seconds=timeout,
+            context=context,
         ):
             raise RitualistError(
                 "assert.window_text_visible failed: visible text not found in "
@@ -170,10 +190,14 @@ class AssertBrowserTextVisibleHandler:
 
     def run(self, step: AssertBrowserTextVisibleStep, context: ActionContext) -> str:
         timeout = step.timeout_seconds or 10.0
-        if not context.adapters.browser.text_visible(
-            text=step.text,
-            exact=step.exact,
+        if not _wait_until(
+            lambda: context.adapters.browser.text_visible(
+                text=step.text,
+                exact=step.exact,
+                timeout_seconds=min(timeout, 0.25),
+            ),
             timeout_seconds=timeout,
+            context=context,
         ):
             raise RitualistError(
                 f"assert.browser_text_visible failed: visible browser text not found: {step.text}"
@@ -228,15 +252,34 @@ def _expand_path(raw: str) -> Path:
     return Path(re.sub(r"%([^%]+)%", replace_percent_var, expanded))
 
 
-def _wait_until(predicate, *, timeout_seconds: float | None) -> bool:
+def _wait_until(
+    predicate,
+    *,
+    timeout_seconds: float | None,
+    context: ActionContext,
+    poll_interval_seconds: float = 0.25,
+) -> bool:
     timeout = timeout_seconds or 0
     deadline = time.monotonic() + timeout
     while True:
+        _cooperate(context)
         if predicate():
             return True
         if timeout <= 0 or time.monotonic() >= deadline:
             return False
-        time.sleep(0.25)
+        sleep_seconds = min(poll_interval_seconds, max(deadline - time.monotonic(), 0))
+        if sleep_seconds <= 0:
+            return False
+        time.sleep(sleep_seconds)
+
+
+def _cooperate(context: ActionContext) -> None:
+    if context.heartbeat is not None:
+        context.heartbeat()
+    if context.runtime_control is not None:
+        context.runtime_control.heartbeat()
+    if context.heartbeat is not None:
+        context.heartbeat()
 
 
 def _read_registry_value(key: str, value_name: str) -> Any:
