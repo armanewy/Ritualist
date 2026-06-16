@@ -91,10 +91,14 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "detailPanel" in qml
     assert "openCardDetails" in qml
     assert "root.confirmationPending" in qml
-    assert "height: 176" in qml
+    assert "root.confirmationPending && root.inlineConfirmationVisible" in qml
     assert "maximumLineCount: 7" in qml
     assert "firstCategoryWithCards" in qml
     assert "Number(categoryModel.get(nextCategory).count || 0) === 0" in qml
+    assert "Recent activity" in qml
+    assert "detailSubtitleText" in qml
+    assert "statusDwellTimer" in qml
+    assert "Math.max(100, root.minStatusDwellMs)" in qml
 
 
 def test_home_runtime_control_is_active_before_action_state_signal():
@@ -117,6 +121,15 @@ def test_home_confirmation_wait_refreshes_run_logger_heartbeat():
     )
     assert "def _heartbeat_home_confirmation" in source
     assert 'record_run_state("confirming", event="confirmation.waiting"' in source
+
+
+def test_home_uses_native_confirmation_presenter_when_available():
+    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "confirmation_presenter = None if mock else _create_confirmation_presenter()" in source
+    assert "self._confirmation_presenter.request_confirmation(" in source
+    assert "from ritualist.home.confirmation import create_qt_confirmation_presenter" in source
 
 
 def test_home_command_import_does_not_load_pyside6():

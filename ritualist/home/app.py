@@ -19,6 +19,7 @@ from ritualist.home.actions import (
 )
 from ritualist.home.fake_events import FakeHomeStatusEmitter
 from ritualist.home.models import (
+    HomeActivityLog,
     HomeCardStatus,
     HomeEventBridge,
     HomeModel,
@@ -45,6 +46,7 @@ def run_home(*, mock: bool = False) -> int:
     class HomeController(QObject):
         payloadChanged = Signal()
         metricsChanged = Signal()
+        recentActivityChanged = Signal()
         installedModelLoaded = Signal(object)
         installedModelLoadFailed = Signal(str)
         actionStateChanged = Signal()
@@ -62,6 +64,7 @@ def run_home(*, mock: bool = False) -> int:
             *,
             mock: bool,
             overlay_controller: Any | None,
+            confirmation_presenter: Any | None,
         ) -> None:
             super().__init__()
             self._model = model
@@ -74,6 +77,10 @@ def run_home(*, mock: bool = False) -> int:
             self._dispatcher = HomeActionDispatcher(
                 HomeActionService(overlay_controller=overlay_controller)
             )
+            self._activity = HomeActivityLog(max_entries=8)
+            self._min_status_dwell_ms = config.home.min_status_dwell_ms
+            self._inline_confirmation_visible = confirmation_presenter is None
+            self._confirmation_presenter = confirmation_presenter or _InlineHomeConfirmationPresenter()
             self._action_busy = False
             self._confirmation_pending = False
             self._confirmation_prompt = ""
@@ -120,6 +127,18 @@ def run_home(*, mock: bool = False) -> int:
         @Property(str, notify=confirmationChanged)
         def confirmationPrompt(self) -> str:
             return self._confirmation_prompt
+
+        @Property(bool, notify=confirmationChanged)
+        def inlineConfirmationVisible(self) -> bool:
+            return self._inline_confirmation_visible
+
+        @Property("QVariantList", notify=recentActivityChanged)
+        def recentActivity(self) -> list[dict[str, object]]:
+            return self._activity.to_qml()
+
+        @Property(int, notify=recentActivityChanged)
+        def minStatusDwellMs(self) -> int:
+            return self._min_status_dwell_ms
 
         @Slot()
         def drainMockEvents(self) -> None:
@@ -374,6 +393,8 @@ def run_home(*, mock: bool = False) -> int:
             return False
 
         def _publish_event(self, event: HomeRuntimeEvent) -> None:
+            if self._activity.record(event) is not None:
+                self.recentActivityChanged.emit()
             self._bridge.queue_runtime_event(event)
             if _should_flush_home_event(event):
                 self._apply_events(self._bridge.flush())
@@ -466,6 +487,13 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot(str, object)
         def _request_confirmation(self, card_id: str, prompt: object) -> None:
+            self._show_confirmation_status(card_id, prompt)
+            self._confirmation_presenter.request_confirmation(
+                prompt,
+                on_decision=lambda accepted: self.answerConfirmation(accepted),
+            )
+
+        def _show_confirmation_status(self, card_id: str, prompt: object) -> None:
             from ritualist.overlay import format_confirmation_request
 
             self._confirmation_pending = True
@@ -483,13 +511,20 @@ def run_home(*, mock: bool = False) -> int:
     config = load_app_config()
     app = QGuiApplication.instance() or QApplication(sys.argv)
     overlay_controller = None if mock else _create_overlay_controller()
+    confirmation_presenter = None if mock else _create_confirmation_presenter()
     model = (
         create_mock_home_model(config.home.categories)
         if mock
         else HomeModel(categories=config.home.categories)
     )
     bridge = HomeEventBridge(model, target_hz=30.0)
-    controller = HomeController(model, bridge, mock=mock, overlay_controller=overlay_controller)
+    controller = HomeController(
+        model,
+        bridge,
+        mock=mock,
+        overlay_controller=overlay_controller,
+        confirmation_presenter=confirmation_presenter,
+    )
     emitter = FakeHomeStatusEmitter(bridge.queue_runtime_event) if mock else None
 
     drain_timer = QTimer(controller)
@@ -557,3 +592,19 @@ def _create_overlay_controller() -> object | None:
         return QtOverlayController()
     except Exception:  # noqa: BLE001 - visual trust remains best-effort.
         return None
+
+
+def _create_confirmation_presenter() -> object | None:
+    try:
+        from ritualist.home.confirmation import create_qt_confirmation_presenter
+    except Exception:  # noqa: BLE001 - Home can fall back to inline status only.
+        return None
+    try:
+        return create_qt_confirmation_presenter()
+    except Exception:  # noqa: BLE001 - confirmation fallback still preserves safety.
+        return None
+
+
+class _InlineHomeConfirmationPresenter:
+    def request_confirmation(self, request: object, *, on_decision: Any) -> None:
+        return

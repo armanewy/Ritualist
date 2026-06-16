@@ -12,6 +12,7 @@ import pytest
 from ritualist.home import (
     HOME_CATEGORIES,
     HomeCard,
+    HomeActivityLog,
     HomeCardStatus,
     HomeDoctorStatus,
     HomeLastRunStatus,
@@ -171,7 +172,7 @@ steps:
     assert [card.id for card in model.cards] == ["launcher"]
     assert card.title == "Local Launcher"
     assert card.category == "Recipes"
-    assert card.subtitle == "Starts a local launcher."
+    assert card.subtitle == "Ready to run locally"
     assert card.description == "Starts a local launcher."
     assert card.doctor_status is HomeDoctorStatus.NOT_CHECKED
     assert [category["label"] for category in model.to_qml()["categories"]] == [
@@ -183,6 +184,32 @@ steps:
         "Settings",
         "Recipes",
     ]
+
+
+def test_installed_recipe_description_is_not_reused_as_missing_home_subtitle(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "description": "Open a looping video, minimize Chrome, launch Battle.net.",
+            "home": {
+                "category": "Gaming",
+                "card": {
+                    "title": "Gaming Mode",
+                },
+            },
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "gaming_mode.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+    card = cards[0]
+
+    assert card.subtitle == "Ready to run locally"
+    assert card.description == "Open a looping video, minimize Chrome, launch Battle.net."
 
 
 def test_installed_recipe_home_metadata_controls_card(tmp_path):
@@ -671,6 +698,31 @@ def test_home_cards_serialize_to_qml_safe_payloads():
         for value in cards_payload[0].values()
     )
     json.dumps(payload)
+
+
+def test_home_activity_log_retains_fast_statuses_without_coalescing():
+    activity = HomeActivityLog(max_entries=4)
+
+    for index, status in enumerate(
+        [
+            HomeCardStatus.RUNNING,
+            HomeCardStatus.WARNING,
+            HomeCardStatus.SUCCESS,
+        ],
+        start=1,
+    ):
+        activity.record(
+            HomeRuntimeEvent(
+                card_id="gaming_mode",
+                status=status,
+                subtitle=f"status {index}",
+            )
+        )
+
+    payload = activity.to_qml()
+
+    assert [entry["subtitle"] for entry in payload] == ["status 3", "status 2", "status 1"]
+    assert [entry["status"] for entry in payload] == ["success", "warning", "running"]
 
 
 def test_home_model_imports_without_gui_or_windows_dependencies():

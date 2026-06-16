@@ -826,6 +826,8 @@ class WorkflowExecutor:
             window_title=_confirmation_window_title(step, region),
             target_text=_confirmation_target_text(step, region),
             control_type=region.control_type if region and region.control_type else getattr(step, "control_type", None),
+            target_rect=region.rect if region else None,
+            safety_message=_confirmation_safety_message(step),
         )
 
 
@@ -1039,6 +1041,14 @@ def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None)
         return region.target_text
     if isinstance(step, DesktopClickTextStep):
         return step.text
+    return None
+
+
+def _confirmation_safety_message(step: ExecutableStep) -> str | None:
+    if isinstance(step, DesktopClickTextStep) and step.text.strip().casefold() == "play":
+        return "Clicking visible text exactly equal to Play requires explicit confirmation."
+    if getattr(step, "requires_confirmation", False):
+        return "This step requires explicit confirmation before Ritualist continues."
     return None
 
 

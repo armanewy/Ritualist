@@ -26,7 +26,10 @@ Window {
     property bool runtimeActive: homeController ? homeController.runtimeActive : false
     property bool runtimePaused: homeController ? homeController.runtimePaused : false
     property bool confirmationPending: homeController ? homeController.confirmationPending : false
+    property bool inlineConfirmationVisible: homeController ? homeController.inlineConfirmationVisible : false
     property string confirmationPrompt: homeController ? homeController.confirmationPrompt : ""
+    property var recentActivity: homeController ? homeController.recentActivity : []
+    property int minStatusDwellMs: homeController ? homeController.minStatusDwellMs : 1200
     property bool detailOpen: false
     property var detailCard: ({})
 
@@ -126,6 +129,15 @@ Window {
         detailCard = card
         detailOpen = true
         footerText = card.title + " details"
+    }
+
+    function detailSubtitleText() {
+        var subtitle = String(root.detailCard.subtitle || "").trim()
+        var description = String(root.detailCard.description || "").trim()
+        if (subtitle && subtitle.toLowerCase() === description.toLowerCase()) {
+            return ""
+        }
+        return subtitle
     }
 
     function refreshHomePayload() {
@@ -233,7 +245,9 @@ Window {
             }
         }
         setSelectedCard(preferredIndex)
-        footerText = categoryName + " ready"
+        if (!statusDwellTimer.running) {
+            footerText = categoryName + " ready"
+        }
     }
 
     function actionEnabled(cardStatus) {
@@ -303,6 +317,18 @@ Window {
                 root.footerText = "Confirmation required"
             }
         }
+
+        function onRecentActivityChanged() {
+            if (root.homeController) {
+                root.recentActivity = root.homeController.recentActivity
+                root.minStatusDwellMs = root.homeController.minStatusDwellMs
+                if (root.recentActivity.length > 0) {
+                    root.footerText = root.recentActivity[0].subtitle || root.recentActivity[0].description || root.footerText
+                    statusDwellTimer.interval = Math.max(100, root.minStatusDwellMs)
+                    statusDwellTimer.restart()
+                }
+            }
+        }
     }
 
     Timer {
@@ -317,6 +343,18 @@ Window {
         repeat: true
         running: root.hasActiveWait()
         onTriggered: root.waitTick += 1
+    }
+
+    Timer {
+        id: statusDwellTimer
+
+        interval: Math.max(100, root.minStatusDwellMs)
+        repeat: false
+        onTriggered: {
+            if (!root.actionBusy && !root.confirmationPending) {
+                root.footerText = root.currentCategoryName() + " ready"
+            }
+        }
     }
 
     Rectangle {
@@ -343,7 +381,7 @@ Window {
         }
 
         Keys.onPressed: function(event) {
-            if (root.confirmationPending) {
+            if (root.confirmationPending && root.inlineConfirmationVisible) {
                 if (event.key === Qt.Key_Escape) {
                     root.homeController.answerConfirmation(false)
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
@@ -945,6 +983,58 @@ Window {
                             }
                         }
                     }
+
+                    Rectangle {
+                        id: recentActivityPanel
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: root.recentActivity.length > 0 ? 116 : 0
+                        visible: root.recentActivity.length > 0
+                        radius: 8
+                        color: "#10151e"
+                        border.color: "#263648"
+                        border.width: 1
+                        opacity: 0.96
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 8
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Recent activity"
+                                color: "#d8e2ee"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                            }
+
+                            Repeater {
+                                model: root.recentActivity.slice(0, 3)
+
+                                delegate: RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 8
+                                        Layout.preferredHeight: 8
+                                        radius: 4
+                                        color: root.statusColor(modelData.status || "updated")
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: modelData.subtitle || modelData.description || ""
+                                        color: "#aebbd0"
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -953,7 +1043,7 @@ Window {
     Rectangle {
         id: confirmationPanel
 
-        visible: root.confirmationPending
+        visible: root.confirmationPending && root.inlineConfirmationVisible
         z: 100
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
@@ -1084,7 +1174,8 @@ Window {
 
                 Text {
                     Layout.fillWidth: true
-                    text: root.detailCard.subtitle || ""
+                    text: root.detailSubtitleText()
+                    visible: text !== ""
                     color: "#aebbd0"
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -1131,7 +1222,7 @@ Window {
     Rectangle {
         id: confirmationModalBlocker
 
-        visible: root.confirmationPending
+        visible: root.confirmationPending && root.inlineConfirmationVisible
         anchors.fill: parent
         z: 90
         color: "#000000"

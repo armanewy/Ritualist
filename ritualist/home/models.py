@@ -93,6 +93,55 @@ class HomeRuntimeEvent:
         return ("home-card", self.card_id)
 
 
+@dataclass(frozen=True)
+class HomeActivityEntry:
+    card_id: str
+    status: str
+    subtitle: str
+    description: str = ""
+    sequence: int = 0
+
+    def to_qml(self) -> dict[str, object]:
+        return {
+            "card_id": self.card_id,
+            "status": self.status,
+            "subtitle": self.subtitle,
+            "description": self.description,
+            "sequence": self.sequence,
+        }
+
+
+class HomeActivityLog:
+    def __init__(self, *, max_entries: int = 8) -> None:
+        self.max_entries = max(1, max_entries)
+        self._entries: list[HomeActivityEntry] = []
+        self._sequence = 0
+
+    @property
+    def entries(self) -> tuple[HomeActivityEntry, ...]:
+        return tuple(self._entries)
+
+    def record(self, event: HomeRuntimeEvent) -> HomeActivityEntry | None:
+        label = _activity_label(event)
+        if not label:
+            return None
+        self._sequence += 1
+        entry = HomeActivityEntry(
+            card_id=event.card_id,
+            status=_activity_status(event),
+            subtitle=label,
+            description=str(event.description or ""),
+            sequence=self._sequence,
+        )
+        self._entries.append(entry)
+        if len(self._entries) > self.max_entries:
+            self._entries = self._entries[-self.max_entries :]
+        return entry
+
+    def to_qml(self) -> list[dict[str, object]]:
+        return [entry.to_qml() for entry in reversed(self._entries)]
+
+
 @dataclass
 class HomeModel:
     cards: list[HomeCard] = field(default_factory=list)
@@ -425,7 +474,7 @@ def _recipe_subtitle(recipe: Any, *, fallback: str) -> str:
     card_metadata = _recipe_home_card_metadata(recipe)
     return _display_string(
         getattr(card_metadata, "subtitle", None),
-        fallback=_display_string(getattr(recipe, "description", None), fallback=fallback),
+        fallback=fallback,
     )
 
 
@@ -511,6 +560,22 @@ def _card_status_from_last_run(last_run_status: HomeLastRunStatus) -> HomeCardSt
     if last_run_status in {HomeLastRunStatus.STOPPED, HomeLastRunStatus.INTERRUPTED}:
         return HomeCardStatus.WARNING
     return HomeCardStatus.READY
+
+
+def _activity_label(event: HomeRuntimeEvent) -> str:
+    subtitle = str(event.subtitle or "").strip()
+    description = str(event.description or "").strip()
+    if subtitle and description:
+        return f"{subtitle} - {description}"
+    return subtitle or description
+
+
+def _activity_status(event: HomeRuntimeEvent) -> str:
+    if event.status is not None:
+        return str(event.status.value)
+    if event.last_run_status is not None:
+        return str(event.last_run_status.value)
+    return "updated"
 
 
 def _optional_enum(enum_type: type[StrEnum], value: object) -> Any:

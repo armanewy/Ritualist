@@ -60,6 +60,7 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
             "Helpdesk",
             "Settings",
         ],
+        "min_status_dwell_ms": 1200,
     }
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"

@@ -2,6 +2,8 @@
 
 from .models import (
     HOME_CATEGORIES,
+    HomeActivityEntry,
+    HomeActivityLog,
     HomeCard,
     HomeCardStatus,
     HomeCategory,
@@ -28,6 +30,8 @@ from .actions import HomeActionDispatcher, HomeActionOutcome, HomeActionService,
 
 __all__ = [
     "HOME_CATEGORIES",
+    "HomeActivityEntry",
+    "HomeActivityLog",
     "HomeActionDispatcher",
     "HomeActionOutcome",
     "HomeActionService",

@@ -29,6 +29,7 @@ class UIConfig:
 @dataclass(frozen=True)
 class HomeConfig:
     categories: tuple[str, ...] = DEFAULT_HOME_CATEGORIES
+    min_status_dwell_ms: int = 1200
 
 
 @dataclass(frozen=True)
@@ -79,7 +80,15 @@ def _load_ui_config(raw: dict[str, Any]) -> UIConfig:
 
 
 def _load_home_config(raw: dict[str, Any]) -> HomeConfig:
-    return HomeConfig(categories=_load_home_categories(raw.get("categories")))
+    dwell = raw.get("min_status_dwell_ms", 1200)
+    try:
+        dwell_int = int(dwell)
+    except (TypeError, ValueError):
+        dwell_int = 1200
+    return HomeConfig(
+        categories=_load_home_categories(raw.get("categories")),
+        min_status_dwell_ms=max(0, dwell_int),
+    )
 
 
 def _load_home_categories(raw: object) -> tuple[str, ...]:

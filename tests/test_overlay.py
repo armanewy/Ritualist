@@ -88,6 +88,9 @@ def test_desktop_click_preview_and_confirmation_include_target_details():
     assert request.window_title == "Battle.net"
     assert request.target_text == "Play"
     assert request.control_type == "Button"
+    assert request.target_rect is not None
+    assert request.target_rect.x == 30
+    assert request.safety_message == "Clicking visible text exactly equal to Play requires explicit confirmation."
 
 
 def test_window_wait_starts_and_stops_wait_hud():
@@ -291,6 +294,7 @@ def test_format_confirmation_request_includes_visual_target_context():
     assert "Step: Ask before clicking Play" in formatted
     assert "Window: Battle.net" in formatted
     assert "Target: Play (Button)" in formatted
+    assert "Safety:" not in formatted
 
 
 def test_format_confirmation_request_includes_control_without_target_text():

@@ -41,6 +41,7 @@ def test_load_app_config_defaults_home_categories_when_missing(tmp_path):
     config = load_app_config(path)
 
     assert config.home.categories == DEFAULT_HOME_CATEGORIES
+    assert config.home.min_status_dwell_ms == 1200
 
 
 def test_load_app_config_reads_custom_home_categories(tmp_path):
@@ -49,6 +50,7 @@ def test_load_app_config_reads_custom_home_categories(tmp_path):
         """
 version: "0.1"
 home:
+  min_status_dwell_ms: 1800
   categories:
     - Launchers
     - Media
@@ -60,6 +62,7 @@ home:
     config = load_app_config(path)
 
     assert config.home.categories == ("Launchers", "Media", "Local Admin")
+    assert config.home.min_status_dwell_ms == 1800
 
 
 def test_load_app_config_uses_default_home_categories_when_custom_list_is_empty(tmp_path):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Protocol
 
 LOGGER = logging.getLogger(__name__)
@@ -44,6 +45,18 @@ class ConfirmationRequest:
     window_title: str | None = None
     target_text: str | None = None
     control_type: str | None = None
+    target_rect: ScreenRect | None = None
+    safety_message: str | None = None
+
+
+class ConfirmationPresenter(Protocol):
+    def request_confirmation(
+        self,
+        request: ConfirmationRequest | str,
+        *,
+        on_decision: Callable[[bool], None],
+    ) -> None:
+        """Present a non-blocking confirmation UI and report the decision."""
 
 
 class WaitOverlayHandle(Protocol):
@@ -128,4 +141,6 @@ def format_confirmation_request(request: ConfirmationRequest | str) -> str:
         lines.append(f"Target: {target}")
     elif request.control_type:
         lines.append(f"Control: {request.control_type}")
+    if request.safety_message:
+        lines.append(f"Safety: {request.safety_message}")
     return "\n".join(lines)
