@@ -122,6 +122,55 @@ def test_dry_run_command_does_not_call_adapters(monkeypatch):
     assert fakes.shell.calls == []
 
 
+def test_run_rejects_quarantined_imported_recipe_path(monkeypatch, tmp_path):
+    imported_root = tmp_path / "imported-packs"
+    recipe_path = imported_root / "demo_pack" / "recipe.yaml"
+    recipe_path.parent.mkdir(parents=True)
+    recipe_path.write_text(
+        """
+version: "0.1"
+id: demo
+name: Demo
+steps:
+  - action: wait.seconds
+    seconds: 0.1
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("ritualist.cli.imported_packs_path", lambda: imported_root)
+
+    def fail_load(*_args, **_kwargs):
+        raise AssertionError("quarantined run should be blocked before loading")
+
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", fail_load)
+
+    result = CliRunner().invoke(app, ["run", str(recipe_path)])
+
+    assert result.exit_code == 1
+    assert "quarantined imported recipes cannot be run directly" in result.output
+
+
+def test_dry_run_allows_quarantined_imported_recipe_path(monkeypatch, tmp_path):
+    imported_root = tmp_path / "imported-packs"
+    recipe_path = imported_root / "demo_pack" / "recipe.yaml"
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [{"action": "wait.seconds", "seconds": 0.1}],
+        }
+    )
+    monkeypatch.setattr("ritualist.cli.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: FakeAdapters().bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+
+    result = CliRunner().invoke(app, ["dry-run", str(recipe_path)])
+
+    assert result.exit_code == 0
+    assert "dry-run" in result.output
+
+
 def test_run_prints_runbook_summary(monkeypatch, tmp_path):
     marker = tmp_path / "marker.txt"
     marker.write_text("ok", encoding="utf-8")

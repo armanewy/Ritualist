@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+from pathlib import Path
 import time
 from typing import Annotated
 
@@ -19,12 +20,21 @@ from .errors import RitualistError
 from .executor import WorkflowExecutor
 from .logging_setup import setup_logging
 from .overlay import format_confirmation_request
+from .packs import (
+    ImportedPackRecord,
+    enable_import,
+    export_recipe_pack,
+    import_pack as import_recipe_pack,
+    list_imports as list_pack_imports,
+)
 from .perf import PerformanceReport, measure_operation
 from .paths import (
     app_data_dir,
     browser_profiles_dir,
     config_dir,
     config_file,
+    imported_packs_dir,
+    imported_packs_path,
     logs_dir,
     recipes_dir,
     runs_dir,
@@ -43,7 +53,9 @@ from .runtime_control import RuntimeControl
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
+pack_app = typer.Typer(help="Export, import, and review portable local recipe packs.")
 app.add_typer(perf_app, name="perf")
+app.add_typer(pack_app, name="pack")
 console = Console()
 
 
@@ -89,6 +101,7 @@ def paths() -> None:
             "config": config_dir(),
             "config_file": config_file(),
             "recipes": recipes_dir(),
+            "imported_packs": imported_packs_dir(),
             "logs": logs_dir(),
             "runs": runs_dir(),
             "browser_profiles": browser_profiles_dir(),
@@ -124,6 +137,100 @@ def actions(
             "yes" if metadata.allowed_in_imported_packs else "no",
         )
     console.print(table)
+
+
+@pack_app.command("export")
+def pack_export(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Output .ritualistpack archive path."),
+    ],
+    readme: Annotated[
+        Path | None,
+        typer.Option("--readme", help="Optional UTF-8 README file to include as README.md."),
+    ] = None,
+) -> None:
+    """Export a recipe into a portable .ritualistpack zip."""
+    try:
+        result = export_recipe_pack(recipe, out, readme_path=readme)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    console.print(f"[green]Exported pack:[/] {escape(str(result.output_path))}")
+    console.print(f"recipe: {escape(result.recipe_id)}")
+    console.print("contents:")
+    for entry in result.entries:
+        console.print(f"- {escape(entry)}")
+
+
+@pack_app.command("import")
+def pack_import(
+    pack: Annotated[str, typer.Argument(help="Path to a .ritualistpack archive.")],
+) -> None:
+    """Import a local recipe pack into disabled quarantine storage."""
+    try:
+        record = import_recipe_pack(pack)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    console.print(
+        f"[green]Imported pack {escape(record.import_id)} into quarantine; it is disabled.[/]"
+    )
+    _print_import_record(record)
+    console.print("Review and configure the quarantined recipe, then run Doctor/dry-run:")
+    for recipe in record.recipes:
+        path = record.root / recipe.path
+        console.print(f"- ritualist doctor {escape(str(path))}")
+        console.print(f"- ritualist dry-run {escape(str(path))}")
+    console.print(f"Enable after review with: ritualist pack enable {escape(record.import_id)}")
+
+
+@pack_app.command("list-imports")
+def pack_list_imports() -> None:
+    """List packs currently stored in import quarantine."""
+    try:
+        records = list_pack_imports()
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    table = Table(title="Imported Packs")
+    table.add_column("Import ID")
+    table.add_column("Name")
+    table.add_column("Version")
+    table.add_column("Status")
+    table.add_column("Recipes")
+    table.add_column("Path")
+    for record in records:
+        table.add_row(
+            escape(record.import_id),
+            escape(record.name),
+            escape(record.version),
+            escape(record.status),
+            ", ".join(escape(recipe.recipe_id) for recipe in record.recipes),
+            escape(str(record.root)),
+        )
+    console.print(table)
+    if not records:
+        console.print("No imported packs found.")
+
+
+@pack_app.command("enable")
+def pack_enable(
+    import_id: Annotated[str, typer.Argument(help="Import id from 'ritualist pack list-imports'.")],
+) -> None:
+    """Validate a quarantined pack and copy its recipe into enabled recipes."""
+    try:
+        record = enable_import(import_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    console.print(f"[green]Enabled imported pack {escape(record.import_id)}.[/]")
+    _print_import_record(record)
+    console.print("No recipe was run.")
 
 
 @perf_app.command("doctor")
@@ -657,6 +764,11 @@ def _run_recipe(
 ) -> None:
     logger = setup_logging()
     try:
+        if not dry_run and _is_imported_pack_recipe_path(recipe):
+            raise RitualistError(
+                "quarantined imported recipes cannot be run directly; "
+                "run Doctor/dry-run, configure the recipe, then enable the pack first"
+            )
         parsed = load_recipe_reference(recipe, _parse_vars(var_values or []))
         registry = create_default_registry()
         adapters = create_default_adapters()
@@ -707,6 +819,18 @@ def _run_recipe(
         _keep_alive_until_interrupted()
     if not summary.success:
         raise typer.Exit(1)
+
+
+def _is_imported_pack_recipe_path(recipe: str) -> bool:
+    candidate = Path(recipe).expanduser()
+    if not candidate.suffix:
+        return False
+    try:
+        resolved_candidate = candidate.resolve(strict=False)
+        resolved_imports = imported_packs_path().resolve(strict=False)
+    except OSError:
+        return False
+    return resolved_candidate.is_relative_to(resolved_imports)
 
 
 def _parse_vars(values: list[str]) -> dict[str, str]:
@@ -769,6 +893,19 @@ def _print_paths(paths: dict[str, object]) -> None:
     table.add_column("Path")
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
+    console.print(table)
+
+
+def _print_import_record(record: ImportedPackRecord) -> None:
+    table = Table(title=f"Import: {escape(record.import_id)}")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("status", escape(record.status))
+    table.add_row("name", escape(record.name))
+    table.add_row("version", escape(record.version))
+    table.add_row("path", escape(str(record.root)))
+    for recipe in record.recipes:
+        table.add_row(f"recipe {escape(recipe.recipe_id)}", escape(recipe.name))
     console.print(table)
 
 

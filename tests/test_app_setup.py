@@ -14,6 +14,7 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "app_data": app_data,
         "config": app_data / "config",
         "recipes": recipe_dir,
+        "imported_packs": app_data / "imported-packs",
         "logs": app_data / "logs",
         "runs": app_data / "runs",
         "browser_profiles": app_data / "browser-profiles",
@@ -21,6 +22,10 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
     monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
     monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
     monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_packs_path",
+        lambda: created_dirs["imported_packs"],
+    )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(
@@ -83,6 +88,7 @@ steps:
         "app_data": tmp_path,
         "config": tmp_path / "config",
         "recipes": recipe_dir,
+        "imported_packs": tmp_path / "imported-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
         "browser_profiles": tmp_path / "browser-profiles",
@@ -91,6 +97,10 @@ steps:
     monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
     monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
     monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_packs_path",
+        lambda: created_dirs["imported_packs"],
+    )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(
@@ -118,6 +128,7 @@ def test_initialize_app_reports_noop_when_up_to_date(tmp_path, monkeypatch):
         "app_data": tmp_path,
         "config": tmp_path / "config",
         "recipes": recipe_dir,
+        "imported_packs": tmp_path / "imported-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
         "browser_profiles": tmp_path / "browser-profiles",
@@ -140,6 +151,10 @@ steps:
     monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
     monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
     monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_packs_path",
+        lambda: created_dirs["imported_packs"],
+    )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(

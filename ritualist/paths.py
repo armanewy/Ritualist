@@ -46,6 +46,16 @@ def recipes_path() -> Path:
     return app_data_path() / "recipes"
 
 
+def imported_packs_dir() -> Path:
+    path = imported_packs_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def imported_packs_path() -> Path:
+    return app_data_path() / "imported-packs"
+
+
 def logs_dir() -> Path:
     path = logs_path()
     path.mkdir(parents=True, exist_ok=True)
@@ -95,6 +105,7 @@ def ensure_app_dirs() -> dict[str, Path]:
         "app_data": app_data_dir(),
         "config": config_dir(),
         "recipes": recipes_dir(),
+        "imported_packs": imported_packs_dir(),
         "logs": logs_dir(),
         "runs": runs_dir(),
         "browser_profiles": browser_profiles_dir(),

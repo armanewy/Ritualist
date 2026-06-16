@@ -6,6 +6,7 @@ This v0.1 implementation includes:
 
 - CLI runner: `ritualist run recipe.yaml`
 - Recipe initialization and discovery: `ritualist init`, `ritualist list`, `ritualist paths`
+- Portable recipe packs: `ritualist pack export`, `ritualist pack import`, `ritualist pack list-imports`, `ritualist pack enable`
 - Desktop diagnostics: `ritualist doctor`, `ritualist inspect-window`
 - GUI launcher: `ritualist gui`
 - YAML recipe validation and variable templating
@@ -47,6 +48,26 @@ ritualist run gaming_mode --var youtube_url=https://www.youtube.com/watch?v=...
 ```
 
 Recipe arguments can be either a recipe id from the user recipes directory or a direct YAML path.
+
+Export and import a portable recipe pack:
+
+```powershell
+ritualist pack export gaming_mode --out gaming_mode.ritualistpack
+ritualist pack import .\gaming_mode.ritualistpack
+ritualist pack list-imports
+ritualist doctor <quarantined-recipe-path>
+ritualist dry-run <quarantined-recipe-path>
+```
+
+Pack export writes a `.ritualistpack` zip containing `manifest.yaml`, `recipe.yaml`, and
+optionally `README.md` when `--readme` points at an explicit UTF-8 text file. Pack import
+validates the archive and copies it into disabled quarantine storage under local app data. It
+does not enable, run, launch, click, type, open browsers, or contact any remote service. Packs
+containing UI, app-launch, or browser-control actions remain blocked from enable in v0.1 and
+should be reviewed with Doctor and dry-run from quarantine. Enable is only available for actions
+allowed by the imported-pack policy, and still does not run recipes. Logs, run history, browser
+profiles, cookies, screenshots, secrets, local paths, and user data are never included in exported
+packs.
 
 Launch the GUI:
 
@@ -273,6 +294,7 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 
 - `config`
 - `recipes`
+- `imported-packs`
 - `logs`
 - `runs`
 - `browser-profiles`
