@@ -13,7 +13,9 @@ $pyinstallerArgs = @(
     "--name", "Ritualist",
     "--collect-submodules", "ritualist.actions",
     "--collect-submodules", "ritualist.adapters",
+    "--collect-submodules", "ritualist.home",
     "--collect-submodules", "ritualist.ui",
+    "--collect-data", "ritualist.home.qml",
     "--collect-data", "ritualist.sample_recipes",
     "--copy-metadata", "ritualist",
     "ritualist\desktop_entry.py"

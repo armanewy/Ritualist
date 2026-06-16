@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import sys
 import traceback
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from ritualist.errors import RitualistError
-from ritualist.ui.app import run_gui
 
 
-def main() -> int:
-    """Launch the desktop GUI entry point used by Windows app bundles."""
+def main(argv: Sequence[str] | None = None) -> int:
+    """Launch the desktop entry point used by Windows app bundles."""
     try:
-        _run_gui()
+        launch_mode = _launch_mode(sys.argv[1:] if argv is None else argv)
+        if launch_mode == "classic-gui":
+            _run_gui()
+        else:
+            _run_home()
     except RitualistError as exc:
         _report_startup_error(str(exc), traceback.format_exc())
         return 1
@@ -22,7 +26,27 @@ def main() -> int:
 
 
 def _run_gui() -> None:
+    from ritualist.ui.app import run_gui
+
     run_gui()
+
+
+def _run_home() -> None:
+    from ritualist.home.app import run_home
+
+    run_home(mock=False)
+
+
+def _launch_mode(argv: Sequence[str]) -> str:
+    args = tuple(argv)
+    if not args or args == ("--home",):
+        return "home"
+    if args in (("--classic-gui",), ("--gui",)):
+        return "classic-gui"
+    raise RitualistError(
+        "Unsupported desktop option. Use Ritualist.exe for Home or "
+        "Ritualist.exe --classic-gui for the classic GUI."
+    )
 
 
 def _report_startup_error(message: str, details: str | None = None) -> None:

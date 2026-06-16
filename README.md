@@ -346,15 +346,17 @@ The build script runs PyInstaller in one-folder/windowed mode and writes:
 dist\Ritualist\Ritualist.exe
 ```
 
-`Ritualist.exe` launches the GUI through `ritualist.desktop_entry`; it does not run any ritual automatically. The normal development CLI stays available through `python -m ritualist` and the `ritualist` console command.
+`Ritualist.exe` launches Home through `ritualist.desktop_entry`; it does not run any ritual automatically. The classic GUI remains available with `dist\Ritualist\Ritualist.exe --classic-gui` or `dist\Ritualist\Ritualist.exe --gui`. The normal development CLI stays available through `python -m ritualist` and the `ritualist` console command.
 
-Bundled sample recipes are collected into the app bundle so **Initialize App** can still install `gaming_mode.yaml`, and starter workspace templates remain available as packaged samples. User data still belongs in the platform user-data directory shown by `ritualist paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Ritualist`.
+Home QML files and bundled sample recipes are collected into the app bundle so Home can load and **Initialize App** in the classic GUI can still install `gaming_mode.yaml`; starter workspace templates remain available as packaged samples. User data still belongs in the platform user-data directory shown by `ritualist paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Ritualist`.
 
 Manual packaged-build smoke checks:
 
 ```text
-dist\Ritualist\Ritualist.exe opens the GUI
-Initialize App works
+dist\Ritualist\Ritualist.exe opens Home
+dist\Ritualist\Ritualist.exe --classic-gui opens the classic GUI
+Initialize App works in the classic GUI
+Home loads installed recipes after initialization
 Open Recipes Folder works
 Dry Run selected recipe works with gaming_mode
 Open Logs/Runs Folder works
@@ -365,7 +367,7 @@ Playwright browser binaries and persistent profile behavior should be retested a
 
 ### Packaged App Troubleshooting
 
-If `dist\Ritualist\Ritualist.exe` opens but a workflow fails, use **About / Diagnostics** first. It shows whether the app is running from a PyInstaller bundle, where user data/logs/runs/browser profiles live, and whether PySide6, Playwright, and Windows UI Automation dependencies are importable. Use **Copy Diagnostics** when filing a bug diary entry.
+If `dist\Ritualist\Ritualist.exe` opens but a workflow fails, launch `dist\Ritualist\Ritualist.exe --classic-gui` and use **About / Diagnostics** first. It shows whether the app is running from a PyInstaller bundle, where user data/logs/runs/browser profiles live, and whether PySide6, Playwright, and Windows UI Automation dependencies are importable. Use **Copy Diagnostics** when filing a bug diary entry.
 
 If the Playwright browser is missing or browser steps fail immediately, rerun this from the development checkout before rebuilding:
 
