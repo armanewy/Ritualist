@@ -19,6 +19,11 @@ from .app_setup import initialize_app
 from .doctor import build_doctor_report
 from .errors import RitualistError
 from .executor import WorkflowExecutor
+from .intent_planner import (
+    build_plan_doctor_report,
+    compile_plan_reference,
+    plan_preview_payload,
+)
 from .logging_setup import setup_logging
 from .overlay import format_confirmation_request
 from .packs import (
@@ -72,11 +77,13 @@ pack_app = typer.Typer(help="Export, import, and review portable local recipe pa
 primitive_app = typer.Typer(help="Inspect primitive kernel metadata.")
 policy_app = typer.Typer(help="Inspect primitive policy and local pack governance.")
 diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts.")
+plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
 app.add_typer(policy_app, name="policy")
 app.add_typer(diagnostics_app, name="diagnostics")
+app.add_typer(plan_app, name="plan")
 console = Console()
 
 
@@ -328,6 +335,52 @@ def _print_primitive_result(result: object) -> None:
         console.print(table)
 
 
+def _print_plan_preview(plan: object, doctor: object) -> None:
+    table = Table(title=f"Plan Preview: {escape(str(plan.plan_id))}")
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("steps", str(len(plan.steps)))
+    table.add_row("primitives", escape(", ".join(plan.required_primitives) or "none"))
+    table.add_row("capabilities", escape(", ".join(plan.required_capabilities) or "none"))
+    table.add_row("risks", escape(json.dumps(plan.risk_summary, sort_keys=True)))
+    table.add_row("compatibility", escape(str(doctor.compatibility)))
+    console.print(table)
+
+    if plan.steps:
+        step_table = Table(title="Plan Steps")
+        step_table.add_column("#", justify="right")
+        step_table.add_column("Primitive", no_wrap=True)
+        step_table.add_column("Name")
+        step_table.add_column("Risk", no_wrap=True)
+        for index, step in enumerate(plan.steps, start=1):
+            step_table.add_row(
+                str(index),
+                escape(step.primitive_id),
+                escape(step.step_name or ""),
+                escape(step.risk.value if step.risk else ""),
+            )
+        console.print(step_table)
+
+    if plan.confirmations_needed:
+        console.print("[bold]Confirmations needed[/]")
+        for item in plan.confirmations_needed:
+            console.print(f"- {escape(item)}")
+    if plan.unresolved_questions:
+        console.print("[bold]Unresolved[/]")
+        for item in plan.unresolved_questions:
+            console.print(f"- {escape(item)}")
+    notable = [
+        check
+        for check in doctor.checks
+        if check.status in {"error", "warn"}
+        and check.section in {"Policy", "Primitives", "Variables"}
+    ]
+    if notable:
+        console.print("[bold]Plan Doctor[/]")
+        for check in notable:
+            console.print(f"- {escape(check.section)}: {escape(check.message)}")
+
+
 @diagnostics_app.command("collect")
 def diagnostics_collect(
     preset: Annotated[
@@ -375,6 +428,32 @@ def diagnostics_collect(
         return
     _print_primitive_result(result)
     if result.status == "failed":
+        raise typer.Exit(1)
+
+
+@plan_app.command("preview")
+def plan_preview(
+    target: Annotated[
+        str,
+        typer.Argument(help="Intent kind/spec path, recipe id, or recipe YAML path."),
+    ],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable plan preview."),
+    ] = False,
+) -> None:
+    """Compile an intent or recipe into a side-effect-free primitive plan preview."""
+    try:
+        plan = compile_plan_reference(target)
+        doctor = build_plan_doctor_report(plan)
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=plan_preview_payload(plan, doctor))
+        return
+    _print_plan_preview(plan, doctor)
+    if doctor.compatibility == "incompatible":
         raise typer.Exit(1)
 
 

@@ -222,12 +222,31 @@ class PrimitivePlan:
     plan_id: str
     steps: tuple[PrimitivePlanStep, ...]
     recipe_id: str | None = None
+    intent: dict[str, Any] | None = None
+    required_primitives: tuple[str, ...] = ()
+    required_capabilities: tuple[str, ...] = ()
+    risk_summary: dict[str, int] = field(default_factory=dict)
+    confirmations_needed: tuple[str, ...] = ()
+    artifacts_expected: tuple[str, ...] = ()
+    verification_steps: tuple[str, ...] = ()
+    rollback_or_cleanup_notes: tuple[str, ...] = ()
+    unresolved_questions: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
             "plan_id": self.plan_id,
             "recipe_id": self.recipe_id,
+            "intent": self.intent,
+            "plan_steps": [step.to_dict() for step in self.steps],
             "steps": [step.to_dict() for step in self.steps],
+            "required_primitives": list(self.required_primitives),
+            "required_capabilities": list(self.required_capabilities),
+            "risk_summary": dict(self.risk_summary),
+            "confirmations_needed": list(self.confirmations_needed),
+            "artifacts_expected": list(self.artifacts_expected),
+            "verification_steps": list(self.verification_steps),
+            "rollback_or_cleanup_notes": list(self.rollback_or_cleanup_notes),
+            "unresolved_questions": list(self.unresolved_questions),
         }
 
 
