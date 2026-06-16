@@ -166,6 +166,71 @@ class ConfirmAskStep(StepBase):
     prompt: str
 
 
+class HumanPromptStep(StepBase):
+    action: Literal["human.prompt"]
+    prompt: str = Field(min_length=1)
+
+    @field_validator("prompt")
+    @classmethod
+    def reject_blank_prompt(cls, value: str) -> str:
+        return _required_text("prompt", value)
+
+
+class HumanChecklistStep(StepBase):
+    action: Literal["human.checklist"]
+    prompt: str = Field(min_length=1)
+    items: list[str] = Field(min_length=1)
+
+    @field_validator("prompt")
+    @classmethod
+    def reject_blank_prompt(cls, value: str) -> str:
+        return _required_text("prompt", value)
+
+    @field_validator("items")
+    @classmethod
+    def reject_blank_items(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value]
+        if any(not item for item in cleaned):
+            raise ValueError("checklist items must not be blank")
+        return cleaned
+
+
+class HumanConfirmEvidenceStep(StepBase):
+    action: Literal["human.confirm_evidence"]
+    prompt: str = Field(min_length=1)
+    evidence: list[str] = Field(min_length=1)
+
+    @field_validator("prompt")
+    @classmethod
+    def reject_blank_prompt(cls, value: str) -> str:
+        return _required_text("prompt", value)
+
+    @field_validator("evidence")
+    @classmethod
+    def reject_blank_evidence(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value]
+        if any(not item for item in cleaned):
+            raise ValueError("evidence items must not be blank")
+        return cleaned
+
+
+class NoteAddStep(StepBase):
+    action: Literal["note.add"]
+    text: str = Field(min_length=1)
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        return _required_text("text", value)
+
+
+def _required_text(field_name: str, value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError(f"{field_name} must not be blank")
+    return cleaned
+
+
 class WaitSecondsStep(StepBase):
     action: Literal["wait.seconds"]
     seconds: float = Field(gt=0)
@@ -276,6 +341,10 @@ WorkflowStep = Annotated[
     | DesktopClickTextStep
     | InputHotkeyStep
     | ConfirmAskStep
+    | HumanPromptStep
+    | HumanChecklistStep
+    | HumanConfirmEvidenceStep
+    | NoteAddStep
     | WaitSecondsStep
     | WaitForUserStep
     | WaitForFileStep

@@ -15,6 +15,8 @@ CatalogCategoryName = Literal[
     "Input",
     "Files",
     "System",
+    "Human",
+    "Notes",
     "Assertions",
     "Waits",
 ]
@@ -27,6 +29,8 @@ CATALOG_CATEGORY_NAMES: tuple[CatalogCategoryName, ...] = (
     "Input",
     "Files",
     "System",
+    "Human",
+    "Notes",
     "Assertions",
     "Waits",
 )
@@ -69,7 +73,11 @@ _ACTION_DESCRIPTIONS: dict[str, str] = {
     "browser.open": "Open a URL in a supported local browser profile.",
     "confirm.ask": "Ask the user for explicit confirmation before continuing.",
     "desktop.click_text": "Click visible text inside a scoped desktop window.",
+    "human.checklist": "Ask the operator to complete an explicit checklist before continuing.",
+    "human.confirm_evidence": "Ask the operator to confirm expected evidence before continuing.",
+    "human.prompt": "Show an explicit operator prompt and wait for acknowledgement.",
     "input.hotkey": "Send a structured keyboard hotkey.",
+    "note.add": "Record a redacted note marker in the action result metadata.",
     "wait.for_file": "Wait until a file appears.",
     "wait.for_process": "Wait until a local process appears.",
     "wait.for_process_exit": "Wait until a local process exits.",
@@ -211,8 +219,12 @@ def _catalog_category(metadata: ActionMetadata) -> CatalogCategoryName:
         return "Windows"
     if metadata.category == "desktop":
         return "Desktop UI"
+    if metadata.category == "human":
+        return "Human"
     if metadata.category == "input":
         return "Input"
+    if metadata.category == "note":
+        return "Notes"
     if metadata.category == "assert":
         return "Assertions"
     if metadata.category == "wait":
