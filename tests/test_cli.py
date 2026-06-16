@@ -919,6 +919,7 @@ def test_doctor_json_outputs_stable_shape(monkeypatch):
         "capabilities",
         "variables",
         "actions",
+        "primitives",
         "environment",
     }
     assert data["schema_version"] == "doctor.v2"
@@ -945,6 +946,9 @@ def test_doctor_json_outputs_stable_shape(monkeypatch):
         }
     ]
     assert data["actions"][0]["action"] == "app.launch"
+    assert data["primitives"][0]["primitive_id"] == "app.process.launch"
+    assert data["primitives"][0]["risk"] == "launches_app"
+    assert data["primitives"][0]["allowed_in_imported_packs"] is False
     assert data["environment"]["current_os"] in {"windows", "macos", "linux"}
     assert data["environment"]["required_capabilities"] == ["app_launch"]
 

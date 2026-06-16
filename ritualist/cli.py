@@ -40,6 +40,7 @@ from .paths import (
     recipes_dir,
     runs_dir,
 )
+from .primitives import PrimitiveSpec, create_primitive_registry
 from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
 from .run_logs import (
     RunLogWriter,
@@ -56,8 +57,10 @@ from .runtime_control import RuntimeControl
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
 pack_app = typer.Typer(help="Export, import, and review portable local recipe packs.")
+primitive_app = typer.Typer(help="Inspect primitive kernel metadata.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
+app.add_typer(primitive_app, name="primitive")
 console = Console()
 
 
@@ -139,6 +142,117 @@ def actions(
             "yes" if metadata.allowed_in_imported_packs else "no",
         )
     console.print(table)
+
+
+@app.command()
+def primitives(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable primitive metadata."),
+    ] = False,
+) -> None:
+    """List primitive kernel metadata derived from registered actions."""
+    registry = create_primitive_registry()
+    specs = registry.specs()
+    if json_output:
+        console.print_json(data=[spec.to_dict() for spec in specs])
+        return
+
+    table = Table(title="Primitive Kernel")
+    table.add_column("Primitive", no_wrap=True)
+    table.add_column("Action", no_wrap=True)
+    table.add_column("Risk", no_wrap=True)
+    table.add_column("Capabilities")
+    table.add_column("Platforms")
+    table.add_column("Imported", no_wrap=True)
+    table.add_column("Adapter", no_wrap=True)
+    for spec in specs:
+        table.add_row(
+            escape(spec.primitive_id),
+            escape(spec.action_name or ""),
+            escape(spec.risk.value),
+            escape(", ".join(capability.value for capability in spec.required_capabilities) or "none"),
+            escape(", ".join(spec.supported_platforms)),
+            "yes" if spec.allowed_in_imported_packs else "no",
+            escape(spec.adapter_binding.adapter_id),
+        )
+    console.print(table)
+
+
+@primitive_app.command("show")
+def primitive_show(
+    primitive_id: Annotated[str, typer.Argument(help="Primitive id such as browser.session.open.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable primitive metadata."),
+    ] = False,
+) -> None:
+    """Show one primitive by full family.verb id."""
+    registry = create_primitive_registry()
+    try:
+        spec = registry.spec(primitive_id)
+    except KeyError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        console.print_json(data=spec.to_dict())
+        return
+    _print_primitive_spec(spec)
+
+
+@primitive_app.command("families")
+def primitive_families(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable primitive family names."),
+    ] = False,
+) -> None:
+    """List primitive families currently represented by registered primitives."""
+    families = create_primitive_registry().families()
+    if json_output:
+        console.print_json(data=families)
+        return
+    table = Table(title="Primitive Families")
+    table.add_column("Family")
+    for family in families:
+        table.add_row(escape(family))
+    console.print(table)
+
+
+def _print_primitive_spec(spec: PrimitiveSpec) -> None:
+    table = Table(title=f"Primitive: {escape(spec.primitive_id)}")
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    rows = {
+        "display_name": spec.display_name,
+        "description": spec.description,
+        "action": spec.action_name or "",
+        "risk": spec.risk.value,
+        "confirmation_policy": spec.confirmation_policy,
+        "allowed_in_imported_packs": "yes" if spec.allowed_in_imported_packs else "no",
+        "capabilities": ", ".join(capability.value for capability in spec.required_capabilities) or "none",
+        "platforms": ", ".join(spec.supported_platforms),
+        "adapter": f"{spec.adapter_binding.adapter_id} ({spec.adapter_binding.binding_type})",
+        "dry_run": spec.dry_run_behavior,
+        "verification": spec.verification_behavior,
+        "artifacts": spec.artifact_behavior,
+    }
+    for key, value in rows.items():
+        table.add_row(escape(key), escape(value))
+    console.print(table)
+    if spec.parameters:
+        parameter_table = Table(title="Parameters")
+        parameter_table.add_column("Name")
+        parameter_table.add_column("Required")
+        parameter_table.add_column("Sensitive")
+        for parameter in spec.parameters:
+            parameter_table.add_row(
+                escape(parameter.name),
+                "yes" if parameter.required else "no",
+                "yes" if parameter.sensitive else "no",
+            )
+        console.print(parameter_table)
 
 
 @pack_app.command("export")

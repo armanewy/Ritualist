@@ -11,6 +11,7 @@ from .actions.registry import ActionRegistry, create_default_registry
 from .adapters.shell import resolve_local_command_path
 from .models import Condition, FlowIfStep, Recipe
 from .paths import browser_profiles_dir
+from .primitives import PrimitiveRegistry, PrimitiveSpec, create_primitive_registry
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class DoctorReport:
     current_os: str
     checks: list[DoctorCheck]
     action_metadata: list[ActionMetadata]
+    primitive_specs: list[PrimitiveSpec]
     recipe: Recipe
     missing_variables: list[str] = field(default_factory=list)
     required_capabilities: list[str] = field(default_factory=list)
@@ -77,6 +79,7 @@ class DoctorReport:
             "capabilities": self._capabilities_to_dict(),
             "variables": self._variables_to_dict(),
             "actions": [metadata.to_dict() for metadata in self.action_metadata],
+            "primitives": [spec.to_dict() for spec in self.primitive_specs],
             "environment": self._environment_to_dict(),
         }
 
@@ -166,6 +169,7 @@ def build_doctor_report(
     registry: ActionRegistry | None = None,
 ) -> DoctorReport:
     registry = registry or create_default_registry()
+    primitive_registry = create_primitive_registry(registry)
     current_os = _current_os()
     action_types = sorted({step.action for step in recipe.execution_steps})
     checks: list[DoctorCheck] = [
@@ -180,6 +184,7 @@ def build_doctor_report(
     checks.extend(_check_environment_os(recipe, current_os))
     checks.extend(_check_variables(recipe, missing_variables or []))
     checks.extend(_check_actions(action_types, registry, current_os))
+    checks.extend(_describe_primitive_requirements(action_types, primitive_registry))
 
     required_capabilities = _required_capabilities(recipe, action_types, registry)
     capability_checks = [_check_capability(capability) for capability in required_capabilities]
@@ -200,6 +205,7 @@ def build_doctor_report(
         current_os=current_os,
         checks=checks,
         action_metadata=[registry.metadata(action_type) for action_type in action_types],
+        primitive_specs=_primitive_specs_for_actions(action_types, primitive_registry),
         recipe=recipe,
         missing_variables=sorted(missing_variables or []),
         required_capabilities=required_capabilities,
@@ -325,6 +331,52 @@ def _check_actions(
             )
         )
     return checks
+
+
+def _describe_primitive_requirements(
+    action_types: list[str],
+    primitive_registry: PrimitiveRegistry,
+) -> list[DoctorCheck]:
+    checks: list[DoctorCheck] = []
+    for action_type in action_types:
+        try:
+            spec = primitive_registry.spec_for_action(action_type)
+        except KeyError:
+            checks.append(
+                DoctorCheck(
+                    "warn",
+                    action_type,
+                    "action is not yet mapped to primitive metadata",
+                    section="Primitives",
+                )
+            )
+            continue
+        checks.append(
+            DoctorCheck(
+                "ok",
+                spec.primitive_id,
+                (
+                    f"{action_type} uses {spec.primitive_id} via "
+                    f"{spec.adapter_binding.adapter_id}; risk: {spec.risk.value}"
+                ),
+                section="Primitives",
+                details=spec.to_dict(),
+            )
+        )
+    return checks
+
+
+def _primitive_specs_for_actions(
+    action_types: list[str],
+    primitive_registry: PrimitiveRegistry,
+) -> list[PrimitiveSpec]:
+    specs: list[PrimitiveSpec] = []
+    for action_type in action_types:
+        try:
+            specs.append(primitive_registry.spec_for_action(action_type))
+        except KeyError:
+            continue
+    return specs
 
 
 def _required_capabilities(
