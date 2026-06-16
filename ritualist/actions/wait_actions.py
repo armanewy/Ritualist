@@ -79,6 +79,7 @@ class WaitForUserHandler:
             prompt=step.prompt,
             action=step.action,
             step_name=step.display_name,
+            recipe_name=context.recipe.name,
         )
         accepted = _confirm_user(request, context=context, timeout_seconds=step.timeout_seconds)
         if not accepted:

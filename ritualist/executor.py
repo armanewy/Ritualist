@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .actions.base import (
+    ActionOutcome,
     ActionContext,
     AdapterBundle,
     ConfirmationCallback,
@@ -127,11 +128,12 @@ class WorkflowExecutor:
                 self._emit_step_finished(result, step)
                 self._emit(index, total, step, "cancelled", result.message)
                 break
-            self._start_step(index, step)
-            self._emit(index, total, step, "running")
             started_at = _now()
+            self._start_step(index, step)
+            self._emit(index, total, step, "running", step_started_at=started_at)
             status = "success"
             message = ""
+            result_metadata: dict[str, Any] = {}
             dry_run_step = False
 
             if self.dry_run:
@@ -151,7 +153,7 @@ class WorkflowExecutor:
                     preview_region = self._find_preview_region(step)
                     self._show_action_preview(step, preview_region)
                     if step.requires_confirmation:
-                        prompt = self._confirmation_request(step, preview_region)
+                        prompt = self._confirmation_request(recipe, step, preview_region)
                         self._heartbeat(index, step.display_name)
                         if not self.confirmer(prompt):
                             raise UserCancelledError("user declined confirmation")
@@ -164,6 +166,8 @@ class WorkflowExecutor:
                             step_name,
                             run_state=_active_run_state_for_step(active_step),
                             step_state=_active_step_state_for_step(active_step),
+                            step=active_step,
+                            step_started_at=started_at,
                         )
                     )
                     self.logger.info("starting step %s/%s: %s", index, total, step.display_name)
@@ -172,7 +176,8 @@ class WorkflowExecutor:
                         f"starting step {index}/{total}: {step.display_name}",
                         step_index=index,
                     )
-                    message = handler.run(step, context)
+                    outcome = handler.run(step, context)
+                    message, result_metadata = _normalize_action_outcome(outcome)
                     self._checkpoint_control()
                     self.logger.info("finished step %s/%s: %s", index, total, step.display_name)
                     self._emit_log_message(
@@ -220,12 +225,13 @@ class WorkflowExecutor:
                 ended_at=_now(),
                 optional=step.optional,
                 dry_run=dry_run_step,
+                metadata=result_metadata,
             )
             results.append(result)
             if self.run_logger is not None:
                 self.run_logger.write_step(result)
             self._emit_step_finished(result, step)
-            self._emit(index, total, step, status, message)
+            self._emit(index, total, step, status, message, step_started_at=started_at)
 
             if status in {"failed", "cancelled"}:
                 break
@@ -256,9 +262,12 @@ class WorkflowExecutor:
         step: ExecutableStep,
         status: str,
         message: str = "",
+        *,
+        step_started_at: datetime | None = None,
     ) -> None:
         if self.status_callback is None:
             return
+        wait_fields = _wait_status_fields(step, step_started_at) if status == "running" else {}
         self.status_callback(
             StepEvent(
                 index=index,
@@ -267,6 +276,8 @@ class WorkflowExecutor:
                 action=step.action,
                 status=status,
                 message=message,
+                keep_open_active=status == "success" and _step_requests_keep_open(step),
+                **wait_fields,
             )
         )
 
@@ -336,6 +347,7 @@ class WorkflowExecutor:
                 state=_runtime_step_state(result.status),
                 message=_runtime_result_message(result),
                 duration_seconds=_duration_seconds(result.started_at, result.ended_at),
+                metadata=result.metadata,
             )
         )
 
@@ -389,9 +401,18 @@ class WorkflowExecutor:
         *,
         run_state: RunState | None = None,
         step_state: StepState = StepState.RUNNING,
+        step: ExecutableStep | None = None,
+        step_started_at: datetime | None = None,
     ) -> None:
         if self.run_logger is None:
-            self._emit_heartbeat(step_id, run_state=run_state, step_state=step_state)
+            self._emit_heartbeat(
+                step_id,
+                step_name=step_name,
+                run_state=run_state,
+                step_state=step_state,
+                step=step,
+                step_started_at=step_started_at,
+            )
             return
         heartbeat = getattr(self.run_logger, "heartbeat", None)
         if heartbeat is not None:
@@ -404,23 +425,37 @@ class WorkflowExecutor:
                 )
             except TypeError:
                 heartbeat(step_id=step_id, step_name=step_name)
-        self._emit_heartbeat(step_id, run_state=run_state, step_state=step_state)
+        self._emit_heartbeat(
+            step_id,
+            step_name=step_name,
+            run_state=run_state,
+            step_state=step_state,
+            step=step,
+            step_started_at=step_started_at,
+        )
 
     def _emit_heartbeat(
         self,
         step_id: int,
         *,
+        step_name: str | None = None,
         run_state: RunState | None,
         step_state: StepState,
+        step: ExecutableStep | None = None,
+        step_started_at: datetime | None = None,
     ) -> None:
         if self._run_id is None:
             return
+        wait_fields = _heartbeat_wait_fields(step, step_started_at)
         self._emit_runtime_event(
             Heartbeat(
                 **self._runtime_event_fields(),
                 run_state=run_state or self._run_state,
                 step_index=step_id,
+                step_name=step_name,
+                action=getattr(step, "action", None),
                 step_state=step_state,
+                **wait_fields,
             )
         )
 
@@ -513,6 +548,7 @@ class WorkflowExecutor:
 
     def _confirmation_request(
         self,
+        recipe: Recipe,
         step: ExecutableStep,
         region: TargetRegion | None,
     ) -> ConfirmationRequest:
@@ -520,6 +556,7 @@ class WorkflowExecutor:
             prompt=f"Run '{step.display_name}' ({step.action})?",
             action=step.action,
             step_name=step.display_name,
+            recipe_name=recipe.name,
             window_title=_confirmation_window_title(step, region),
             target_text=_confirmation_target_text(step, region),
             control_type=region.control_type if region and region.control_type else getattr(step, "control_type", None),
@@ -538,6 +575,12 @@ def _duration_seconds(started_at: datetime | None, ended_at: datetime) -> float 
     if started_at is None:
         return None
     return max((ended_at - started_at).total_seconds(), 0.0)
+
+
+def _normalize_action_outcome(outcome: str | ActionOutcome) -> tuple[str, dict[str, Any]]:
+    if isinstance(outcome, ActionOutcome):
+        return outcome.message, dict(outcome.metadata)
+    return str(outcome), {}
 
 
 def _runtime_step_state(status: str) -> StepState:
@@ -562,8 +605,64 @@ def _active_step_state_for_step(step: ExecutableStep) -> StepState:
     return StepState.RUNNING
 
 
+def _wait_status_fields(step: ExecutableStep, started_at: datetime | None) -> dict[str, Any]:
+    if not _is_wait_step(step) or started_at is None:
+        return {}
+    return {
+        "wait_action": step.action,
+        "wait_target": _wait_target_label(step),
+        "wait_started_at": started_at,
+        "wait_elapsed_seconds": _duration_seconds(started_at, _now()),
+        "wait_timeout_seconds": _wait_timeout_seconds(step),
+    }
+
+
+def _heartbeat_wait_fields(step: ExecutableStep | None, started_at: datetime | None) -> dict[str, Any]:
+    fields = _wait_status_fields(step, started_at) if step is not None else {}
+    if not fields:
+        return {}
+    return {
+        "wait_target": fields["wait_target"],
+        "wait_started_at": fields["wait_started_at"],
+        "wait_elapsed_seconds": fields["wait_elapsed_seconds"],
+        "wait_timeout_seconds": fields["wait_timeout_seconds"],
+    }
+
+
 def _is_wait_step(step: ExecutableStep) -> bool:
     return step.action == "window.wait" or step.action.startswith("wait.")
+
+
+def _step_requests_keep_open(step: ExecutableStep) -> bool:
+    return step.action == "browser.open" and bool(getattr(step, "keep_open", False))
+
+
+def _wait_target_label(step: ExecutableStep) -> str:
+    action = step.action
+    if action == "wait.seconds":
+        return f"{getattr(step, 'seconds', 0):g}s"
+    if action == "wait.for_user":
+        return str(getattr(step, "prompt", "user confirmation"))
+    if action == "wait.for_file":
+        return f"file {getattr(step, 'path', '')}"
+    if action == "wait.for_process":
+        return f"process {getattr(step, 'process_name', '')} to start"
+    if action == "wait.for_process_exit":
+        return f"process {getattr(step, 'process_name', '')} to exit"
+    if action in {"window.wait", "wait.for_window"} and isinstance(step, WindowMatchMixin):
+        return f"window {_window_match_label(step)}"
+    if action == "wait.for_window_gone" and isinstance(step, WindowMatchMixin):
+        return f"window {_window_match_label(step)} to close"
+    return step.display_name
+
+
+def _wait_timeout_seconds(step: ExecutableStep) -> float | None:
+    timeout = getattr(step, "timeout_seconds", None)
+    if timeout is not None:
+        return float(timeout)
+    if step.action == "wait.seconds":
+        return float(getattr(step, "seconds", 0))
+    return None
 
 
 def _runtime_result_message(result: StepResult) -> str | None:

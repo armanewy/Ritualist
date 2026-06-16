@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -83,6 +83,10 @@ class StepWaiting(RuntimeEventBase):
     step_name: str
     action: str
     reason: str | None = None
+    target: str | None = None
+    elapsed_seconds: float = Field(default=0.0, ge=0)
+    timeout_seconds: float | None = Field(default=None, ge=0)
+    started_at: datetime | None = None
     state: StepState = StepState.WAITING
 
 
@@ -133,6 +137,7 @@ class StepFinished(RuntimeEventBase):
     state: StepState
     message: str | None = None
     duration_seconds: float | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("state")
     @classmethod
@@ -168,7 +173,13 @@ class Heartbeat(RuntimeEventBase):
     type: Literal["heartbeat"] = "heartbeat"
     run_state: RunState
     step_index: int | None = Field(default=None, ge=1)
+    step_name: str | None = None
+    action: str | None = None
     step_state: StepState | None = None
+    wait_target: str | None = None
+    wait_started_at: datetime | None = None
+    wait_elapsed_seconds: float | None = Field(default=None, ge=0)
+    wait_timeout_seconds: float | None = Field(default=None, ge=0)
 
 
 RuntimeEvent = Annotated[

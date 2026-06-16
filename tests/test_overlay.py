@@ -27,11 +27,13 @@ class RecordingWaitHandle:
 class RecordingOverlay:
     def __init__(self) -> None:
         self.previews: list[ActionPreview] = []
+        self.preview_durations: list[int] = []
         self.waits: list[str] = []
         self.handles: list[RecordingWaitHandle] = []
 
     def show_preview(self, preview: ActionPreview, *, duration_ms: int) -> None:
         self.previews.append(preview)
+        self.preview_durations.append(duration_ms)
 
     def start_wait(self, label: str) -> RecordingWaitHandle:
         handle = RecordingWaitHandle()
@@ -82,6 +84,7 @@ def test_desktop_click_preview_and_confirmation_include_target_details():
     assert isinstance(request, ConfirmationRequest)
     assert request.action == "desktop.click_text"
     assert request.step_name == "Ask before clicking Play"
+    assert request.recipe_name == "Run"
     assert request.window_title == "Battle.net"
     assert request.target_text == "Play"
     assert request.control_type == "Button"
@@ -137,6 +140,23 @@ def test_overlay_can_be_disabled_by_config():
     assert summary.success
     assert overlay.previews == []
     assert [call[0] for call in fakes.window.calls] == ["focus"]
+
+
+def test_overlay_duration_uses_config_value():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "window.focus", "title_contains": "Battle.net"}],
+        }
+    )
+    overlay = RecordingOverlay()
+    config = AppConfig(ui=UIConfig(overlay_duration_ms=1234))
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), overlay=overlay, config=config).run(recipe)
+
+    assert summary.success
+    assert overlay.preview_durations == [1234]
 
 
 def test_desktop_click_preview_can_be_disabled_without_disabling_confirmation_details():
@@ -207,7 +227,8 @@ def test_null_overlay_does_not_trigger_hidden_preview_probe():
     assert request.target_text == "Play"
 
 
-def test_best_effort_overlay_swallows_rendering_failures():
+def test_best_effort_overlay_swallows_and_logs_rendering_failures(caplog):
+    caplog.set_level("WARNING", logger="ritualist.overlay")
     controller = BestEffortOverlayController(FailingOverlay())
 
     controller.show_preview(
@@ -221,12 +242,17 @@ def test_best_effort_overlay_swallows_rendering_failures():
     )
     controller.start_wait("Waiting...").close()
 
+    messages = [record.getMessage() for record in caplog.records]
+    assert "Action overlay preview failed: overlay failed" in messages
+    assert "Action overlay wait HUD failed: overlay failed" in messages
+
 
 def test_format_confirmation_request_includes_visual_target_context():
     request = ConfirmationRequest(
         prompt="Run 'Ask before clicking Play' (desktop.click_text)?",
         action="desktop.click_text",
         step_name="Ask before clicking Play",
+        recipe_name="Gaming Mode",
         window_title="Battle.net",
         target_text="Play",
         control_type="Button",
@@ -235,5 +261,22 @@ def test_format_confirmation_request_includes_visual_target_context():
     formatted = format_confirmation_request(request)
 
     assert "Action: desktop.click_text" in formatted
+    assert "Recipe: Gaming Mode" in formatted
+    assert "Step: Ask before clicking Play" in formatted
     assert "Window: Battle.net" in formatted
     assert "Target: Play (Button)" in formatted
+
+
+def test_format_confirmation_request_includes_control_without_target_text():
+    request = ConfirmationRequest(
+        prompt="Run 'Focus' (window.focus)?",
+        action="window.focus",
+        step_name="Focus",
+        recipe_name="Gaming Mode",
+        control_type="Window",
+    )
+
+    formatted = format_confirmation_request(request)
+
+    assert "Recipe: Gaming Mode" in formatted
+    assert "Control: Window" in formatted

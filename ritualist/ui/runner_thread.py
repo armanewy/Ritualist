@@ -76,7 +76,7 @@ class RunnerThread(QThread):
         self._confirmation_result = accepted
         self._confirmation_event.set()
 
-    def _confirm(self, prompt: str) -> bool:
+    def _confirm(self, prompt: object) -> bool:
         self._confirmation_event.clear()
         self._record_run_state("confirming")
         self.run_state_changed.emit("confirming")

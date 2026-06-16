@@ -44,6 +44,7 @@ def test_main_window_has_personal_app_controls_and_loads_selected_recipe(tmp_pat
     assert window.pause_button.isEnabled() is False
     assert window.resume_button.isEnabled() is False
     assert window.run_state_label.text() == "Run state: stopped"
+    assert window.waiting_label.text() == "Waiting: inactive"
     assert window.keep_open_label.text() == "Keep-open: inactive"
     assert window.recipe is recipe
     assert window.path_edit.text() == str(recipe_path)
@@ -77,6 +78,57 @@ def test_main_window_doctor_prints_checks_without_running_recipe(tmp_path, monke
     assert app is not None
     assert "Doctor: Gaming Mode (gaming_mode)" in window.log.toPlainText()
     assert "ok: recipe - loaded gaming_mode" in window.log.toPlainText()
+
+    window.close()
+
+
+def test_main_window_shows_waiting_details_and_keeps_run_controls(tmp_path, monkeypatch):
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    recipe_path = tmp_path / "gaming_mode.yaml"
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "steps": [
+                {
+                    "action": "wait.for_window",
+                    "title_contains": "Battle.net",
+                    "timeout_seconds": 30,
+                }
+            ],
+        }
+    )
+    monkeypatch.setattr(main_window, "reconcile_running_runs", lambda: [])
+    monkeypatch.setattr(main_window, "discover_recipes", lambda: [(recipe_path, recipe, None)])
+    monkeypatch.setattr(main_window, "load_recipe", lambda path: recipe)
+
+    window = main_window.MainWindow()
+    window.on_run_state_changed("waiting")
+    window.on_step_event(
+        SimpleNamespace(
+            index=1,
+            action="wait.for_window",
+            status="running",
+            wait_action="wait.for_window",
+            wait_target="window Battle.net",
+            wait_elapsed_seconds=4,
+            wait_timeout_seconds=30,
+            keep_open_active=False,
+        )
+    )
+
+    assert app is not None
+    assert window.stop_button.isEnabled() is True
+    assert window.pause_button.isEnabled() is True
+    assert window.resume_button.isEnabled() is False
+    assert "Waiting: wait.for_window" in window.waiting_label.text()
+    assert "Target: window Battle.net" in window.waiting_label.text()
+    assert "Elapsed: 4s" in window.waiting_label.text()
+    assert "Timeout: 30s" in window.waiting_label.text()
+
+    window.on_step_event(SimpleNamespace(index=1, action="wait.for_window", status="success"))
+
+    assert window.waiting_label.text() == "Waiting: inactive"
 
     window.close()
 

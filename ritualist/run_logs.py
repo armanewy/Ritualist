@@ -132,6 +132,8 @@ class RunLogWriter:
             "optional": result.optional,
             "dry_run": result.dry_run,
         }
+        if result.metadata:
+            payload["metadata"] = result.metadata
         with self._steps_jsonl.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self._metadata["steps_completed"] = result.index
@@ -147,6 +149,7 @@ class RunLogWriter:
             step_name=result.step_name,
             action=result.action,
             message=_safe_message(result),
+            metadata=result.metadata or None,
         )
         self._write_run_json()
 

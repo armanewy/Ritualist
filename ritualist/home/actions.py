@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -174,6 +175,8 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             status=HomeCardStatus.RUNNING,
             subtitle="Dry run started" if dry_run else "Run started",
             description=_recipe_event_description(event),
+            keep_open_active=False,
+            **_clear_wait_fields(),
         )
 
     if event_type == "run.state_changed":
@@ -183,6 +186,23 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             status=_home_status_for_run_state(state),
             subtitle=f"Run state: {state}",
             description=str(getattr(event, "message", "") or ""),
+            **({} if state == "waiting" else _clear_wait_fields()),
+        )
+
+    if event_type == "step.waiting":
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.RUNNING,
+            subtitle=f"Waiting: {getattr(event, 'action', '')}",
+            description=_wait_description(
+                target=getattr(event, "target", None),
+                timeout_seconds=getattr(event, "timeout_seconds", None),
+            ),
+            wait_action=str(getattr(event, "action", "") or ""),
+            wait_target=str(getattr(event, "target", "") or ""),
+            wait_started_at=_datetime_string(getattr(event, "started_at", None)),
+            wait_elapsed_seconds=_seconds_string(getattr(event, "elapsed_seconds", None)),
+            wait_timeout_seconds=_seconds_string(getattr(event, "timeout_seconds", None)),
         )
 
     if event_type == "step.started":
@@ -191,6 +211,7 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             status=HomeCardStatus.RUNNING,
             subtitle=f"Running step {getattr(event, 'step_index', '')}",
             description=str(getattr(event, "step_name", "") or ""),
+            **_clear_wait_fields(),
         )
 
     if event_type == "step.finished":
@@ -200,6 +221,7 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             status=_home_status_for_step_state(state),
             subtitle=f"Step {getattr(event, 'step_index', '')}: {state}",
             description=str(getattr(event, "message", "") or getattr(event, "step_name", "") or ""),
+            **_clear_wait_fields(),
         )
 
     if event_type == "run.finished":
@@ -210,16 +232,33 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
             last_run_status=_last_run_status_for_run_state(state),
             subtitle=f"Run {state}",
             description=str(getattr(event, "message", "") or ""),
+            **_clear_wait_fields(),
         )
 
     if event_type == "heartbeat":
         run_state = _event_value(getattr(event, "run_state", "running"))
         step_state = getattr(event, "step_state", None)
+        if run_state == "waiting" or _event_value(step_state) == "waiting":
+            action = str(getattr(event, "action", "") or "")
+            target = str(getattr(event, "wait_target", "") or "")
+            timeout = getattr(event, "wait_timeout_seconds", None)
+            return HomeRuntimeEvent(
+                card_id=card_id,
+                status=HomeCardStatus.RUNNING,
+                subtitle=f"Waiting: {action or 'step'}",
+                description=_wait_description(target=target, timeout_seconds=timeout),
+                wait_action=action,
+                wait_target=target,
+                wait_started_at=_datetime_string(getattr(event, "wait_started_at", None)),
+                wait_elapsed_seconds=_seconds_string(getattr(event, "wait_elapsed_seconds", None)),
+                wait_timeout_seconds=_seconds_string(timeout),
+            )
         return HomeRuntimeEvent(
             card_id=card_id,
             status=_home_status_for_run_state(run_state),
             subtitle=f"Run state: {run_state}",
             description=f"Step state: {_event_value(step_state)}" if step_state is not None else "",
+            **_clear_wait_fields(),
         )
 
     if event_type == "log.message":
@@ -229,6 +268,43 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
         )
 
     return None
+
+
+def home_event_from_step_status(card_id: str, event: Any) -> HomeRuntimeEvent:
+    wait_action = str(getattr(event, "wait_action", "") or "")
+    if wait_action:
+        target = str(getattr(event, "wait_target", "") or "")
+        timeout = getattr(event, "wait_timeout_seconds", None)
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.RUNNING,
+            subtitle=f"Waiting: {wait_action}",
+            description=_wait_description(target=target, timeout_seconds=timeout),
+            wait_action=wait_action,
+            wait_target=target,
+            wait_started_at=_datetime_string(getattr(event, "wait_started_at", None)),
+            wait_elapsed_seconds=_seconds_string(getattr(event, "wait_elapsed_seconds", None)),
+            wait_timeout_seconds=_seconds_string(timeout),
+        )
+
+    keep_open_active = bool(getattr(event, "keep_open_active", False))
+    if keep_open_active:
+        return HomeRuntimeEvent(
+            card_id=card_id,
+            status=HomeCardStatus.RUNNING,
+            subtitle="Keep-open active",
+            description="Browser window will remain open after the run.",
+            keep_open_active=True,
+            **_clear_wait_fields(),
+        )
+
+    return HomeRuntimeEvent(
+        card_id=card_id,
+        status=HomeCardStatus.RUNNING,
+        subtitle=f"Step {getattr(event, 'index', '')}: {getattr(event, 'status', '')}",
+        description=str(getattr(event, "step_name", "") or ""),
+        **_clear_wait_fields(),
+    )
 
 
 def _recipe_event_description(event: Any) -> str:
@@ -271,3 +347,42 @@ def _last_run_status_for_run_state(state: str) -> HomeLastRunStatus:
     if state == "running" and hasattr(HomeLastRunStatus, "RUNNING"):
         return HomeLastRunStatus.RUNNING
     return HomeLastRunStatus.STOPPED
+
+
+def _clear_wait_fields() -> dict[str, str]:
+    return {
+        "wait_action": "",
+        "wait_target": "",
+        "wait_started_at": "",
+        "wait_elapsed_seconds": "",
+        "wait_timeout_seconds": "",
+    }
+
+
+def _wait_description(*, target: object, timeout_seconds: object) -> str:
+    target_text = str(target or "").strip()
+    timeout_text = _seconds_string(timeout_seconds)
+    if target_text and timeout_text:
+        return f"Target: {target_text} | Timeout: {timeout_text}s"
+    if target_text:
+        return f"Target: {target_text}"
+    if timeout_text:
+        return f"Timeout: {timeout_text}s"
+    return "Waiting for condition"
+
+
+def _datetime_string(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _seconds_string(value: object) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)

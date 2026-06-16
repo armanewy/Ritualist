@@ -75,22 +75,30 @@ class FakeWindowAdapter(RecordingAdapter):
 
     def find_window_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_window_region", **kwargs)
-        return TargetRegion(
-            rect=ScreenRect(10, 20, 300, 200),
-            window_title=kwargs.get("title_contains") or kwargs.get("process_name") or "Window",
-        )
+        return self.response("find_window_region", _fake_window_region(kwargs))
 
-    def focus(self, **kwargs: Any) -> None:
+    def focus(self, **kwargs: Any) -> TargetRegion:
         self.record("focus", **kwargs)
+        return self.response("focus", _fake_window_region(kwargs))
 
-    def minimize(self, **kwargs: Any) -> None:
+    def minimize(self, **kwargs: Any) -> TargetRegion:
         self.record("minimize", **kwargs)
+        return self.response("minimize", _fake_window_region(kwargs))
 
-    def maximize(self, **kwargs: Any) -> None:
+    def maximize(self, **kwargs: Any) -> TargetRegion:
         self.record("maximize", **kwargs)
+        return self.response("maximize", _fake_window_region(kwargs))
 
-    def wait(self, **kwargs: Any) -> None:
+    def wait(self, **kwargs: Any) -> TargetRegion:
         self.record("wait", **kwargs)
+        return self.response("wait", _fake_window_region(kwargs))
+
+
+def _fake_window_region(kwargs: dict[str, Any]) -> TargetRegion:
+    return TargetRegion(
+        rect=ScreenRect(10, 20, 300, 200),
+        window_title=kwargs.get("title_contains") or kwargs.get("process_name") or "Window",
+    )
 
 
 class FakeDesktopAdapter(RecordingAdapter):
@@ -100,15 +108,20 @@ class FakeDesktopAdapter(RecordingAdapter):
 
     def find_text_region(self, **kwargs: Any) -> TargetRegion:
         self.record("find_text_region", **kwargs)
-        return TargetRegion(
-            rect=ScreenRect(30, 40, 120, 36),
-            window_title=kwargs.get("window_title_contains"),
-            target_text=kwargs.get("text"),
-            control_type=kwargs.get("control_type"),
-        )
+        return self.response("find_text_region", _fake_text_region(kwargs))
 
-    def click_text(self, **kwargs: Any) -> None:
+    def click_text(self, **kwargs: Any) -> TargetRegion:
         self.record("click_text", **kwargs)
+        return self.response("click_text", _fake_text_region(kwargs))
+
+
+def _fake_text_region(kwargs: dict[str, Any]) -> TargetRegion:
+    return TargetRegion(
+        rect=ScreenRect(30, 40, 120, 36),
+        window_title=kwargs.get("window_title_contains"),
+        target_text=kwargs.get("text"),
+        control_type=kwargs.get("control_type"),
+    )
 
 
 class FakeInputAdapter(RecordingAdapter):

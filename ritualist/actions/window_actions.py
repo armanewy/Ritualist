@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ritualist.models import WindowFocusStep, WindowMaximizeStep, WindowMinimizeStep, WindowWaitStep
 
-from .base import ActionContext
+from .base import ActionContext, ActionOutcome, target_region_metadata
 from .metadata import ActionMetadata, WINDOWS_ONLY
 
 
@@ -21,14 +21,14 @@ class WindowFocusHandler:
         allowed_in_imported_packs=False,
     )
 
-    def run(self, step: WindowFocusStep, context: ActionContext) -> str:
+    def run(self, step: WindowFocusStep, context: ActionContext) -> ActionOutcome:
         timeout = step.timeout_seconds or 10.0
-        context.adapters.window.focus(
+        region = context.adapters.window.focus(
             title_contains=step.title_contains,
             process_name=step.process_name,
             timeout_seconds=timeout,
         )
-        return "focused window"
+        return ActionOutcome(message="focused window", metadata=target_region_metadata(region))
 
 
 class WindowMinimizeHandler:
@@ -46,14 +46,14 @@ class WindowMinimizeHandler:
         allowed_in_imported_packs=False,
     )
 
-    def run(self, step: WindowMinimizeStep, context: ActionContext) -> str:
+    def run(self, step: WindowMinimizeStep, context: ActionContext) -> ActionOutcome:
         timeout = step.timeout_seconds or 10.0
-        context.adapters.window.minimize(
+        region = context.adapters.window.minimize(
             title_contains=step.title_contains,
             process_name=step.process_name,
             timeout_seconds=timeout,
         )
-        return "minimized window"
+        return ActionOutcome(message="minimized window", metadata=target_region_metadata(region))
 
 
 class WindowMaximizeHandler:
@@ -71,14 +71,14 @@ class WindowMaximizeHandler:
         allowed_in_imported_packs=False,
     )
 
-    def run(self, step: WindowMaximizeStep, context: ActionContext) -> str:
+    def run(self, step: WindowMaximizeStep, context: ActionContext) -> ActionOutcome:
         timeout = step.timeout_seconds or 10.0
-        context.adapters.window.maximize(
+        region = context.adapters.window.maximize(
             title_contains=step.title_contains,
             process_name=step.process_name,
             timeout_seconds=timeout,
         )
-        return "maximized window"
+        return ActionOutcome(message="maximized window", metadata=target_region_metadata(region))
 
 
 class WindowWaitHandler:
@@ -96,11 +96,11 @@ class WindowWaitHandler:
         allowed_in_imported_packs=True,
     )
 
-    def run(self, step: WindowWaitStep, context: ActionContext) -> str:
+    def run(self, step: WindowWaitStep, context: ActionContext) -> ActionOutcome:
         timeout = step.timeout_seconds or 30.0
-        context.adapters.window.wait(
+        region = context.adapters.window.wait(
             title_contains=step.title_contains,
             process_name=step.process_name,
             timeout_seconds=timeout,
         )
-        return "window appeared"
+        return ActionOutcome(message="window appeared", metadata=target_region_metadata(region))

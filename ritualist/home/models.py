@@ -59,6 +59,12 @@ class HomeCard:
     doctor_status: HomeDoctorStatus = HomeDoctorStatus.NOT_CHECKED
     accent: str = "#3dd6a5"
     image: str = ""
+    wait_action: str = ""
+    wait_target: str = ""
+    wait_started_at: str = ""
+    wait_elapsed_seconds: str = ""
+    wait_timeout_seconds: str = ""
+    keep_open_active: bool = False
 
     def to_qml(self) -> dict[str, str]:
         return {field.name: _qml_string(getattr(self, field.name)) for field in fields(self)}
@@ -75,6 +81,12 @@ class HomeRuntimeEvent:
     doctor_status: HomeDoctorStatus | None = None
     accent: str | None = None
     image: str | None = None
+    wait_action: str | None = None
+    wait_target: str | None = None
+    wait_started_at: str | None = None
+    wait_elapsed_seconds: str | None = None
+    wait_timeout_seconds: str | None = None
+    keep_open_active: bool | None = None
 
     @property
     def key(self) -> tuple[str, str]:
@@ -331,6 +343,12 @@ def _runtime_event_from_mapping(event: Mapping[str, Any]) -> HomeRuntimeEvent:
         doctor_status=_optional_enum(HomeDoctorStatus, event.get("doctor_status")),
         accent=_optional_string(event.get("accent")),
         image=_optional_string(event.get("image")),
+        wait_action=_optional_string(event.get("wait_action")),
+        wait_target=_optional_string(event.get("wait_target")),
+        wait_started_at=_optional_string(event.get("wait_started_at")),
+        wait_elapsed_seconds=_optional_string(event.get("wait_elapsed_seconds")),
+        wait_timeout_seconds=_optional_string(event.get("wait_timeout_seconds")),
+        keep_open_active=_optional_bool(event.get("keep_open_active")),
     )
 
 
@@ -458,6 +476,12 @@ def _optional_string(value: object) -> str | None:
     return str(value)
 
 
+def _optional_bool(value: object) -> bool | None:
+    if value is None or isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _category_labels(configured: Sequence[HomeCategory | str] | None) -> list[str]:
     if configured is None:
         return list(DEFAULT_HOME_CATEGORIES)
@@ -490,6 +514,8 @@ def _home_category_label(value: object) -> str:
 
 
 def _qml_string(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
     if isinstance(value, StrEnum):
         return value.value
     if value is None:

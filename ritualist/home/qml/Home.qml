@@ -21,7 +21,10 @@ Window {
     property bool railActive: false
     property string footerText: "Home ready"
     property int devTick: 0
+    property int waitTick: 0
     property bool actionBusy: homeController ? homeController.actionBusy : false
+    property bool runtimeActive: homeController ? homeController.runtimeActive : false
+    property bool runtimePaused: homeController ? homeController.runtimePaused : false
     property bool confirmationPending: homeController ? homeController.confirmationPending : false
     property string confirmationPrompt: homeController ? homeController.confirmationPrompt : ""
 
@@ -117,6 +120,52 @@ Window {
             return "mock updates 0 | tick " + devTick
         }
         return "mock updates " + homeController.updatesApplied + " | tick " + devTick
+    }
+
+    function durationText(rawSeconds) {
+        var seconds = Math.max(0, Math.floor(Number(rawSeconds || 0)))
+        if (seconds < 60) {
+            return seconds + "s"
+        }
+        var minutes = Math.floor(seconds / 60)
+        var remainder = seconds % 60
+        if (minutes < 60) {
+            return minutes + "m " + remainder + "s"
+        }
+        var hours = Math.floor(minutes / 60)
+        return hours + "h " + (minutes % 60) + "m"
+    }
+
+    function elapsedWaitText(startedAt, baselineSeconds) {
+        var tick = waitTick
+        var baseline = Number(baselineSeconds || 0)
+        var parsed = Date.parse(startedAt || "")
+        if (!isNaN(parsed)) {
+            return durationText(Math.max(baseline, (Date.now() - parsed) / 1000))
+        }
+        return durationText(baseline)
+    }
+
+    function waitSummary(target, startedAt, elapsedSeconds, timeoutSeconds) {
+        var parts = []
+        if (target) {
+            parts.push("Target: " + target)
+        }
+        parts.push("Elapsed: " + elapsedWaitText(startedAt, elapsedSeconds))
+        if (timeoutSeconds) {
+            parts.push("Timeout: " + durationText(timeoutSeconds))
+        }
+        return parts.join(" | ")
+    }
+
+    function hasActiveWait() {
+        var cards = allCards()
+        for (var i = 0; i < cards.length; i += 1) {
+            if (cards[i].wait_action) {
+                return true
+            }
+        }
+        return false
     }
 
     function statusColor(status) {
@@ -229,6 +278,13 @@ Window {
         repeat: true
         running: root.mockMode
         onTriggered: root.devTick += 1
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: root.hasActiveWait()
+        onTriggered: root.waitTick += 1
     }
 
     Rectangle {
@@ -451,19 +507,85 @@ Window {
                         }
 
                         Rectangle {
-                            Layout.preferredWidth: 112
+                            id: pauseControl
+
+                            Layout.preferredWidth: 104
                             Layout.preferredHeight: 40
                             radius: 8
-                            color: root.actionBusy ? (stopPointer.containsMouse ? "#4a2a34" : "#351f27") : "#151b24"
-                            border.color: root.actionBusy ? "#d96d7e" : "#263648"
-                            opacity: root.actionBusy ? 1.0 : 0.52
+                            color: pauseControl.pauseEnabled ? (pausePointer.containsMouse ? "#263648" : "#1c2734") : "#151b24"
+                            border.color: pauseControl.pauseEnabled ? "#40546a" : "#263648"
+                            opacity: pauseControl.pauseEnabled ? 1.0 : 0.52
+
+                            MouseArea {
+                                id: pausePointer
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: pauseControl.pauseEnabled
+                                onClicked: root.homeController.pauseCurrentRun()
+                            }
+
+                            property bool pauseEnabled: root.runtimeActive && !root.runtimePaused && root.homeController
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 12
+                                text: "Pause"
+                                color: pauseControl.pauseEnabled ? "#d8e2ee" : "#7f8da1"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            id: resumeControl
+
+                            Layout.preferredWidth: 104
+                            Layout.preferredHeight: 40
+                            radius: 8
+                            color: resumeControl.resumeEnabled ? (resumePointer.containsMouse ? "#263648" : "#1c2734") : "#151b24"
+                            border.color: resumeControl.resumeEnabled ? "#40546a" : "#263648"
+                            opacity: resumeControl.resumeEnabled ? 1.0 : 0.52
+
+                            MouseArea {
+                                id: resumePointer
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: resumeControl.resumeEnabled
+                                onClicked: root.homeController.resumeCurrentRun()
+                            }
+
+                            property bool resumeEnabled: root.runtimeActive && root.runtimePaused && root.homeController
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 12
+                                text: "Resume"
+                                color: resumeControl.resumeEnabled ? "#d8e2ee" : "#7f8da1"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 104
+                            Layout.preferredHeight: 40
+                            radius: 8
+                            color: root.runtimeActive ? (stopPointer.containsMouse ? "#4a2a34" : "#351f27") : "#151b24"
+                            border.color: root.runtimeActive ? "#d96d7e" : "#263648"
+                            opacity: root.runtimeActive ? 1.0 : 0.52
 
                             MouseArea {
                                 id: stopPointer
 
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                enabled: root.actionBusy && root.homeController
+                                enabled: root.runtimeActive && root.homeController
                                 onClicked: root.homeController.stopCurrentRun()
                             }
 
@@ -471,7 +593,7 @@ Window {
                                 anchors.centerIn: parent
                                 width: parent.width - 12
                                 text: "Stop"
-                                color: root.actionBusy ? "#ffeef1" : "#7f8da1"
+                                color: root.runtimeActive ? "#ffeef1" : "#7f8da1"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 horizontalAlignment: Text.AlignHCenter
@@ -490,7 +612,7 @@ Window {
                         boundsBehavior: Flickable.StopAtBounds
                         currentIndex: root.selectedCard
                         cellWidth: Math.floor(width / columns)
-                        cellHeight: 298
+                        cellHeight: 382
 
                         property int columns: width >= 1260 ? 4 : (width >= 900 ? 3 : 2)
 
@@ -503,6 +625,8 @@ Window {
                             property int cardIndex: index
                             property string cardId: model.id || ""
                             property string cardStatus: model.status || status
+                            property bool waitActive: (model.wait_action || "") !== ""
+                            property bool keepOpenActive: (model.keep_open_active || "") === "true"
 
                             Rectangle {
                                 id: card
@@ -615,6 +739,60 @@ Window {
                                         elide: Text.ElideRight
                                     }
 
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: cardSlot.waitActive ? 48 : 0
+                                        visible: cardSlot.waitActive
+                                        radius: 6
+                                        color: "#1b2530"
+                                        border.color: "#f5c96b"
+                                        border.width: 1
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            spacing: 3
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Waiting: " + (model.wait_action || "")
+                                                color: "#f6d37a"
+                                                font.pixelSize: 12
+                                                font.weight: Font.DemiBold
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.waitSummary(model.wait_target || "", model.wait_started_at || "", model.wait_elapsed_seconds || "", model.wait_timeout_seconds || "")
+                                                color: "#d7e0eb"
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: cardSlot.keepOpenActive ? 24 : 0
+                                        visible: cardSlot.keepOpenActive
+                                        radius: 6
+                                        color: "#18281f"
+                                        border.color: "#65d59b"
+                                        border.width: 1
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 12
+                                            text: "Keep-open active"
+                                            color: "#bbf5d1"
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
                                     Item {
                                         Layout.fillHeight: true
                                     }
@@ -712,7 +890,7 @@ Window {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28
         width: Math.min(parent.width - 56, 720)
-        height: 118
+        height: 176
         radius: 8
         color: "#10151e"
         border.color: "#f5c96b"
@@ -745,7 +923,7 @@ Window {
                     color: "#d7e0eb"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 3
+                    maximumLineCount: 7
                     elide: Text.ElideRight
                 }
             }

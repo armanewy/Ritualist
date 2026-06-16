@@ -6,6 +6,7 @@ import os
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
+from ritualist.overlay import ScreenRect, TargetRegion
 from ritualist.run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
 
 
@@ -89,6 +90,46 @@ def test_load_run_accepts_legacy_log_without_runtime_v2_fields(tmp_path):
     assert loaded.metadata["recipe_id"] == "legacy"
     assert "current_run_state" not in loaded.metadata
     assert loaded.steps[0]["step_name"] == "Old step"
+
+
+def test_run_log_writer_records_action_result_metadata(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {
+                    "action": "desktop.click_text",
+                    "text": "Diablo IV",
+                    "window_title_contains": "Battle.net",
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.desktop.responses["click_text"] = TargetRegion(
+        rect=ScreenRect(30, 40, 120, 36),
+        window_title="Battle.net",
+        target_text="Diablo IV",
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    steps = [
+        json.loads(line)
+        for line in (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert steps[0]["metadata"] == summary.results[0].metadata
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    step_finished = [
+        entry for entry in run_json["event_summaries"] if entry["event"] == "step.finished"
+    ][-1]
+    assert step_finished["metadata"] == summary.results[0].metadata
 
 
 def test_run_log_writer_records_runtime_v2_metadata_hooks(tmp_path):

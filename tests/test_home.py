@@ -82,8 +82,26 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     )
 
     assert "stopCurrentRun" in qml
+    assert "pauseCurrentRun" in qml
+    assert "resumeCurrentRun" in qml
+    assert "property bool runtimeActive" in qml
+    assert "cellHeight: 382" in qml
     assert "confirmationModalBlocker" in qml
     assert "root.confirmationPending" in qml
+    assert "height: 176" in qml
+    assert "maximumLineCount: 7" in qml
+
+
+def test_home_runtime_control_is_active_before_action_state_signal():
+    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("def _start_runtime_action")
+    body = source[start : source.index("def _start_action", start)]
+
+    assert body.index("self._runtime_control = RuntimeControl()") < body.index(
+        "self._set_action_busy(True)"
+    )
 
 
 def test_home_command_import_does_not_load_pyside6():

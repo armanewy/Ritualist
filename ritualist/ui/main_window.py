@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import monotonic
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self.discovered_recipes: dict[str, Path] = {}
         self.runner: RunnerThread | None = None
         self._close_after_run_stops = False
+        self._wait_status: dict[str, object] | None = None
         self.overlay_controller, self._overlay_warning = self._create_overlay_controller()
 
         root = QWidget()
@@ -125,8 +127,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.status_label)
         self.run_state_label = QLabel("Run state: stopped")
         layout.addWidget(self.run_state_label)
+        self.waiting_label = QLabel("Waiting: inactive")
+        layout.addWidget(self.waiting_label)
         self.keep_open_label = QLabel("Keep-open: inactive")
         layout.addWidget(self.keep_open_label)
+        self._wait_timer = QTimer(self)
+        self._wait_timer.setInterval(1000)
+        self._wait_timer.timeout.connect(self._refresh_waiting_label)
 
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
@@ -262,6 +269,7 @@ class MainWindow(QMainWindow):
         self.set_run_controls_enabled(False)
         self.set_run_state("running")
         self.status_label.setText("Running")
+        self._clear_wait_status()
         self.keep_open_label.setText("Keep-open: inactive")
         logger = setup_logging()
         config = load_app_config()
@@ -287,10 +295,20 @@ class MainWindow(QMainWindow):
         self.runner.start()
 
     def on_step_event(self, event) -> None:
-        if event.status != "success" or event.action != "browser.open":
-            return
         step = self._step_by_index(event.index)
-        if step is not None and getattr(step, "keep_open", False):
+        if getattr(event, "wait_action", "") or (
+            event.status == "running" and _is_wait_action(event.action)
+        ):
+            self._set_wait_status(event, step)
+        elif event.status != "running" and _is_wait_action(event.action):
+            self._clear_wait_status()
+
+        if getattr(event, "keep_open_active", False) or (
+            event.status == "success"
+            and event.action == "browser.open"
+            and step is not None
+            and getattr(step, "keep_open", False)
+        ):
             self.keep_open_label.setText("Keep-open: active")
 
     def on_confirmation_requested(self, prompt: object) -> None:
@@ -313,6 +331,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"Stopped: {message}")
         self.set_run_state("stopped")
         self.status_label.setText("Run stopped")
+        self._clear_wait_status()
         self.set_run_controls_enabled(True)
         if self._close_after_run_stops:
             self._close_after_run_stops = False
@@ -322,6 +341,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"Failed: {message}")
         self.set_run_state("failed")
         self.status_label.setText("Run failed")
+        self._clear_wait_status()
         show_error(self, "Run Failed", message)
         self.set_run_controls_enabled(True)
         if self._close_after_run_stops:
@@ -344,6 +364,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"{final_text}: {summary_text}")
         self.set_run_state(final_state)
         self.status_label.setText(final_text)
+        self._clear_wait_status()
         keep_open_active = self._summary_requests_keep_open(summary)
         self.keep_open_label.setText(
             "Keep-open: active" if keep_open_active else "Keep-open: inactive"
@@ -367,6 +388,7 @@ class MainWindow(QMainWindow):
             self.runner.answer_confirmation(False)
         self.append_log("Stop requested; the current step may finish before the run stops")
         self.status_label.setText("Stop requested")
+        self._clear_wait_status()
         self.stop_button.setEnabled(False)
         self.pause_button.setEnabled(False)
         self.resume_button.setEnabled(False)
@@ -400,6 +422,43 @@ class MainWindow(QMainWindow):
 
     def set_run_state(self, state: str) -> None:
         self.run_state_label.setText(f"Run state: {state}")
+
+    def _set_wait_status(self, event, step) -> None:
+        action = str(getattr(event, "wait_action", "") or getattr(event, "action", ""))
+        target = str(getattr(event, "wait_target", "") or _wait_target_for_step(step))
+        elapsed = _optional_float(getattr(event, "wait_elapsed_seconds", None)) or 0.0
+        timeout = _optional_float(getattr(event, "wait_timeout_seconds", None))
+        if timeout is None:
+            timeout = _wait_timeout_for_step(step)
+        self._wait_status = {
+            "action": action,
+            "target": target,
+            "started_monotonic": monotonic() - elapsed,
+            "timeout": timeout,
+        }
+        self._refresh_waiting_label()
+        if not self._wait_timer.isActive():
+            self._wait_timer.start()
+
+    def _clear_wait_status(self) -> None:
+        self._wait_status = None
+        self._wait_timer.stop()
+        self.waiting_label.setText("Waiting: inactive")
+
+    def _refresh_waiting_label(self) -> None:
+        if not self._wait_status:
+            self.waiting_label.setText("Waiting: inactive")
+            return
+        elapsed = max(monotonic() - float(self._wait_status["started_monotonic"]), 0.0)
+        parts = [
+            f"Waiting: {self._wait_status['action']}",
+            f"Target: {self._wait_status['target']}",
+            f"Elapsed: {_format_duration(elapsed)}",
+        ]
+        timeout = self._wait_status.get("timeout")
+        if timeout is not None:
+            parts.append(f"Timeout: {_format_duration(float(timeout))}")
+        self.waiting_label.setText(" | ".join(parts))
 
     def open_path(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -480,3 +539,61 @@ class MainWindow(QMainWindow):
         if any(result.status == "failed" for result in summary.results):
             return "failed"
         return "stopped"
+
+
+def _is_wait_action(action: str) -> bool:
+    return action == "window.wait" or action.startswith("wait.")
+
+
+def _wait_target_for_step(step) -> str:
+    if step is None:
+        return "condition"
+    action = getattr(step, "action", "")
+    if action == "wait.seconds":
+        return f"{getattr(step, 'seconds', 0):g}s"
+    if action == "wait.for_user":
+        return str(getattr(step, "prompt", "user confirmation"))
+    if action == "wait.for_file":
+        return f"file {getattr(step, 'path', '')}"
+    if action == "wait.for_process":
+        return f"process {getattr(step, 'process_name', '')} to start"
+    if action == "wait.for_process_exit":
+        return f"process {getattr(step, 'process_name', '')} to exit"
+    title = getattr(step, "title_contains", None)
+    process_name = getattr(step, "process_name", None)
+    if action in {"window.wait", "wait.for_window"}:
+        return f"window {title or process_name or 'window'}"
+    if action == "wait.for_window_gone":
+        return f"window {title or process_name or 'window'} to close"
+    return getattr(step, "display_name", None) or "condition"
+
+
+def _wait_timeout_for_step(step) -> float | None:
+    if step is None:
+        return None
+    timeout = getattr(step, "timeout_seconds", None)
+    if timeout is not None:
+        return float(timeout)
+    if getattr(step, "action", "") == "wait.seconds":
+        return float(getattr(step, "seconds", 0))
+    return None
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_duration(seconds: float) -> str:
+    whole_seconds = max(int(seconds), 0)
+    if whole_seconds < 60:
+        return f"{whole_seconds}s"
+    minutes, remainder = divmod(whole_seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {remainder}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m"

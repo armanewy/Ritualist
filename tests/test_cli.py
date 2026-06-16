@@ -1071,6 +1071,7 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
     assert result.exit_code == 1
     assert called == [True]
     assert fakes.desktop.calls == []
+    assert "Recipe: Demo" in result.output
     assert "Window: Battle.net" in result.output
     assert "Target: Play" in result.output
     assert "Final run state: stopped" in result.output

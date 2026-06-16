@@ -205,6 +205,7 @@ def test_wait_for_user_uses_confirmation_callback_without_risky_action() -> None
     assert isinstance(requests[0], ConfirmationRequest)
     assert requests[0].action == "wait.for_user"
     assert requests[0].prompt == "Continue?"
+    assert requests[0].recipe_name == "Wait Test"
 
 
 def test_sample_wait_runbook_executes_with_fake_adapters() -> None:

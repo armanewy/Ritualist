@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ritualist.models import DesktopClickTextStep
 
-from .base import ActionContext
+from .base import ActionContext, ActionOutcome, target_region_metadata
 from .metadata import ActionMetadata, WINDOWS_ONLY
 
 
@@ -29,9 +29,9 @@ class DesktopClickTextHandler:
         allowed_in_imported_packs=False,
     )
 
-    def run(self, step: DesktopClickTextStep, context: ActionContext) -> str:
+    def run(self, step: DesktopClickTextStep, context: ActionContext) -> ActionOutcome:
         timeout = step.timeout_seconds or 10.0
-        context.adapters.desktop.click_text(
+        region = context.adapters.desktop.click_text(
             text=step.text,
             window_title_contains=step.window_title_contains,
             control_type=step.control_type,
@@ -39,4 +39,7 @@ class DesktopClickTextHandler:
             button=step.button,
             timeout_seconds=timeout,
         )
-        return f"clicked visible text '{step.text}'"
+        return ActionOutcome(
+            message=f"clicked visible text '{step.text}'",
+            metadata=target_region_metadata(region),
+        )

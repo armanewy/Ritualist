@@ -15,6 +15,7 @@ from ritualist.home.actions import (
     HomeActionService,
     HomeCardAction,
     home_event_from_runtime,
+    home_event_from_step_status,
 )
 from ritualist.home.fake_events import FakeHomeStatusEmitter
 from ritualist.home.models import (
@@ -79,6 +80,7 @@ def run_home(*, mock: bool = False) -> int:
             self._confirmation_event = Event()
             self._confirmation_result = False
             self._runtime_control: Any | None = None
+            self._runtime_paused = False
             self.installedModelLoaded.connect(self._replace_model)
             self.installedModelLoadFailed.connect(self._mark_load_failed)
             self.actionCompleted.connect(self._complete_action)
@@ -102,6 +104,14 @@ def run_home(*, mock: bool = False) -> int:
         @Property(bool, notify=actionStateChanged)
         def actionBusy(self) -> bool:
             return self._action_busy
+
+        @Property(bool, notify=actionStateChanged)
+        def runtimeActive(self) -> bool:
+            return self._runtime_control is not None
+
+        @Property(bool, notify=actionStateChanged)
+        def runtimePaused(self) -> bool:
+            return self._runtime_paused
 
         @Property(bool, notify=confirmationChanged)
         def confirmationPending(self) -> bool:
@@ -175,7 +185,33 @@ def run_home(*, mock: bool = False) -> int:
                 return
             self._runtime_control.stop()
             self.answerConfirmation(False)
+            self._runtime_paused = False
             self._last_event_label = "Stopping current run"
+            self.actionStateChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def pauseCurrentRun(self) -> None:
+            if self._runtime_control is None:
+                self._last_event_label = "No runtime run is active"
+                self.metricsChanged.emit()
+                return
+            self._runtime_control.pause()
+            self._runtime_paused = True
+            self._last_event_label = "Pausing current run"
+            self.actionStateChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def resumeCurrentRun(self) -> None:
+            if self._runtime_control is None:
+                self._last_event_label = "No runtime run is active"
+                self.metricsChanged.emit()
+                return
+            self._runtime_control.resume()
+            self._runtime_paused = False
+            self._last_event_label = "Resuming current run"
+            self.actionStateChanged.emit()
             self.metricsChanged.emit()
 
         @Slot(bool)
@@ -198,6 +234,10 @@ def run_home(*, mock: bool = False) -> int:
         def _start_runtime_action(self, card_id: str, action: HomeCardAction) -> None:
             if self._action_guard(card_id, action):
                 return
+            from ritualist.runtime_control import RuntimeControl
+
+            self._runtime_control = RuntimeControl()
+            self._runtime_paused = False
             self._set_action_busy(True)
             label = "Dry run" if action is HomeCardAction.DRY_RUN else "Run"
             self._publish_event(
@@ -206,12 +246,19 @@ def run_home(*, mock: bool = False) -> int:
                     status=HomeCardStatus.RUNNING,
                     subtitle=f"{label} starting",
                     description="Runtime worker started",
+                    keep_open_active=False,
+                    wait_action="",
+                    wait_target="",
+                    wait_started_at="",
+                    wait_elapsed_seconds="",
+                    wait_timeout_seconds="",
                 )
             )
             future = self._ensure_worker_executor().submit(
                 self._run_runtime_action,
                 card_id,
                 action,
+                self._runtime_control,
             )
             self._action_future = future
             future.add_done_callback(lambda completed: self._complete_action_future(card_id, completed))
@@ -233,17 +280,14 @@ def run_home(*, mock: bool = False) -> int:
             self._action_future = future
             future.add_done_callback(lambda completed: self._complete_action_future(card_id, completed))
 
-        def _run_runtime_action(self, card_id: str, action: HomeCardAction) -> object:
-            from ritualist.runtime_control import RuntimeControl
-
-            self._runtime_control = RuntimeControl()
+        def _run_runtime_action(self, card_id: str, action: HomeCardAction, control: object) -> object:
             return self._dispatcher.dispatch(
                 action,
                 card_id,
                 runtime_event_callback=lambda event: self.runtimeEventReceived.emit(card_id, event),
                 status_callback=lambda event: self.statusEventReceived.emit(card_id, event),
                 confirmer=lambda prompt: self._confirm(card_id, prompt),
-                control=self._runtime_control,
+                control=control,
             )
 
         def _confirm(self, card_id: str, prompt: object) -> bool:
@@ -346,6 +390,8 @@ def run_home(*, mock: bool = False) -> int:
                 self._last_event_label = f"{card_id}: action finished"
                 self.metricsChanged.emit()
             self._runtime_control = None
+            self._runtime_paused = False
+            self.actionStateChanged.emit()
             self._set_action_busy(False)
 
         @Slot(str, str)
@@ -359,6 +405,8 @@ def run_home(*, mock: bool = False) -> int:
                 )
             )
             self._runtime_control = None
+            self._runtime_paused = False
+            self.actionStateChanged.emit()
             self._set_action_busy(False)
 
         @Slot(str, object)
@@ -369,14 +417,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot(str, object)
         def _apply_status_event(self, card_id: str, event: object) -> None:
-            self._publish_event(
-                HomeRuntimeEvent(
-                    card_id=card_id,
-                    status=HomeCardStatus.RUNNING,
-                    subtitle=f"Step {getattr(event, 'index', '')}: {getattr(event, 'status', '')}",
-                    description=str(getattr(event, "step_name", "") or ""),
-                )
-            )
+            self._publish_event(home_event_from_step_status(card_id, event))
 
         @Slot(str, object)
         def _request_confirmation(self, card_id: str, prompt: object) -> None:

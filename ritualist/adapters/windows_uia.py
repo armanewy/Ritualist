@@ -101,7 +101,7 @@ class WindowsUIAutomationAdapter:
         exact: bool,
         button: str,
         timeout_seconds: float,
-    ) -> None:
+    ) -> TargetRegion:
         _ensure_windows()
         desktop = _desktop()
         deadline = time.monotonic() + timeout_seconds
@@ -115,8 +115,14 @@ class WindowsUIAutomationAdapter:
                 for element in _preferred_descendants(root, control_type):
                     label = _element_text(element)
                     if matcher(label):
+                        region = TargetRegion(
+                            rect=_element_rect(element),
+                            window_title=_element_text(root),
+                            target_text=label or text,
+                            control_type=control_type,
+                        )
                         _activate(element, button=button)
-                        return
+                        return region
             time.sleep(0.25)
 
         if not last_roots:

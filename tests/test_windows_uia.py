@@ -66,14 +66,14 @@ class FakeDesktop:
 
 
 def test_click_text_uses_invoke_before_click(monkeypatch):
-    button = FakeElement("Play")
+    button = FakeElement("Play", rect=SimpleNamespace(left=100, top=200, right=180, bottom=240))
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
     monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
-    WindowsUIAutomationAdapter().click_text(
+    region = WindowsUIAutomationAdapter().click_text(
         text="Play",
         window_title_contains="Battle.net",
         control_type=None,
@@ -84,6 +84,13 @@ def test_click_text_uses_invoke_before_click(monkeypatch):
 
     assert button.invoked is True
     assert button.clicked is False
+    assert region.window_title == "Battle.net"
+    assert region.target_text == "Play"
+    assert region.rect is not None
+    assert region.rect.x == 100
+    assert region.rect.y == 200
+    assert region.rect.width == 80
+    assert region.rect.height == 40
 
 
 def test_click_text_failure_includes_candidate_labels(monkeypatch):

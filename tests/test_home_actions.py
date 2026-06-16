@@ -9,6 +9,7 @@ from ritualist.home.actions import (
     HomeActionService,
     HomeCardAction,
     home_event_from_runtime,
+    home_event_from_step_status,
 )
 from ritualist.home.models import HomeCardStatus, HomeLastRunStatus
 from ritualist.overlay import ActionPreview
@@ -152,3 +153,58 @@ def test_home_runtime_events_update_card_state():
     assert home_event.card_id == "gaming_mode"
     assert home_event.status is HomeCardStatus.SUCCESS
     assert home_event.last_run_status is HomeLastRunStatus.SUCCESS
+
+
+def test_home_runtime_heartbeat_maps_waiting_details():
+    event = SimpleNamespace(
+        type="heartbeat",
+        run_state="waiting",
+        step_state="waiting",
+        action="wait.for_window",
+        wait_target="window Battle.net",
+        wait_started_at="2026-06-15T12:00:00+00:00",
+        wait_elapsed_seconds=4.0,
+        wait_timeout_seconds=30.0,
+    )
+
+    home_event = home_event_from_runtime("gaming_mode", event)
+
+    assert home_event is not None
+    assert home_event.status is HomeCardStatus.RUNNING
+    assert home_event.wait_action == "wait.for_window"
+    assert home_event.wait_target == "window Battle.net"
+    assert home_event.wait_elapsed_seconds == "4"
+    assert home_event.wait_timeout_seconds == "30"
+
+
+def test_home_step_status_maps_wait_and_keep_open_state():
+    waiting = home_event_from_step_status(
+        "gaming_mode",
+        SimpleNamespace(
+            index=2,
+            status="running",
+            step_name="Wait for launcher",
+            wait_action="wait.for_process",
+            wait_target="process launcher.exe to start",
+            wait_started_at="2026-06-15T12:00:00+00:00",
+            wait_elapsed_seconds=2.0,
+            wait_timeout_seconds=10.0,
+            keep_open_active=False,
+        ),
+    )
+    keep_open = home_event_from_step_status(
+        "gaming_mode",
+        SimpleNamespace(
+            index=1,
+            status="success",
+            step_name="Open browser",
+            wait_action="",
+            keep_open_active=True,
+        ),
+    )
+
+    assert waiting.subtitle == "Waiting: wait.for_process"
+    assert waiting.wait_target == "process launcher.exe to start"
+    assert waiting.wait_timeout_seconds == "10"
+    assert keep_open.keep_open_active is True
+    assert keep_open.wait_action == ""

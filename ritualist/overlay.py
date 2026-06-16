@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,7 @@ class ConfirmationRequest:
     prompt: str
     action: str
     step_name: str
+    recipe_name: str | None = None
     window_title: str | None = None
     target_text: str | None = None
     control_type: str | None = None
@@ -69,30 +73,35 @@ class NullOverlayController:
 
 
 class BestEffortOverlayController:
-    def __init__(self, wrapped: OverlayController | None) -> None:
+    def __init__(self, wrapped: OverlayController | None, *, logger: logging.Logger | None = None) -> None:
         self.wrapped = wrapped or NullOverlayController()
+        self._logger = logger or LOGGER
 
     def show_preview(self, preview: ActionPreview, *, duration_ms: int) -> None:
         try:
             self.wrapped.show_preview(preview, duration_ms=duration_ms)
-        except Exception:  # noqa: BLE001 - visual trust layer must not break execution.
+        except Exception as exc:  # noqa: BLE001 - visual trust layer must not break execution.
+            self._logger.warning("Action overlay preview failed: %s", exc)
             return
 
     def start_wait(self, label: str) -> WaitOverlayHandle:
         try:
-            return _BestEffortWaitOverlayHandle(self.wrapped.start_wait(label))
-        except Exception:  # noqa: BLE001 - wait HUD failure must not break execution.
+            return _BestEffortWaitOverlayHandle(self.wrapped.start_wait(label), logger=self._logger)
+        except Exception as exc:  # noqa: BLE001 - wait HUD failure must not break execution.
+            self._logger.warning("Action overlay wait HUD failed: %s", exc)
             return NullWaitOverlayHandle()
 
 
 class _BestEffortWaitOverlayHandle:
-    def __init__(self, wrapped: WaitOverlayHandle) -> None:
+    def __init__(self, wrapped: WaitOverlayHandle, *, logger: logging.Logger) -> None:
         self.wrapped = wrapped
+        self._logger = logger
 
     def close(self) -> None:
         try:
             self.wrapped.close()
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            self._logger.warning("Action overlay wait HUD close failed: %s", exc)
             return
 
 
@@ -101,9 +110,15 @@ def format_confirmation_request(request: ConfirmationRequest | str) -> str:
         return request
     lines = [
         request.prompt,
-        f"Step: {request.step_name}",
-        f"Action: {request.action}",
     ]
+    if request.recipe_name:
+        lines.append(f"Recipe: {request.recipe_name}")
+    lines.extend(
+        [
+            f"Step: {request.step_name}",
+            f"Action: {request.action}",
+        ]
+    )
     if request.window_title:
         lines.append(f"Window: {request.window_title}")
     if request.target_text:
@@ -111,4 +126,6 @@ def format_confirmation_request(request: ConfirmationRequest | str) -> str:
         if request.control_type:
             target = f"{target} ({request.control_type})"
         lines.append(f"Target: {target}")
+    elif request.control_type:
+        lines.append(f"Control: {request.control_type}")
     return "\n".join(lines)

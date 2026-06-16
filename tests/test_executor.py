@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import pytest
+
 from ritualist.actions.base import ActionContext
 from ritualist.actions.metadata import ALL_PLATFORMS, ActionMetadata
 from ritualist.actions.registry import ActionRegistry
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
+from ritualist.overlay import ScreenRect, TargetRegion
 from ritualist.runtime_control import RuntimeControl
-from ritualist.runtime_models import RunFinished, RunState, StepFinished, StepState
+from ritualist.runtime_models import Heartbeat, RunFinished, RunState, StepFinished, StepState
 
 
 def test_executor_runs_steps_in_order():
@@ -106,6 +109,113 @@ def test_executor_cancels_when_confirmation_declined():
     assert summary.results[0].status == "cancelled"
 
 
+def test_desktop_click_result_includes_target_preview_metadata_without_overlay():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "desktop.click_text",
+                    "text": "Diablo IV",
+                    "window_title_contains": "Battle.net",
+                    "control_type": "Button",
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.desktop.responses["click_text"] = TargetRegion(
+        rect=ScreenRect(101, 202, 80, 40),
+        window_title="Battle.net",
+        target_text="Diablo IV",
+        control_type="Button",
+    )
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.desktop.calls] == ["click_text"]
+    assert summary.results[0].metadata == {
+        "target_preview": {
+            "window_title": "Battle.net",
+            "target_text": "Diablo IV",
+            "control_type": "Button",
+            "bounds": {"x": 101, "y": 202, "width": 80, "height": 40},
+        }
+    }
+    finished = next(event for event in runtime_events if isinstance(event, StepFinished))
+    assert finished.metadata == summary.results[0].metadata
+
+
+@pytest.mark.parametrize(
+    ("action", "adapter_call"),
+    [
+        ("window.focus", "focus"),
+        ("window.minimize", "minimize"),
+        ("window.maximize", "maximize"),
+        ("window.wait", "wait"),
+    ],
+)
+def test_window_action_result_includes_bounds_metadata_without_overlay(action, adapter_call):
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": action, "title_contains": "Battle.net"}],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.window.responses[adapter_call] = TargetRegion(
+        rect=ScreenRect(10, 20, 300, 200),
+        window_title="Battle.net",
+    )
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.window.calls] == [adapter_call]
+    assert summary.results[0].metadata == {
+        "target_preview": {
+            "window_title": "Battle.net",
+            "bounds": {"x": 10, "y": 20, "width": 300, "height": 200},
+        }
+    }
+
+
+def test_confirm_ask_uses_structured_request_with_recipe_details():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "name": "Pause before launch",
+                    "action": "confirm.ask",
+                    "prompt": "Continue?",
+                }
+            ],
+        }
+    )
+    requests = []
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda request: requests.append(request) or True,
+    ).run(recipe)
+
+    assert summary.success
+    request = requests[0]
+    assert request.recipe_name == "Run"
+    assert request.step_name == "Pause before launch"
+    assert request.action == "confirm.ask"
+    assert request.prompt == "Continue?"
+
+
 def test_executor_emits_runtime_events_for_success_and_keeps_step_callback():
     recipe = Recipe.model_validate(
         {
@@ -172,6 +282,40 @@ def test_executor_emits_failed_runtime_state_for_required_step_failure():
         RunState.FAILED
     ]
     assert runtime_events[-1].state == RunState.FAILED
+
+
+def test_executor_emits_wait_status_metadata():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [{"action": "wait.seconds", "seconds": 0.01, "timeout_seconds": 0.2}],
+        }
+    )
+    runtime_events = []
+    step_events = []
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        runtime_event_callback=runtime_events.append,
+        status_callback=step_events.append,
+    ).run(recipe)
+
+    waiting_status = next(event for event in step_events if event.status == "running")
+    waiting_heartbeat = next(
+        event
+        for event in runtime_events
+        if isinstance(event, Heartbeat) and event.run_state == RunState.WAITING
+    )
+
+    assert summary.success
+    assert waiting_status.wait_action == "wait.seconds"
+    assert waiting_status.wait_target == "0.01s"
+    assert waiting_status.wait_timeout_seconds == 0.2
+    assert waiting_status.wait_started_at is not None
+    assert waiting_heartbeat.action == "wait.seconds"
+    assert waiting_heartbeat.wait_target == "0.01s"
+    assert waiting_heartbeat.wait_timeout_seconds == 0.2
 
 
 def test_executor_emits_skipped_runtime_step_for_optional_failure():

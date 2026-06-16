@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ritualist.errors import UserCancelledError
 from ritualist.models import ConfirmAskStep
+from ritualist.overlay import ConfirmationRequest
 
 from .base import ActionContext
 from .metadata import ALL_PLATFORMS, ActionMetadata
@@ -23,6 +24,12 @@ class ConfirmAskHandler:
     )
 
     def run(self, step: ConfirmAskStep, context: ActionContext) -> str:
-        if not context.confirm(step.prompt):
+        request = ConfirmationRequest(
+            prompt=step.prompt,
+            action=step.action,
+            step_name=step.display_name,
+            recipe_name=context.recipe.name,
+        )
+        if not context.confirm(request):
             raise UserCancelledError("user declined confirmation")
         return "confirmed"

@@ -41,9 +41,10 @@ class WindowsWindowManager:
         title_contains: str | None,
         process_name: str | None,
         timeout_seconds: float,
-    ) -> None:
+    ) -> TargetRegion:
         window = self._find_window(title_contains, process_name, timeout_seconds)
         window.set_focus()
+        return _target_region(window)
 
     def minimize(
         self,
@@ -51,9 +52,10 @@ class WindowsWindowManager:
         title_contains: str | None,
         process_name: str | None,
         timeout_seconds: float,
-    ) -> None:
+    ) -> TargetRegion:
         window = self._find_window(title_contains, process_name, timeout_seconds)
         window.minimize()
+        return _target_region(window)
 
     def maximize(
         self,
@@ -61,9 +63,10 @@ class WindowsWindowManager:
         title_contains: str | None,
         process_name: str | None,
         timeout_seconds: float,
-    ) -> None:
+    ) -> TargetRegion:
         window = self._find_window(title_contains, process_name, timeout_seconds)
         window.maximize()
+        return _target_region(window)
 
     def wait(
         self,
@@ -71,8 +74,9 @@ class WindowsWindowManager:
         title_contains: str | None,
         process_name: str | None,
         timeout_seconds: float,
-    ) -> None:
-        self._find_window(title_contains, process_name, timeout_seconds)
+    ) -> TargetRegion:
+        window = self._find_window(title_contains, process_name, timeout_seconds)
+        return _target_region(window)
 
     def _find_window(
         self,
@@ -177,3 +181,7 @@ def _screen_rect_from_object(rect: Any) -> ScreenRect | None:
     if width <= 0 or height <= 0:
         return None
     return ScreenRect(x=left, y=top, width=width, height=height)
+
+
+def _target_region(window: Any) -> TargetRegion:
+    return TargetRegion(rect=_window_rect(window), window_title=_safe_window_text(window))

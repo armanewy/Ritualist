@@ -55,6 +55,12 @@ def test_home_card_fields_are_stable_for_qml_bridge():
         "doctor_status",
         "accent",
         "image",
+        "wait_action",
+        "wait_target",
+        "wait_started_at",
+        "wait_elapsed_seconds",
+        "wait_timeout_seconds",
+        "keep_open_active",
     )
 
 
@@ -290,6 +296,37 @@ def test_home_model_updates_card_from_runtime_event():
     assert finished.status is HomeCardStatus.SUCCESS
     assert finished.last_run_status is HomeLastRunStatus.SUCCESS
     assert finished.description == "Finished without touching the GUI thread."
+
+
+def test_home_model_updates_wait_and_keep_open_state():
+    model = create_mock_home_model()
+    card = model.cards[0]
+
+    waiting = model.apply_runtime_event(
+        HomeRuntimeEvent(
+            card_id=card.id,
+            status=HomeCardStatus.RUNNING,
+            wait_action="wait.for_window",
+            wait_target="window Battle.net",
+            wait_started_at="2026-06-15T12:00:00+00:00",
+            wait_elapsed_seconds="3",
+            wait_timeout_seconds="30",
+        )
+    )
+
+    assert waiting.wait_action == "wait.for_window"
+    assert waiting.wait_target == "window Battle.net"
+    assert waiting.wait_elapsed_seconds == "3"
+    assert waiting.wait_timeout_seconds == "30"
+
+    keep_open = model.apply_runtime_event(
+        {"card_id": card.id, "keep_open_active": True, "wait_action": "", "wait_target": ""}
+    )
+
+    assert keep_open.keep_open_active is True
+    assert keep_open.wait_action == ""
+    assert keep_open.wait_target == ""
+    assert model.get_card(card.id).to_qml()["keep_open_active"] == "true"
 
 
 def test_home_model_rejects_unknown_runtime_event_card_id():
