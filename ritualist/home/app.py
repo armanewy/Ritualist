@@ -37,7 +37,7 @@ def run_home(*, mock: bool = False) -> int:
     """
     try:
         from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
-        from PySide6.QtGui import QDesktopServices, QGuiApplication
+        from PySide6.QtGui import QDesktopServices
         from PySide6.QtQml import QQmlApplicationEngine
         from PySide6.QtWidgets import QApplication
     except ImportError as exc:
@@ -56,6 +56,7 @@ def run_home(*, mock: bool = False) -> int:
         runtimeEventReceived = Signal(str, object)
         statusEventReceived = Signal(str, object)
         confirmationRequested = Signal(str, object)
+        confirmationDecision = Signal(bool)
 
         def __init__(
             self,
@@ -79,7 +80,7 @@ def run_home(*, mock: bool = False) -> int:
             )
             self._activity = HomeActivityLog(max_entries=8)
             self._min_status_dwell_ms = config.home.min_status_dwell_ms
-            self._inline_confirmation_visible = confirmation_presenter is None
+            self._inline_confirmation_visible = _should_show_inline_confirmation(confirmation_presenter)
             self._confirmation_presenter = confirmation_presenter or _InlineHomeConfirmationPresenter()
             self._action_busy = False
             self._confirmation_pending = False
@@ -95,6 +96,7 @@ def run_home(*, mock: bool = False) -> int:
             self.runtimeEventReceived.connect(self._apply_runtime_event)
             self.statusEventReceived.connect(self._apply_status_event)
             self.confirmationRequested.connect(self._request_confirmation)
+            self.confirmationDecision.connect(self.answerConfirmation)
 
         @Property("QVariantMap", notify=payloadChanged)
         def payload(self) -> dict[str, object]:
@@ -490,7 +492,7 @@ def run_home(*, mock: bool = False) -> int:
             self._show_confirmation_status(card_id, prompt)
             self._confirmation_presenter.request_confirmation(
                 prompt,
-                on_decision=lambda accepted: self.answerConfirmation(accepted),
+                on_decision=self.confirmationDecision.emit,
             )
 
         def _show_confirmation_status(self, card_id: str, prompt: object) -> None:
@@ -509,7 +511,7 @@ def run_home(*, mock: bool = False) -> int:
             )
 
     config = load_app_config()
-    app = QGuiApplication.instance() or QApplication(sys.argv)
+    app = QApplication.instance() or QApplication(sys.argv)
     overlay_controller = None if mock else _create_overlay_controller()
     confirmation_presenter = None if mock else _create_confirmation_presenter()
     model = (
@@ -596,15 +598,27 @@ def _create_overlay_controller() -> object | None:
 
 def _create_confirmation_presenter() -> object | None:
     try:
-        from ritualist.home.confirmation import create_qt_confirmation_presenter
+        from ritualist.home.confirmation import (
+            create_qt_confirmation_presenter,
+            create_win32_confirmation_presenter,
+        )
     except Exception:  # noqa: BLE001 - Home can fall back to inline status only.
         return None
     try:
         return create_qt_confirmation_presenter()
-    except Exception:  # noqa: BLE001 - confirmation fallback still preserves safety.
+    except Exception:  # noqa: BLE001 - use native fallback before inline Home fallback.
+        if sys.platform == "win32":
+            try:
+                return create_win32_confirmation_presenter()
+            except Exception:  # noqa: BLE001 - confirmation fallback still preserves safety.
+                return None
         return None
 
 
 class _InlineHomeConfirmationPresenter:
     def request_confirmation(self, request: object, *, on_decision: Any) -> None:
         return
+
+
+def _should_show_inline_confirmation(confirmation_presenter: object | None) -> bool:
+    return confirmation_presenter is None

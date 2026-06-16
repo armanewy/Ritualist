@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from threading import Thread
 from typing import Any
 
 from ritualist.overlay import ConfirmationRequest, ScreenRect, format_confirmation_request
@@ -35,7 +36,7 @@ def create_qt_confirmation_presenter() -> Any:
     helpers remains safe in CLI and non-GUI test environments.
     """
 
-    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtCore import QPoint, QTimer, Qt
     from PySide6.QtGui import QGuiApplication
     from PySide6.QtWidgets import (
         QDialog,
@@ -55,6 +56,21 @@ def create_qt_confirmation_presenter() -> Any:
             *,
             on_decision: Callable[[bool], None],
         ) -> None:
+            try:
+                self._request_qt_confirmation(request, on_decision=on_decision)
+            except Exception:  # noqa: BLE001 - preserve safety if Qt cannot present the dialog.
+                self._discard_dialog()
+                if _is_windows():
+                    _show_win32_confirmation_async(request, on_decision=on_decision)
+                else:
+                    on_decision(False)
+
+        def _request_qt_confirmation(
+            self,
+            request: ConfirmationRequest | str,
+            *,
+            on_decision: Callable[[bool], None],
+        ) -> None:
             if self._dialog is not None:
                 self._dialog.close()
                 self._dialog.deleteLater()
@@ -63,6 +79,7 @@ def create_qt_confirmation_presenter() -> Any:
             self._dialog = dialog
             dialog.setWindowTitle("Ritualist Confirmation Required")
             dialog.setModal(False)
+            dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
             dialog.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
             dialog.setWindowFlag(Qt.WindowType.Window, True)
             dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
@@ -112,15 +129,42 @@ def create_qt_confirmation_presenter() -> Any:
             dialog.adjustSize()
             _place_dialog(dialog, request, QGuiApplication, QPoint)
             dialog.show()
-            dialog.raise_()
-            dialog.activateWindow()
+            _force_dialog_foreground(dialog)
+            QTimer.singleShot(150, lambda active_dialog=dialog: _force_dialog_foreground(active_dialog))
+            QTimer.singleShot(700, lambda active_dialog=dialog: _force_dialog_foreground(active_dialog))
 
         def _clear_dialog(self, dialog: QDialog) -> None:
             if self._dialog is dialog:
                 self._dialog = None
             dialog.deleteLater()
 
+        def _discard_dialog(self) -> None:
+            if self._dialog is None:
+                return
+            dialog = self._dialog
+            self._dialog = None
+            try:
+                dialog.close()
+                dialog.deleteLater()
+            except RuntimeError:
+                return
+
     return QtHomeConfirmationPresenter()
+
+
+def create_win32_confirmation_presenter() -> Any:
+    """Create a topmost native Windows confirmation fallback."""
+
+    class Win32ConfirmationPresenter:
+        def request_confirmation(
+            self,
+            request: ConfirmationRequest | str,
+            *,
+            on_decision: Callable[[bool], None],
+        ) -> None:
+            _show_win32_confirmation_async(request, on_decision=on_decision)
+
+    return Win32ConfirmationPresenter()
 
 
 def placement_for_dialog(
@@ -172,6 +216,79 @@ def _place_dialog(dialog: Any, request: ConfirmationRequest | str, app: Any, poi
         screen_height=available.height(),
     )
     dialog.move(placement.x, placement.y)
+
+
+def _force_dialog_foreground(dialog: Any) -> None:
+    if dialog is None:
+        return
+    try:
+        dialog.raise_()
+        dialog.activateWindow()
+    except RuntimeError:
+        return
+    if not _is_windows():
+        return
+    try:
+        hwnd = int(dialog.winId())
+    except Exception:  # noqa: BLE001 - foreground forcing is best-effort.
+        return
+    _force_hwnd_foreground(hwnd)
+
+
+def _show_win32_confirmation(request: ConfirmationRequest | str) -> bool:
+    import ctypes
+
+    text = format_confirmation_request(request)
+    title = "Ritualist Confirmation Required"
+    flags = 0x00000001 | 0x00000030 | 0x00000100 | 0x00040000 | 0x00010000
+    try:
+        result = ctypes.windll.user32.MessageBoxW(None, text, title, flags)
+    except Exception:  # noqa: BLE001 - if the fallback cannot show, preserve safety by declining.
+        return False
+    return result == 1
+
+
+def _show_win32_confirmation_async(
+    request: ConfirmationRequest | str,
+    *,
+    on_decision: Callable[[bool], None],
+) -> None:
+    def decide() -> None:
+        on_decision(_show_win32_confirmation(request))
+
+    Thread(target=decide, name="ritualist-win32-confirmation", daemon=True).start()
+
+
+def _force_hwnd_foreground(hwnd: int) -> None:
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    hwnd_topmost = -1
+    sw_shownormal = 1
+    swp_nosize = 0x0001
+    swp_nomove = 0x0002
+    swp_showwindow = 0x0040
+    try:
+        user32.ShowWindow(hwnd, sw_shownormal)
+        user32.SetWindowPos(
+            hwnd,
+            hwnd_topmost,
+            0,
+            0,
+            0,
+            0,
+            swp_nomove | swp_nosize | swp_showwindow,
+        )
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:  # noqa: BLE001 - topmost promotion must never break confirmation.
+        return
+
+
+def _is_windows() -> bool:
+    import sys
+
+    return sys.platform == "win32"
 
 
 def _proceed_label(request: ConfirmationRequest | str) -> str:

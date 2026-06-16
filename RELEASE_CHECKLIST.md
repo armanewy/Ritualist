@@ -104,6 +104,27 @@ Manual release gates:
 
 ## Dogfood Findings - 2026-06-16
 
+Packaged Home confirmation trust regression:
+
+- Manual packaged Home testing on 2026-06-16 found the Play confirmation still
+  appeared as the inline QML panel behind the Battle.net / Diablo screen. This
+  was treated as a release blocker because a risky desktop action confirmation
+  must remain visible above the target app.
+- Fix applied for the next rebuild: Home now creates a `QApplication` for widget
+  support, packaged builds explicitly include `ritualist.home.confirmation`, the
+  Qt confirmation dialog is promoted with topmost/foreground Win32 calls, and a
+  topmost Win32 MessageBox fallback is available if Qt dialog presentation fails.
+- Post-fix validation: `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m
+  pytest -q` passed with `455 passed, 1 skipped`; `python -m compileall -q
+  ritualist tests`, `python -m ritualist dry-run gaming_mode`, `python -m
+  ritualist actions --json`, `python -m ritualist doctor gaming_mode --json
+  --no-strict`, and `python -m ritualist perf fake-run gaming_mode --json`
+  passed; `.\scripts\build_windows_app.ps1` rebuilt `dist\Ritualist\Ritualist.exe`;
+  a brief packaged launch smoke opened a `Ritualist Home` window.
+- Re-test requirement: after rebuilding `dist\Ritualist\Ritualist.exe`, start
+  `gaming_mode` from Home and verify the Play confirmation appears as a separate
+  top-level/native dialog above Battle.net, not as the inline Home panel.
+
 Automated Windows development-checkout checks passed:
 
 - `python -m pip install -e ".[all,dev]"`.
@@ -190,6 +211,8 @@ Manual Windows-only checks still required:
 - [ ] Confirm YouTube opens and loops.
 - [ ] Confirm Battle.net launches.
 - [ ] Confirm Diablo IV is selected.
+- [ ] Confirm the Play confirmation is a separate top-level/native dialog that
+  stays visible above Battle.net / Diablo.
 - [ ] Decline Play.
 - [ ] Confirm the latest run status is `stopped`.
 - [ ] Confirm the final step is `cancelled | Ask before clicking Play | user declined confirmation`.
@@ -198,6 +221,8 @@ Manual Windows-only checks still required:
 
 - [ ] Start `gaming_mode` from the packaged app.
 - [ ] Wait until the Play confirmation is visible.
+- [ ] Confirm the Play confirmation is a separate top-level/native dialog above
+  Battle.net, not the inline QML panel inside Home.
 - [ ] Kill `Ritualist.exe` from Task Manager or PowerShell.
 - [ ] Relaunch `dist\Ritualist\Ritualist.exe`.
 - [ ] Confirm Home startup or Refresh reconciles the abandoned run.

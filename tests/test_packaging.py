@@ -18,10 +18,15 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "ritualist.adapters" in script
     assert "ritualist.home" in script
     assert "ritualist.ui" in script
+    assert "--hidden-import" in script
+    assert "ritualist.home.confirmation" in script
     assert "--collect-data" in script
     assert "ritualist.home.qml" in script
     assert "ritualist.sample_recipes" in script
     assert "dist\\Ritualist\\Ritualist.exe" in script
+
+    spec = Path("Ritualist.spec").read_text(encoding="utf-8")
+    assert "ritualist.home.confirmation" in spec
 
 
 def test_package_data_includes_home_qml_and_sample_templates():

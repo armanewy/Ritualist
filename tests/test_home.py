@@ -130,9 +130,39 @@ def test_home_uses_native_confirmation_presenter_when_available():
     source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
         encoding="utf-8"
     )
+    assert "app = QApplication.instance() or QApplication(sys.argv)" in source
     assert "confirmation_presenter = None if mock else _create_confirmation_presenter()" in source
+    assert "self._inline_confirmation_visible = _should_show_inline_confirmation(" in source
     assert "self._confirmation_presenter.request_confirmation(" in source
-    assert "from ritualist.home.confirmation import create_qt_confirmation_presenter" in source
+    assert "create_qt_confirmation_presenter" in source
+    assert "create_win32_confirmation_presenter" in source
+    assert "return create_win32_confirmation_presenter()" in source
+    assert "confirmationDecision = Signal(bool)" in source
+    assert "on_decision=self.confirmationDecision.emit" in source
+
+
+def test_home_confirmation_presenter_uses_win32_fallback_when_qt_factory_fails(monkeypatch):
+    from ritualist.home import confirmation as home_confirmation
+
+    fallback = object()
+
+    def fail_qt() -> object:
+        raise RuntimeError("qt dialog unavailable")
+
+    monkeypatch.setattr(home_app.sys, "platform", "win32")
+    monkeypatch.setattr(home_confirmation, "create_qt_confirmation_presenter", fail_qt)
+    monkeypatch.setattr(
+        home_confirmation,
+        "create_win32_confirmation_presenter",
+        lambda: fallback,
+    )
+
+    assert home_app._create_confirmation_presenter() is fallback
+
+
+def test_home_inline_confirmation_visibility_depends_on_presenter():
+    assert home_app._should_show_inline_confirmation(None) is True
+    assert home_app._should_show_inline_confirmation(object()) is False
 
 
 def test_home_command_import_does_not_load_pyside6():

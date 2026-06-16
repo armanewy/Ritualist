@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from threading import Event
 from pathlib import Path
+from types import SimpleNamespace
 
-from ritualist.home.confirmation import _proceed_label, placement_for_dialog
+from ritualist.home import confirmation as confirmation_module
+from ritualist.home.confirmation import (
+    _proceed_label,
+    _show_win32_confirmation,
+    create_win32_confirmation_presenter,
+    placement_for_dialog,
+)
 from ritualist.overlay import ConfirmationRequest, ScreenRect
 
 
@@ -82,11 +90,80 @@ def test_native_home_confirmation_presenter_uses_top_level_always_on_top_dialog(
 
     assert "dialog = QDialog()" in source
     assert "dialog.setModal(False)" in source
+    assert "ApplicationModal" in source
     assert "WindowStaysOnTopHint" in source
     assert "WindowType.Window" in source
     assert "_place_dialog(dialog, request" in source
+    assert "_force_dialog_foreground(dialog)" in source
+    assert "QTimer.singleShot(150" in source
+    assert "QTimer.singleShot(700" in source
     assert "Skip if supported" in source
     assert "Cancel Ritual" in source
+    assert "create_win32_confirmation_presenter" in source
+    assert "_show_win32_confirmation(request)" in source
+    assert "SetForegroundWindow" in source
+    assert "SetWindowPos" in source
+    assert "0x00040000" in source
+    assert "0x00010000" in source
+    assert "0x00000100" in source
+
+
+def test_win32_fallback_messagebox_is_topmost_and_foreground(monkeypatch):
+    import ctypes
+
+    calls: list[tuple[object, str, str, int]] = []
+
+    class User32:
+        def MessageBoxW(self, hwnd: object, text: str, title: str, flags: int) -> int:
+            calls.append((hwnd, text, title, flags))
+            return 1
+
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=User32()), raising=False)
+
+    accepted = _show_win32_confirmation(
+        ConfirmationRequest(
+            prompt="Click Play?",
+            recipe_name="Gaming Mode",
+            step_name="Ask before clicking Play",
+            action="desktop.click_text",
+            window_title="Battle.net",
+            target_text="Play",
+            safety_message="Clicking visible text exactly equal to Play requires explicit confirmation.",
+        )
+    )
+
+    assert accepted is True
+    assert calls
+    _, text, title, flags = calls[0]
+    assert "Gaming Mode" in text
+    assert "Ask before clicking Play" in text
+    assert "Window: Battle.net" in text
+    assert "Target: Play" in text
+    assert title == "Ritualist Confirmation Required"
+    assert flags & 0x00040000
+    assert flags & 0x00010000
+    assert flags & 0x00000100
+
+
+def test_win32_confirmation_presenter_does_not_block_caller_thread(monkeypatch):
+    started = Event()
+    release = Event()
+    decisions: list[bool] = []
+
+    def fake_show(request: object) -> bool:
+        started.set()
+        assert release.wait(timeout=2)
+        return True
+
+    monkeypatch.setattr(confirmation_module, "_show_win32_confirmation", fake_show)
+
+    presenter = create_win32_confirmation_presenter()
+    presenter.request_confirmation("Click Play?", on_decision=decisions.append)
+
+    assert started.wait(timeout=2)
+    assert decisions == []
+    release.set()
+    assert _wait_for(lambda: decisions == [True])
 
 
 def test_home_confirmation_proceed_label_uses_browser_target_metadata():
@@ -100,3 +177,14 @@ def test_home_confirmation_proceed_label_uses_browser_target_metadata():
     )
 
     assert _proceed_label(request) == "Click target"
+
+
+def _wait_for(predicate, *, timeout: float = 2.0) -> bool:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
