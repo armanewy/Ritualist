@@ -9,6 +9,7 @@ from ritualist.models import Recipe
 from ritualist.overlay import ScreenRect, TargetRegion
 from ritualist.run_logs import (
     RunLogWriter,
+    append_operator_note,
     list_recent_runs,
     load_run,
     reconcile_running_runs,
@@ -179,6 +180,64 @@ def test_run_log_writer_records_runtime_v2_metadata_hooks(tmp_path):
     }
     assert loaded.metadata["run_state_history"][-1]["state"] == "paused"
     assert loaded.metadata["event_summaries"][-1]["event"] == "confirmation.requested"
+
+
+def test_run_log_writer_records_user_entered_operator_note(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    writer.start(recipe, dry_run=False)
+    entry = writer.add_operator_note("Operator checked the window title.")
+
+    assert entry is not None
+    assert writer.run_dir is not None
+    notes_text = (writer.run_dir / "operator_notes.jsonl").read_text(encoding="utf-8")
+    notes = [json.loads(line) for line in notes_text.splitlines()]
+    assert notes == [entry]
+    assert notes[0]["source"] == "user"
+    assert notes[0]["user_entered"] is True
+    assert notes[0]["kind"] == "operator_note"
+    assert notes[0]["note"] == "Operator checked the window title."
+
+    run_json_text = (writer.run_dir / "run.json").read_text(encoding="utf-8")
+    run_json = json.loads(run_json_text)
+    assert run_json["operator_notes_count"] == 1
+    assert run_json["last_operator_note_at"] == entry["at"]
+    assert run_json["event_summaries"][-1]["event"] == "operator_note.added"
+    assert "Operator checked the window title." not in run_json_text
+
+    loaded = load_run(writer.run_dir)
+    assert loaded is not None
+    assert loaded.notes == [entry]
+
+
+def test_append_operator_note_adds_note_to_finished_run(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), run_logger=writer).run(recipe)
+    assert summary.run_dir is not None
+    entry = append_operator_note(summary.run_dir, "Follow-up note after the run.")
+
+    assert entry is not None
+    loaded = load_run(summary.run_dir)
+    assert loaded is not None
+    assert loaded.notes == [entry]
+    assert loaded.notes[0]["user_entered"] is True
+    assert loaded.metadata["operator_notes_count"] == 1
+    assert loaded.metadata["last_operator_note_at"] == entry["at"]
 
 
 def test_run_log_writer_maps_dry_run_status_to_runtime_step_state(tmp_path):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 import json
 from pathlib import Path
+import sys
 import time
 from typing import Annotated
 
@@ -43,6 +44,7 @@ from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_r
 from .run_logs import (
     RunLogWriter,
     RunbookSummary,
+    append_operator_note,
     list_recent_runs,
     load_run,
     reconcile_running_runs,
@@ -542,6 +544,7 @@ def show_run(
     console.print(table)
 
     _print_runbook_summary(summarize_run_record(record))
+    _print_operator_notes(record.notes)
 
     steps = Table(title="Steps")
     steps.add_column("#", justify="right")
@@ -558,6 +561,36 @@ def show_run(
             escape(str(step.get("message", ""))),
         )
     console.print(steps)
+
+
+@app.command("note-run")
+def note_run(
+    run_id_or_path: Annotated[str, typer.Argument(help="Run id from 'ritualist runs' or run path.")],
+    note: Annotated[str | None, typer.Argument(help="User-entered operator note text.")] = None,
+    stdin: Annotated[
+        bool,
+        typer.Option("--stdin", help="Read the user-entered operator note from standard input."),
+    ] = False,
+) -> None:
+    """Add a user-entered operator note to a run log."""
+    if note is not None and stdin:
+        console.print("[red]Error:[/] pass note text or --stdin, not both.")
+        raise typer.Exit(1)
+    note_text = sys.stdin.read() if stdin else note
+    if note_text is None:
+        note_text = typer.prompt("Operator note", default="", show_default=False)
+    try:
+        entry = append_operator_note(run_id_or_path, note_text)
+    except ValueError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if entry is None:
+        console.print(f"[red]Error:[/] run not found: {escape(run_id_or_path)}")
+        raise typer.Exit(1)
+    console.print(
+        "[green]Added user-entered operator note[/] "
+        f"at {escape(str(entry.get('at', '')))}."
+    )
 
 
 @app.command()
@@ -1060,6 +1093,26 @@ def _print_runbook_summary(summary: RunbookSummary) -> None:
     console.print(f"  Final status: {escape(summary.final_status)}")
     console.print(f"  Stopped/interrupted: {escape(summary.stop_semantics)}")
     console.print(f"  Last step: {escape(summary.last_step or 'none')}")
+
+
+def _print_operator_notes(notes: list[dict[str, object]]) -> None:
+    if not notes:
+        return
+    table = Table(title="Operator notes (user-entered)")
+    table.add_column("At", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Note", overflow="fold")
+    for note in notes:
+        if note.get("user_entered") is True:
+            source = "user-entered"
+        else:
+            source = str(note.get("source", ""))
+        table.add_row(
+            escape(str(note.get("at", ""))),
+            escape(source),
+            escape(str(note.get("note", ""))),
+        )
+    console.print(table)
 
 
 def _finish_run_logger_as_stopped(run_logger: object, *, logger: object) -> None:
