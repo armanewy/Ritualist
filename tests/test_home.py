@@ -16,6 +16,7 @@ from ritualist.home import (
     HomeRuntimeEvent,
     create_mock_home_model,
 )
+from ritualist.home.models import HomeCardStatus
 
 
 class FakeClock:
@@ -47,6 +48,16 @@ def test_home_mock_command_calls_launcher(monkeypatch):
     assert calls == [True]
 
 
+def test_home_command_loads_installed_recipes_by_default(monkeypatch):
+    calls = []
+    monkeypatch.setattr(home_app, "run_home", lambda *, mock: calls.append(mock))
+
+    result = CliRunner().invoke(app, ["home"])
+
+    assert result.exit_code == 0
+    assert calls == [False]
+
+
 def test_home_dependency_error_preserves_gui_extra(monkeypatch):
     def missing_home(*, mock: bool) -> None:
         raise DependencyMissingError("Home requires PySide6; install ritualist[gui]")
@@ -57,6 +68,22 @@ def test_home_dependency_error_preserves_gui_extra(monkeypatch):
 
     assert result.exit_code == 1
     assert "ritualist[gui]" in result.output
+
+
+def test_home_doctor_incompatible_maps_to_failed_card_status():
+    assert home_app._doctor_status("compatible") is HomeCardStatus.SUCCESS
+    assert home_app._doctor_status("compatible_with_warnings") is HomeCardStatus.WARNING
+    assert home_app._doctor_status("incompatible") is HomeCardStatus.FAILED
+
+
+def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
+    qml = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "qml" / "Home.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "stopCurrentRun" in qml
+    assert "confirmationModalBlocker" in qml
+    assert "root.confirmationPending" in qml
 
 
 def test_home_command_import_does_not_load_pyside6():

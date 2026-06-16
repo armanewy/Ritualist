@@ -46,6 +46,16 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "overlay_duration_ms": 700,
         "preview_desktop_clicks": True,
     }
+    assert config["home"] == {
+        "categories": [
+            "Gaming",
+            "Media",
+            "Coding",
+            "News",
+            "Helpdesk",
+            "Settings",
+        ],
+    }
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"
     assert rows[0][1].steps[0].keep_open is True

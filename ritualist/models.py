@@ -277,6 +277,22 @@ class EnvironmentContract(BaseModel):
     variable_hints: dict[str, str] = Field(default_factory=dict)
 
 
+class RecipeHomeCardMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    subtitle: str = ""
+    image: str = ""
+    accent: str = ""
+
+
+class RecipeHomeMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: str = ""
+    card: RecipeHomeCardMetadata = Field(default_factory=RecipeHomeCardMetadata)
+
+
 class Recipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -285,6 +301,7 @@ class Recipe(BaseModel):
     name: str
     description: str | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
+    home: RecipeHomeMetadata = Field(default_factory=RecipeHomeMetadata)
     environment: EnvironmentContract = Field(default_factory=EnvironmentContract)
     preflight: list[AssertionStep] = Field(default_factory=list)
     steps: list[WorkflowStep] = Field(min_length=1)

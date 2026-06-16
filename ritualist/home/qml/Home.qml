@@ -21,6 +21,9 @@ Window {
     property bool railActive: false
     property string footerText: "Home ready"
     property int devTick: 0
+    property bool actionBusy: homeController ? homeController.actionBusy : false
+    property bool confirmationPending: homeController ? homeController.confirmationPending : false
+    property string confirmationPrompt: homeController ? homeController.confirmationPrompt : ""
 
     function allCards() {
         if (!homePayload || !homePayload.cards) {
@@ -159,6 +162,27 @@ Window {
         footerText = categoryName + " ready"
     }
 
+    function actionEnabled(cardStatus) {
+        return homeController && !mockMode && !actionBusy && cardStatus !== "disabled"
+    }
+
+    function invokeCardAction(action, cardId) {
+        if (!homeController || !cardId || mockMode || actionBusy) {
+            return
+        }
+        if (action === "run") {
+            homeController.runCard(cardId)
+        } else if (action === "dry_run") {
+            homeController.dryRunCard(cardId)
+        } else if (action === "doctor") {
+            homeController.doctorCard(cardId)
+        } else if (action === "edit_recipe") {
+            homeController.editRecipe(cardId)
+        } else if (action === "open_logs") {
+            homeController.openLogs(cardId)
+        }
+    }
+
     onSelectedCategoryChanged: {
         if (categoryModel.count > 0) {
             loadCards()
@@ -184,6 +208,18 @@ Window {
         function onMetricsChanged() {
             if (root.homeController) {
                 root.footerText = root.homeController.lastEventLabel
+            }
+        }
+
+        function onActionStateChanged() {
+            if (root.homeController && root.homeController.actionBusy) {
+                root.footerText = "Action running"
+            }
+        }
+
+        function onConfirmationChanged() {
+            if (root.homeController && root.homeController.confirmationPending) {
+                root.footerText = "Confirmation required"
             }
         }
     }
@@ -219,7 +255,14 @@ Window {
         }
 
         Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Escape) {
+            if (root.confirmationPending) {
+                if (event.key === Qt.Key_Escape) {
+                    root.homeController.answerConfirmation(false)
+                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    root.homeController.answerConfirmation(true)
+                }
+                event.accepted = true
+            } else if (event.key === Qt.Key_Escape) {
                 root.close()
                 event.accepted = true
             } else if (event.key === Qt.Key_Left) {
@@ -406,6 +449,35 @@ Window {
                                 font.weight: Font.DemiBold
                             }
                         }
+
+                        Rectangle {
+                            Layout.preferredWidth: 112
+                            Layout.preferredHeight: 40
+                            radius: 8
+                            color: root.actionBusy ? (stopPointer.containsMouse ? "#4a2a34" : "#351f27") : "#151b24"
+                            border.color: root.actionBusy ? "#d96d7e" : "#263648"
+                            opacity: root.actionBusy ? 1.0 : 0.52
+
+                            MouseArea {
+                                id: stopPointer
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: root.actionBusy && root.homeController
+                                onClicked: root.homeController.stopCurrentRun()
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 12
+                                text: "Stop"
+                                color: root.actionBusy ? "#ffeef1" : "#7f8da1"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
                     }
 
                     GridView {
@@ -418,7 +490,7 @@ Window {
                         boundsBehavior: Flickable.StopAtBounds
                         currentIndex: root.selectedCard
                         cellWidth: Math.floor(width / columns)
-                        cellHeight: 218
+                        cellHeight: 298
 
                         property int columns: width >= 1260 ? 4 : (width >= 900 ? 3 : 2)
 
@@ -427,6 +499,10 @@ Window {
 
                             width: grid.cellWidth
                             height: grid.cellHeight
+
+                            property int cardIndex: index
+                            property string cardId: model.id || ""
+                            property string cardStatus: model.status || status
 
                             Rectangle {
                                 id: card
@@ -457,7 +533,7 @@ Window {
                                     hoverEnabled: true
                                     onClicked: {
                                         root.railActive = false
-                                        root.setSelectedCard(index)
+                                        root.setSelectedCard(cardSlot.cardIndex)
                                         root.footerText = title + " opened"
                                     }
                                 }
@@ -470,11 +546,24 @@ Window {
                                     anchors.top: parent.top
                                     height: 94
                                     radius: 8
+                                    clip: true
                                     color: accent
 
                                     gradient: Gradient {
                                         GradientStop { position: 0.0; color: accent }
                                         GradientStop { position: 1.0; color: "#1a2230" }
+                                    }
+
+                                    Image {
+                                        anchors.fill: parent
+                                        source: image || ""
+                                        visible: source !== ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                        cache: true
+                                        smooth: true
+                                        sourceSize.width: 512
+                                        sourceSize.height: 288
                                     }
 
                                     Rectangle {
@@ -550,11 +639,181 @@ Window {
                                             elide: Text.ElideRight
                                         }
                                     }
+
+                                    GridLayout {
+                                        Layout.fillWidth: true
+                                        columns: 3
+                                        rowSpacing: 6
+                                        columnSpacing: 6
+
+                                        property var actionItems: [
+                                            { "label": "Run", "action": "run" },
+                                            { "label": "Dry Run", "action": "dry_run" },
+                                            { "label": "Doctor", "action": "doctor" },
+                                            { "label": "Edit", "action": "edit_recipe" },
+                                            { "label": "Logs", "action": "open_logs" }
+                                        ]
+
+                                        Repeater {
+                                            model: parent.actionItems
+
+                                            delegate: Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 28
+                                                radius: 6
+                                                color: enabledAction ? (buttonPointer.containsMouse ? "#263648" : "#1c2734") : "#151b24"
+                                                border.width: 1
+                                                border.color: enabledAction ? "#40546a" : "#24303d"
+                                                opacity: enabledAction ? 1.0 : 0.5
+
+                                                property bool enabledAction: root.actionEnabled(cardSlot.cardStatus)
+
+                                                MouseArea {
+                                                    id: buttonPointer
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: parent.enabledAction
+                                                    onClicked: {
+                                                        root.railActive = false
+                                                        root.setSelectedCard(cardSlot.cardIndex)
+                                                        root.invokeCardAction(modelData.action, cardSlot.cardId)
+                                                    }
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - 8
+                                                    text: modelData.label
+                                                    color: "#d8e2ee"
+                                                    font.pixelSize: 11
+                                                    font.weight: Font.DemiBold
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Rectangle {
+        id: confirmationPanel
+
+        visible: root.confirmationPending
+        z: 100
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 28
+        width: Math.min(parent.width - 56, 720)
+        height: 118
+        radius: 8
+        color: "#10151e"
+        border.color: "#f5c96b"
+        border.width: 1
+        opacity: 0.96
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 14
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 6
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Confirmation required"
+                    color: "#f6d37a"
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: root.confirmationPrompt
+                    color: "#d7e0eb"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 112
+                Layout.preferredHeight: 42
+                radius: 6
+                color: confirmPointer.containsMouse ? "#305842" : "#244735"
+                border.color: "#65d59b"
+
+                MouseArea {
+                    id: confirmPointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.homeController.answerConfirmation(true)
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Confirm"
+                    color: "#ecfff5"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 42
+                radius: 6
+                color: cancelPointer.containsMouse ? "#4a2a34" : "#351f27"
+                border.color: "#d96d7e"
+
+                MouseArea {
+                    id: cancelPointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.homeController.answerConfirmation(false)
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Cancel"
+                    color: "#ffeef1"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: confirmationModalBlocker
+
+        visible: root.confirmationPending
+        anchors.fill: parent
+        z: 90
+        color: "#000000"
+        opacity: 0.22
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.AllButtons
+            onClicked: {
             }
         }
     }

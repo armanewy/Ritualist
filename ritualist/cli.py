@@ -625,8 +625,8 @@ def gui() -> None:
 def home(
     mock: Annotated[
         bool,
-        typer.Option("--mock/--no-mock", help="Show the QML Home mock card model."),
-    ] = True,
+        typer.Option("--mock", help="Show the QML Home mock card model instead of installed recipes."),
+    ] = False,
 ) -> None:
     """Open the experimental Qt Quick Home surface."""
     try:

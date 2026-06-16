@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ritualist.config import load_app_config
+from ritualist.config import DEFAULT_HOME_CATEGORIES, load_app_config
 
 
 def test_load_app_config_reads_visual_trust_options(tmp_path):
@@ -32,3 +32,49 @@ def test_load_app_config_defaults_visual_trust_options_when_missing(tmp_path):
     assert config.ui.show_action_overlay is True
     assert config.ui.overlay_duration_ms == 700
     assert config.ui.preview_desktop_clicks is True
+
+
+def test_load_app_config_defaults_home_categories_when_missing(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("version: '0.1'\n", encoding="utf-8")
+
+    config = load_app_config(path)
+
+    assert config.home.categories == DEFAULT_HOME_CATEGORIES
+
+
+def test_load_app_config_reads_custom_home_categories(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+version: "0.1"
+home:
+  categories:
+    - Launchers
+    - Media
+    - Local Admin
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    config = load_app_config(path)
+
+    assert config.home.categories == ("Launchers", "Media", "Local Admin")
+
+
+def test_load_app_config_uses_default_home_categories_when_custom_list_is_empty(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+version: "0.1"
+home:
+  categories:
+    - ""
+    - " "
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    config = load_app_config(path)
+
+    assert config.home.categories == DEFAULT_HOME_CATEGORIES

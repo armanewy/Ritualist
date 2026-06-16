@@ -2,6 +2,13 @@ version: "0.1"
 id: gaming_mode
 name: Gaming Mode
 description: Open a looping video, minimize Chrome, launch Battle.net, and ask before Play.
+home:
+  category: Gaming
+  card:
+    title: Diablo IV Night
+    subtitle: YouTube ambience + Battle.net
+    image: ""
+    accent: ""
 variables:
   youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
   battle_net_path: 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'

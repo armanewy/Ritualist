@@ -12,11 +12,17 @@ from ritualist.home import (
     HOME_CATEGORIES,
     HomeCard,
     HomeCardStatus,
+    HomeDoctorStatus,
     HomeLastRunStatus,
+    HomeModel,
     HomeRuntimeEvent,
+    HomeRunHistoryCache,
+    create_installed_home_model,
     create_mock_home_model,
     generate_mock_home_cards,
+    load_installed_home_cards,
 )
+from ritualist.models import Recipe
 
 
 def _card_field_names() -> tuple[str, ...]:
@@ -46,6 +52,7 @@ def test_home_card_fields_are_stable_for_qml_bridge():
         "description",
         "status",
         "last_run_status",
+        "doctor_status",
         "accent",
         "image",
     )
@@ -72,6 +79,186 @@ def test_mock_home_cards_assign_all_required_categories():
     )
     assert categories == set(_category_labels())
     assert all(card.category in _category_labels() for card in cards)
+
+
+def test_home_model_uses_custom_categories():
+    model = create_mock_home_model(("Launchers", "Media"))
+
+    payload = model.to_qml()
+
+    assert [category["label"] for category in payload["categories"]] == ["Launchers", "Media"]
+    assert {card.category for card in model.cards} == {"Launchers", "Media"}
+
+
+def test_home_model_appends_unknown_card_category():
+    model = HomeModel(
+        categories=("Gaming", "Media"),
+        cards=[
+            HomeCard(
+                id="local-admin",
+                title="Local Admin",
+                category="Local Admin",
+            )
+        ],
+    )
+
+    payload = model.to_qml()
+
+    assert [category["label"] for category in payload["categories"]] == [
+        "Gaming",
+        "Media",
+        "Local Admin",
+    ]
+    assert payload["cards"][0]["category"] == "Local Admin"
+
+
+def test_home_model_routes_blank_card_category_to_other():
+    model = HomeModel(
+        categories=("Gaming",),
+        cards=[
+            HomeCard(
+                id="uncategorized",
+                title="Uncategorized",
+                category=" ",
+            )
+        ],
+    )
+
+    payload = model.to_qml()
+
+    assert [category["label"] for category in payload["categories"]] == ["Gaming", "Other"]
+    assert payload["cards"][0]["category"] == "Other"
+
+
+def test_installed_recipes_become_home_cards(tmp_path, monkeypatch):
+    recipe_dir = tmp_path / "recipes"
+    recipe_dir.mkdir()
+    (recipe_dir / "launcher.yaml").write_text(
+        """
+version: "0.1"
+id: launcher
+name: Local Launcher
+description: Starts a local launcher.
+steps:
+  - action: app.launch
+    command: demo.exe
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("ritualist.recipe_loader.recipes_dir", lambda: recipe_dir)
+
+    model = create_installed_home_model(
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs")
+    )
+    card = model.get_card("launcher")
+
+    assert [card.id for card in model.cards] == ["launcher"]
+    assert card.title == "Local Launcher"
+    assert card.category == "Recipes"
+    assert card.subtitle == "Starts a local launcher."
+    assert card.description == "Starts a local launcher."
+    assert card.doctor_status is HomeDoctorStatus.NOT_CHECKED
+    assert [category["label"] for category in model.to_qml()["categories"]] == [
+        "Gaming",
+        "Media",
+        "Coding",
+        "News",
+        "Helpdesk",
+        "Settings",
+        "Recipes",
+    ]
+
+
+def test_installed_recipe_home_metadata_controls_card(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "gaming_mode",
+            "name": "Gaming Mode",
+            "description": "Fallback description",
+            "home": {
+                "category": "Gaming",
+                "card": {
+                    "title": "Diablo IV Night",
+                    "subtitle": "YouTube ambience + Battle.net",
+                    "accent": "#6aa9ff",
+                    "image": "",
+                },
+            },
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "gaming_mode.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+    card = cards[0]
+
+    assert card.id == "gaming_mode"
+    assert card.title == "Diablo IV Night"
+    assert card.category == "Gaming"
+    assert card.subtitle == "YouTube ambience + Battle.net"
+    assert card.description == "Fallback description"
+    assert card.accent == "#6aa9ff"
+    assert card.image == ""
+
+
+def test_installed_recipe_missing_metadata_uses_home_defaults(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "bare_recipe",
+            "name": "Bare Recipe",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "bare_recipe.yaml", recipe, None)],
+        run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs"),
+    )
+    card = cards[0]
+
+    assert card.id == "bare_recipe"
+    assert card.title == "Bare Recipe"
+    assert card.category == "Recipes"
+    assert card.subtitle == "Ready to run locally"
+    assert card.description == "No description provided."
+    assert card.status is HomeCardStatus.READY
+    assert card.last_run_status is HomeLastRunStatus.NONE
+    assert card.doctor_status is HomeDoctorStatus.NOT_CHECKED
+
+
+def test_installed_recipe_card_includes_cached_last_run_status(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "history_recipe",
+            "name": "History Recipe",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    run_dir = tmp_path / "runs" / "20260615T120000Z_history_recipe"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "history_recipe",
+                "recipe_name": "History Recipe",
+                "status": "stopped",
+                "final_state": "failed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cache = HomeRunHistoryCache(base_dir=tmp_path / "runs")
+    cards = load_installed_home_cards(
+        recipe_rows=[(tmp_path / "history_recipe.yaml", recipe, None)],
+        run_history_cache=cache,
+    )
+    card = cards[0]
+
+    assert card.last_run_status is HomeLastRunStatus.FAILED
+    assert card.status is HomeCardStatus.FAILED
 
 
 def test_home_model_updates_card_from_runtime_event():

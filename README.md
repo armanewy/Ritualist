@@ -54,13 +54,21 @@ Launch the GUI:
 ritualist gui
 ```
 
-Launch the experimental Qt Quick Home mock:
+Launch the experimental Qt Quick Home recipe dashboard:
+
+```powershell
+ritualist home
+```
+
+Home loads installed recipes as cards, keeps slow recipe/run-history work off the UI thread, and can run, dry-run, doctor, edit, and open logs for selected recipes while preserving the same runtime confirmation gates as the CLI.
+
+Launch the generated-data Home mock for UI development:
 
 ```powershell
 ritualist home --mock
 ```
 
-The Home mock is a technical spike for a full-screen, local-first recipe dashboard. It uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
+The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
 
 Inspect a real Windows UI Automation window before tuning click text:
 
@@ -112,6 +120,7 @@ See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract,
 - Prefer event-driven Home updates over polling or broad synchronous reloads.
 - Keep Pause and Stop controls responsive even when adapters are busy.
 - Preserve local-first behavior and existing safety gates.
+- Home card art must use cached local thumbnails, currently bounded to 512x288, with missing images falling back to static gradients.
 
 ## Recipe Format
 
@@ -119,6 +128,13 @@ See [PERFORMANCE.md](PERFORMANCE.md) for Ritualist's UI responsiveness contract,
 version: "0.1"
 id: gaming_mode
 name: Gaming Mode
+home:
+  category: Gaming
+  card:
+    title: Diablo IV Night
+    subtitle: YouTube ambience + Battle.net
+    image: ""
+    accent: ""
 variables:
   youtube_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
   battle_net_window: Battle.net
@@ -216,6 +232,19 @@ ui:
   show_action_overlay: true
   overlay_duration_ms: 700
   preview_desktop_clicks: true
+```
+
+Home categories are local config too. Recipes or cards with a category outside this list still appear safely by appending that category to the Home payload; blank categories appear under `Other`.
+
+```yaml
+home:
+  categories:
+    - Gaming
+    - Media
+    - Coding
+    - News
+    - Helpdesk
+    - Settings
 ```
 
 ## Local Data

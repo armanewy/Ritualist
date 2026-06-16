@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from .config import DEFAULT_HOME_CATEGORIES
 from .paths import (
     app_data_path,
     browser_profiles_path,
@@ -89,6 +90,9 @@ def _ensure_config_file() -> bool:
             "show_action_overlay": True,
             "overlay_duration_ms": 700,
             "preview_desktop_clicks": True,
+        },
+        "home": {
+            "categories": list(DEFAULT_HOME_CATEGORIES),
         },
     }
     path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")

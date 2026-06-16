@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from textwrap import dedent
 
 import pytest
@@ -109,6 +110,63 @@ def test_load_recipe_supports_environment_contract(tmp_path):
     assert recipe.environment.expected_windows[0].title_contains == "Vendor App"
     assert recipe.environment.expected_labels[0].text == "Connected"
     assert recipe.environment.variable_hints["app_window"] == "Use the visible app title."
+
+
+def test_load_recipe_supports_home_metadata(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            home:
+              category: Gaming
+              card:
+                title: Diablo IV Night
+                subtitle: YouTube ambience + Battle.net
+                image: ""
+                accent: "#6aa9ff"
+            steps:
+              - action: app.launch
+                command: demo.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.home.category == "Gaming"
+    assert recipe.home.card.title == "Diablo IV Night"
+    assert recipe.home.card.subtitle == "YouTube ambience + Battle.net"
+    assert recipe.home.card.image == ""
+    assert recipe.home.card.accent == "#6aa9ff"
+
+
+def test_load_recipe_without_home_uses_empty_metadata(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            steps:
+              - action: app.launch
+                command: demo.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.home.category == ""
+    assert recipe.home.card.title == ""
+    assert recipe.home.card.subtitle == ""
+    assert recipe.home.card.image == ""
+    assert recipe.home.card.accent == ""
 
 
 def test_load_recipe_without_environment_uses_empty_contract(tmp_path):
@@ -228,6 +286,16 @@ def test_load_recipe_reference_resolves_recipe_id(tmp_path, monkeypatch):
     recipe = load_recipe_reference("gaming_mode")
 
     assert recipe.id == "gaming_mode"
+
+
+def test_bundled_gaming_mode_sample_includes_home_metadata():
+    sample = Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+
+    recipe = load_recipe(sample)
+
+    assert recipe.home.category == "Gaming"
+    assert recipe.home.card.title == "Diablo IV Night"
+    assert recipe.home.card.subtitle == "YouTube ambience + Battle.net"
 
 
 def test_unknown_action_is_validation_error(tmp_path):

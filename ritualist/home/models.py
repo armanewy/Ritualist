@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from ritualist.config import DEFAULT_HOME_CATEGORIES
 from ritualist.event_coalescing import EventCoalescer
+
+OTHER_HOME_CATEGORY = "Other"
+DEFAULT_RECIPE_CATEGORY = "Recipes"
+DEFAULT_RECIPE_SUBTITLE = "Ready to run locally"
+DEFAULT_RECIPE_DESCRIPTION = "No description provided."
+DEFAULT_RECIPE_ACCENT = "#3dd6a5"
 
 
 @dataclass(frozen=True)
@@ -14,14 +22,7 @@ class HomeCategory:
     label: str
 
 
-HOME_CATEGORIES = (
-    HomeCategory("Gaming"),
-    HomeCategory("Media"),
-    HomeCategory("Coding"),
-    HomeCategory("News"),
-    HomeCategory("Helpdesk"),
-    HomeCategory("Settings"),
-)
+HOME_CATEGORIES = tuple(HomeCategory(label) for label in DEFAULT_HOME_CATEGORIES)
 
 
 class HomeCardStatus(StrEnum):
@@ -35,9 +36,15 @@ class HomeCardStatus(StrEnum):
 
 class HomeLastRunStatus(StrEnum):
     NONE = "none"
+    RUNNING = "running"
     SUCCESS = "success"
     STOPPED = "stopped"
     FAILED = "failed"
+    INTERRUPTED = "interrupted"
+
+
+class HomeDoctorStatus(StrEnum):
+    NOT_CHECKED = "not_checked"
 
 
 @dataclass(frozen=True)
@@ -49,6 +56,7 @@ class HomeCard:
     description: str = ""
     status: HomeCardStatus = HomeCardStatus.READY
     last_run_status: HomeLastRunStatus = HomeLastRunStatus.NONE
+    doctor_status: HomeDoctorStatus = HomeDoctorStatus.NOT_CHECKED
     accent: str = "#3dd6a5"
     image: str = ""
 
@@ -64,6 +72,7 @@ class HomeRuntimeEvent:
     description: str | None = None
     status: HomeCardStatus | None = None
     last_run_status: HomeLastRunStatus | None = None
+    doctor_status: HomeDoctorStatus | None = None
     accent: str | None = None
     image: str | None = None
 
@@ -75,6 +84,10 @@ class HomeRuntimeEvent:
 @dataclass
 class HomeModel:
     cards: list[HomeCard] = field(default_factory=list)
+    categories: tuple[HomeCategory | str, ...] = field(default_factory=lambda: HOME_CATEGORIES)
+
+    def __post_init__(self) -> None:
+        self.categories = resolve_home_categories(self.categories)
 
     def get_card(self, card_id: str) -> HomeCard:
         return self.cards[self._card_index(card_id)]
@@ -95,9 +108,10 @@ class HomeModel:
         return updated
 
     def to_qml(self) -> dict[str, object]:
+        categories = resolve_home_categories(self.categories, self.cards)
         return {
-            "categories": [{"label": category.label} for category in HOME_CATEGORIES],
-            "cards": [card.to_qml() for card in self.cards],
+            "categories": [{"label": category.label} for category in categories],
+            "cards": [_card_for_qml(card).to_qml() for card in self.cards],
         }
 
     def _card_index(self, card_id: str) -> int:
@@ -138,6 +152,10 @@ class HomeEventBridge:
     def applied_count(self) -> int:
         return self._applied_count
 
+    def replace_model(self, model: HomeModel) -> None:
+        with self._lock:
+            self._model = model
+
     def queue_runtime_event(self, event: HomeRuntimeEvent) -> None:
         with self._lock:
             self._coalescer.put(event.key, event)
@@ -166,8 +184,31 @@ class HomeEventBridge:
         return applied
 
 
-def generate_mock_home_cards() -> list[HomeCard]:
+def resolve_home_categories(
+    configured: Sequence[HomeCategory | str] | None = None,
+    cards: Sequence[HomeCard] = (),
+) -> tuple[HomeCategory, ...]:
+    labels = _category_labels(configured)
+    if not labels:
+        labels = list(DEFAULT_HOME_CATEGORIES)
+
+    seen = {label.casefold() for label in labels}
+    for card in cards:
+        label = _home_category_label(card.category) or OTHER_HOME_CATEGORY
+        key = label.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(label)
+
+    return tuple(HomeCategory(label) for label in labels)
+
+
+def generate_mock_home_cards(
+    categories: Sequence[HomeCategory | str] | None = None,
+) -> list[HomeCard]:
     cards: list[HomeCard] = []
+    resolved_categories = resolve_home_categories(categories)
     accents = ("#3dd6a5", "#6aa9ff", "#f2c94c", "#eb5757", "#bb86fc", "#56ccf2")
     statuses = (
         HomeCardStatus.READY,
@@ -193,7 +234,7 @@ def generate_mock_home_cards() -> list[HomeCard]:
     }
 
     for index in range(120):
-        category = HOME_CATEGORIES[index % len(HOME_CATEGORIES)]
+        category = resolved_categories[index % len(resolved_categories)]
         status = statuses[index % len(statuses)]
         card_number = index + 1
         cards.append(
@@ -212,8 +253,71 @@ def generate_mock_home_cards() -> list[HomeCard]:
     return cards
 
 
-def create_mock_home_model() -> HomeModel:
-    return HomeModel(cards=generate_mock_home_cards())
+def create_mock_home_model(
+    categories: Sequence[HomeCategory | str] | None = None,
+) -> HomeModel:
+    return HomeModel(cards=generate_mock_home_cards(categories), categories=resolve_home_categories(categories))
+
+
+@dataclass
+class HomeRunHistoryCache:
+    """Bounded, reusable lookup of latest run status by recipe id."""
+
+    limit: int = 100
+    base_dir: Path | None = None
+    _last_status_by_recipe_id: dict[str, HomeLastRunStatus] = field(default_factory=dict)
+    _loaded: bool = False
+
+    def refresh(self) -> None:
+        from ritualist.run_logs import list_recent_runs
+
+        latest: dict[str, HomeLastRunStatus] = {}
+        for record in list_recent_runs(limit=self.limit, base_dir=self.base_dir):
+            recipe_id = _optional_string(record.metadata.get("recipe_id"))
+            if not recipe_id or recipe_id in latest:
+                continue
+            latest[recipe_id] = _last_run_status_from_metadata(record.metadata)
+        self._last_status_by_recipe_id = latest
+        self._loaded = True
+
+    def get(self, recipe_id: str) -> HomeLastRunStatus:
+        if not self._loaded:
+            self.refresh()
+        return self._last_status_by_recipe_id.get(recipe_id, HomeLastRunStatus.NONE)
+
+
+def create_installed_home_model(
+    *,
+    categories: Sequence[HomeCategory | str] | None = None,
+    run_history_cache: HomeRunHistoryCache | None = None,
+    recipe_rows: Sequence[tuple[Path, Any, str | None]] | None = None,
+) -> HomeModel:
+    cards = load_installed_home_cards(
+        run_history_cache=run_history_cache,
+        recipe_rows=recipe_rows,
+    )
+    return HomeModel(cards=cards, categories=resolve_home_categories(categories, cards))
+
+
+def load_installed_home_cards(
+    *,
+    run_history_cache: HomeRunHistoryCache | None = None,
+    recipe_rows: Sequence[tuple[Path, Any, str | None]] | None = None,
+) -> list[HomeCard]:
+    if recipe_rows is None:
+        from ritualist.recipe_loader import discover_recipes
+
+        rows = discover_recipes()
+    else:
+        rows = recipe_rows
+
+    history = run_history_cache or HomeRunHistoryCache()
+    cards: list[HomeCard] = []
+    for _path, recipe, _error in rows:
+        if recipe is None:
+            continue
+        cards.append(_recipe_home_card(recipe, history.get(str(recipe.id))))
+    return cards
 
 
 def _runtime_event_from_mapping(event: Mapping[str, Any]) -> HomeRuntimeEvent:
@@ -224,9 +328,122 @@ def _runtime_event_from_mapping(event: Mapping[str, Any]) -> HomeRuntimeEvent:
         description=_optional_string(event.get("description")),
         status=_optional_enum(HomeCardStatus, event.get("status")),
         last_run_status=_optional_enum(HomeLastRunStatus, event.get("last_run_status")),
+        doctor_status=_optional_enum(HomeDoctorStatus, event.get("doctor_status")),
         accent=_optional_string(event.get("accent")),
         image=_optional_string(event.get("image")),
     )
+
+
+def _recipe_home_card(recipe: Any, last_run_status: HomeLastRunStatus) -> HomeCard:
+    recipe_id = str(recipe.id)
+    card_metadata = _recipe_home_card_metadata(recipe)
+    title = _display_string(
+        getattr(card_metadata, "title", None),
+        fallback=_display_string(getattr(recipe, "name", None), fallback=_title_from_id(recipe_id)),
+    )
+    description = _display_string(getattr(recipe, "description", None), fallback=DEFAULT_RECIPE_DESCRIPTION)
+    return HomeCard(
+        id=recipe_id,
+        title=title,
+        category=_recipe_category(recipe),
+        subtitle=_recipe_subtitle(recipe, fallback=DEFAULT_RECIPE_SUBTITLE),
+        description=description,
+        status=_card_status_from_last_run(last_run_status),
+        last_run_status=last_run_status,
+        doctor_status=HomeDoctorStatus.NOT_CHECKED,
+        accent=_display_string(getattr(card_metadata, "accent", None), fallback=DEFAULT_RECIPE_ACCENT),
+        image=_recipe_thumbnail_url(getattr(card_metadata, "image", None)),
+    )
+
+
+def _recipe_category(recipe: Any) -> str:
+    return _display_string(
+        _recipe_home_value(recipe, "category"),
+        fallback=DEFAULT_RECIPE_CATEGORY,
+    )
+
+
+def _recipe_subtitle(recipe: Any, *, fallback: str) -> str:
+    card_metadata = _recipe_home_card_metadata(recipe)
+    return _display_string(
+        getattr(card_metadata, "subtitle", None),
+        fallback=_display_string(getattr(recipe, "description", None), fallback=fallback),
+    )
+
+
+def _recipe_home_value(recipe: Any, key: str) -> object:
+    home = getattr(recipe, "home", None)
+    if home is not None:
+        return getattr(home, key, None)
+    return None
+
+
+def _recipe_home_card_metadata(recipe: Any) -> Any | None:
+    home = getattr(recipe, "home", None)
+    if home is None:
+        return None
+    return getattr(home, "card", None)
+
+
+def _recipe_thumbnail_url(image_path: object) -> str:
+    raw = str(image_path or "").strip()
+    if not raw:
+        return ""
+    from ritualist.home.assets import HomeThumbnailCache
+
+    return HomeThumbnailCache().ensure_thumbnail(raw).thumbnail_url
+
+
+def _display_string(value: object, *, fallback: str) -> str:
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    return text or fallback
+
+
+def _title_from_id(recipe_id: str) -> str:
+    return recipe_id.replace("_", " ").replace("-", " ").title() or "Untitled Recipe"
+
+
+def _categories_from_cards(cards: Sequence[HomeCard]) -> tuple[HomeCategory, ...]:
+    categories: list[HomeCategory] = []
+    seen: set[str] = set()
+    for card in cards:
+        category = _home_category_label(card.category) or DEFAULT_RECIPE_CATEGORY
+        key = category.casefold()
+        if key in seen:
+            continue
+        categories.append(HomeCategory(category))
+        seen.add(key)
+    return tuple(categories) or (HomeCategory(DEFAULT_RECIPE_CATEGORY),)
+
+
+def _last_run_status_from_metadata(metadata: Mapping[str, Any]) -> HomeLastRunStatus:
+    raw_status = metadata.get("final_state") or metadata.get("current_run_state") or metadata.get("status")
+    status = str(raw_status or "").strip().lower()
+    if status == "success":
+        return HomeLastRunStatus.SUCCESS
+    if status in {"failed", "error"}:
+        return HomeLastRunStatus.FAILED
+    if status in {"stopped", "cancelled", "canceled"}:
+        return HomeLastRunStatus.STOPPED
+    if status == "interrupted":
+        return HomeLastRunStatus.INTERRUPTED
+    if status == "running":
+        return HomeLastRunStatus.RUNNING
+    return HomeLastRunStatus.NONE
+
+
+def _card_status_from_last_run(last_run_status: HomeLastRunStatus) -> HomeCardStatus:
+    if last_run_status is HomeLastRunStatus.RUNNING:
+        return HomeCardStatus.RUNNING
+    if last_run_status is HomeLastRunStatus.SUCCESS:
+        return HomeCardStatus.SUCCESS
+    if last_run_status is HomeLastRunStatus.FAILED:
+        return HomeCardStatus.FAILED
+    if last_run_status in {HomeLastRunStatus.STOPPED, HomeLastRunStatus.INTERRUPTED}:
+        return HomeCardStatus.WARNING
+    return HomeCardStatus.READY
 
 
 def _optional_enum(enum_type: type[StrEnum], value: object) -> Any:
@@ -239,6 +456,37 @@ def _optional_string(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _category_labels(configured: Sequence[HomeCategory | str] | None) -> list[str]:
+    if configured is None:
+        return list(DEFAULT_HOME_CATEGORIES)
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for category in configured:
+        label = _home_category_label(category.label if isinstance(category, HomeCategory) else category)
+        if not label:
+            continue
+        key = label.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(label)
+    return labels
+
+
+def _card_for_qml(card: HomeCard) -> HomeCard:
+    category = _home_category_label(card.category) or OTHER_HOME_CATEGORY
+    if category == card.category:
+        return card
+    return replace(card, category=category)
+
+
+def _home_category_label(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _qml_string(value: object) -> str:

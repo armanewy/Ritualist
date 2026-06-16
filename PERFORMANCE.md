@@ -65,10 +65,14 @@ Card visuals should be predictable, bounded, and cheap to present.
 
 - Use stable asset dimensions so cards do not relayout after images load.
 - Keep large image decoding off the UI thread.
+- Prepare Home card images through `ritualist.home.assets.HomeThumbnailCache` and pass QML only cached local thumbnail URLs or an empty image value.
+- Build thumbnails from a worker, setup task, or other non-GUI path; `ensure_thumbnail()` may decode image data and must not run from QML bindings or UI signal handlers.
+- The default Home thumbnail bound is 512x288. Increase it only with a measured reason and keep dimensions explicit.
 - Cache decoded or scaled assets when cards are reused.
 - Prefer pre-sized thumbnails for Home cards.
 - Avoid loading remote assets. Ritualist should remain local-first.
 - Missing or invalid assets should fall back quickly without blocking card rendering.
+- Animated card backgrounds are intentionally out of scope for now.
 
 ## Logging and Run-History Loading Rules
 
