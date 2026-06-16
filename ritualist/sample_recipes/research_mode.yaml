@@ -1,0 +1,75 @@
+version: "0.1"
+id: research_mode
+name: Research Mode
+description: Open local notes and configured source URLs for focused research.
+home:
+  category: Research
+  card:
+    title: Research Mode
+    subtitle: Notes + sources + library
+    image: ""
+    accent: "#7c6fce"
+variables:
+  notes_app_path: 'C:\Program Files\Obsidian\Obsidian.exe'
+  research_workspace_path: '%USERPROFILE%\Documents\Research'
+  seed_source_url: "https://example.invalid/source"
+  reference_url: "https://example.invalid/reference"
+  library_url: "https://example.invalid/library"
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+  variable_hints:
+    notes_app_path: Set this to the local notes app executable.
+    research_workspace_path: Set this to the local research workspace directory.
+    seed_source_url: Set this to the first source URL to review.
+    reference_url: Set this to supporting reference material.
+    library_url: Set this to a local-library, bookmark, or reading-list URL.
+preflight:
+  - name: Research workspace exists
+    action: assert.path_exists
+    path: "{{ research_workspace_path }}"
+
+steps:
+  - name: Confirm research workspace
+    action: confirm.ask
+    prompt: Open the configured notes app and research URLs?
+
+  - name: Open notes workspace
+    action: app.launch
+    command: "{{ notes_app_path }}"
+    args:
+      - "{{ research_workspace_path }}"
+    optional: true
+
+  - name: Open seed source
+    action: browser.open
+    url: "{{ seed_source_url }}"
+    browser: chrome
+    profile: research_mode
+    keep_open: true
+
+  - name: Open reference material
+    action: browser.open
+    url: "{{ reference_url }}"
+    browser: chrome
+    profile: research_mode
+    keep_open: true
+
+  - name: Open research library
+    action: browser.open
+    url: "{{ library_url }}"
+    browser: chrome
+    profile: research_mode
+    keep_open: true
+
+  - name: Wait for source triage
+    action: wait.for_user
+    prompt: Confirm the useful sources are open and ready for manual review.
+
+verify:
+  - name: Research workspace remains available
+    action: assert.path_exists
+    path: "{{ research_workspace_path }}"

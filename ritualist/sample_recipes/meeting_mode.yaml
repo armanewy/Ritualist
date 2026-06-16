@@ -1,0 +1,61 @@
+version: "0.1"
+id: meeting_mode
+name: Meeting Mode
+description: Prepare a meeting workspace without joining audio or video automatically.
+home:
+  category: Meetings
+  card:
+    title: Meeting Mode
+    subtitle: Calendar + notes + meeting link
+    image: ""
+    accent: "#2f9e8f"
+variables:
+  calendar_url: "https://calendar.example.invalid/today"
+  meeting_notes_url: "https://docs.example.invalid/meeting-notes"
+  meeting_url: "https://meet.example.invalid/room"
+  meeting_app_path: '%LOCALAPPDATA%\Microsoft\Teams\current\Teams.exe'
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - playwright
+  variable_hints:
+    calendar_url: Set this to the calendar page for the day.
+    meeting_notes_url: Set this to the notes document for the meeting.
+    meeting_url: Set this to the meeting lobby URL.
+    meeting_app_path: Set this to the local meeting app executable, or leave it as an optional launcher.
+steps:
+  - name: Confirm meeting workspace
+    action: confirm.ask
+    prompt: Open the configured calendar, notes, meeting app, and meeting link?
+
+  - name: Open calendar
+    action: browser.open
+    url: "{{ calendar_url }}"
+    browser: chrome
+    profile: meeting_mode
+    keep_open: true
+
+  - name: Open meeting notes
+    action: browser.open
+    url: "{{ meeting_notes_url }}"
+    browser: chrome
+    profile: meeting_mode
+    keep_open: true
+
+  - name: Launch meeting app
+    action: app.launch
+    command: "{{ meeting_app_path }}"
+    optional: true
+
+  - name: Open meeting lobby
+    action: browser.open
+    url: "{{ meeting_url }}"
+    browser: chrome
+    profile: meeting_mode
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Wait for manual join
+    action: wait.for_user
+    prompt: Join audio and video manually if appropriate.

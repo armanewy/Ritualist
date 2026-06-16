@@ -75,6 +75,17 @@ class WindowMatchMixin(BaseModel):
         return self
 
 
+class WindowTitleScopeMixin(BaseModel):
+    title_contains: str
+
+    @field_validator("title_contains")
+    @classmethod
+    def require_window_title_scope(cls, value: str) -> str:
+        if not value.strip():
+            raise SafetyError("window layout actions require title_contains")
+        return value
+
+
 class WindowFocusStep(WindowMatchMixin, StepBase):
     action: Literal["window.focus"]
 
@@ -83,8 +94,40 @@ class WindowMinimizeStep(WindowMatchMixin, StepBase):
     action: Literal["window.minimize"]
 
 
+class WindowMoveStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.move"]
+    x: int
+    y: int
+
+
+class WindowResizeStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.resize"]
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
 class WindowMaximizeStep(WindowMatchMixin, StepBase):
     action: Literal["window.maximize"]
+
+
+class WindowRestoreStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.restore"]
+
+
+class WindowSnapLeftStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.snap_left"]
+
+
+class WindowSnapRightStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.snap_right"]
+
+
+class WindowSnapTopStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.snap_top"]
+
+
+class WindowSnapBottomStep(WindowTitleScopeMixin, StepBase):
+    action: Literal["window.snap_bottom"]
 
 
 class WindowWaitStep(WindowMatchMixin, StepBase):
@@ -221,7 +264,14 @@ WorkflowStep = Annotated[
     | AppWaitProcessStep
     | WindowFocusStep
     | WindowMinimizeStep
+    | WindowMoveStep
+    | WindowResizeStep
     | WindowMaximizeStep
+    | WindowRestoreStep
+    | WindowSnapLeftStep
+    | WindowSnapRightStep
+    | WindowSnapTopStep
+    | WindowSnapBottomStep
     | WindowWaitStep
     | DesktopClickTextStep
     | InputHotkeyStep

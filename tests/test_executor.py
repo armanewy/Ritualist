@@ -153,20 +153,38 @@ def test_desktop_click_result_includes_target_preview_metadata_without_overlay()
 
 
 @pytest.mark.parametrize(
-    ("action", "adapter_call"),
+    ("step_data", "adapter_call"),
     [
-        ("window.focus", "focus"),
-        ("window.minimize", "minimize"),
-        ("window.maximize", "maximize"),
-        ("window.wait", "wait"),
+        ({"action": "window.focus", "title_contains": "Battle.net"}, "focus"),
+        ({"action": "window.minimize", "title_contains": "Battle.net"}, "minimize"),
+        ({"action": "window.maximize", "title_contains": "Battle.net"}, "maximize_window"),
+        (
+            {"action": "window.move", "title_contains": "Battle.net", "x": 10, "y": 20},
+            "move_window",
+        ),
+        (
+            {
+                "action": "window.resize",
+                "title_contains": "Battle.net",
+                "width": 800,
+                "height": 600,
+            },
+            "resize_window",
+        ),
+        ({"action": "window.restore", "title_contains": "Battle.net"}, "restore_window"),
+        ({"action": "window.snap_left", "title_contains": "Battle.net"}, "snap_left"),
+        ({"action": "window.snap_right", "title_contains": "Battle.net"}, "snap_right"),
+        ({"action": "window.snap_top", "title_contains": "Battle.net"}, "snap_top"),
+        ({"action": "window.snap_bottom", "title_contains": "Battle.net"}, "snap_bottom"),
+        ({"action": "window.wait", "title_contains": "Battle.net"}, "wait"),
     ],
 )
-def test_window_action_result_includes_bounds_metadata_without_overlay(action, adapter_call):
+def test_window_action_result_includes_bounds_metadata_without_overlay(step_data, adapter_call):
     recipe = Recipe.model_validate(
         {
             "id": "run",
             "name": "Run",
-            "steps": [{"action": action, "title_contains": "Battle.net"}],
+            "steps": [step_data],
         }
     )
     fakes = FakeAdapters()
@@ -185,6 +203,57 @@ def test_window_action_result_includes_bounds_metadata_without_overlay(action, a
             "bounds": {"x": 10, "y": 20, "width": 300, "height": 200},
         }
     }
+
+
+def test_window_layout_actions_pass_title_scope_to_adapter():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "window.move",
+                    "title_contains": "Battle.net",
+                    "x": 100,
+                    "y": 200,
+                    "timeout_seconds": 3,
+                },
+                {
+                    "action": "window.resize",
+                    "title_contains": "Battle.net",
+                    "width": 1280,
+                    "height": 720,
+                },
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle()).run(recipe)
+
+    assert summary.success
+    assert fakes.window.calls[0] == (
+        "move_window",
+        (),
+        {
+            "title_contains": "Battle.net",
+            "process_name": None,
+            "timeout_seconds": 3.0,
+            "x": 100,
+            "y": 200,
+        },
+    )
+    assert fakes.window.calls[1] == (
+        "resize_window",
+        (),
+        {
+            "title_contains": "Battle.net",
+            "process_name": None,
+            "timeout_seconds": 10.0,
+            "width": 1280,
+            "height": 720,
+        },
+    )
 
 
 def test_confirm_ask_uses_structured_request_with_recipe_details():

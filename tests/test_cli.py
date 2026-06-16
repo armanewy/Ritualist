@@ -815,6 +815,31 @@ def test_doctor_reports_environment_required_capability(monkeypatch):
     assert "ritualist[browser]" in result.output
 
 
+def test_doctor_reports_missing_pywin32_for_window_management(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "runbook",
+            "name": "Runbook",
+            "steps": [{"action": "window.snap_left", "title_contains": "Demo"}],
+        }
+    )
+    monkeypatch.setattr(
+        "ritualist.cli.load_recipe_for_diagnostics",
+        lambda *_args, **_kwargs: (recipe, {}, []),
+    )
+    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr(
+        "ritualist.doctor.importlib.util.find_spec",
+        lambda name: None if name == "win32api" else object(),
+    )
+
+    result = CliRunner().invoke(app, ["doctor", "runbook"])
+
+    assert result.exit_code == 1
+    assert "win32api" in result.output
+    assert "ritualist[windows]" in result.output
+
+
 def test_doctor_reports_platform_mismatch(monkeypatch):
     recipe = Recipe.model_validate(
         {

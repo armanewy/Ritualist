@@ -373,7 +373,7 @@ def _check_capability(capability: str) -> DoctorCheck:
                 section="Capabilities",
                 details={"capability": capability},
             )
-        return _check_import("pywinauto", capability, "install ritualist[windows]")
+        return _check_window_management_capability()
     if capability == "keyboard_input":
         if sys.platform != "win32":
             return DoctorCheck(
@@ -475,6 +475,27 @@ def _check_import(module: str, name: str, install_hint: str) -> DoctorCheck:
         f"{display_name} import works",
         section="Capabilities",
         details={"module": module},
+    )
+
+
+def _check_window_management_capability() -> DoctorCheck:
+    pywinauto_check = _check_import("pywinauto", "window_management", "install ritualist[windows]")
+    if pywinauto_check.status != "ok":
+        return pywinauto_check
+    if not _module_available("win32api"):
+        return DoctorCheck(
+            "error",
+            "window_management",
+            "window_management import failed; install ritualist[windows] (pywin32/win32api missing)",
+            section="Capabilities",
+            details={"module": "win32api", "capability": "window_management"},
+        )
+    return DoctorCheck(
+        "ok",
+        "window_management",
+        "window_management imports work",
+        section="Capabilities",
+        details={"modules": ["pywinauto", "win32api"], "capability": "window_management"},
     )
 
 

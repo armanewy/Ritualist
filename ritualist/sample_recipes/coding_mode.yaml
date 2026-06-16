@@ -1,0 +1,73 @@
+version: "0.1"
+id: coding_mode
+name: Coding Mode
+description: Open a local editor workspace and reference pages without running project commands.
+home:
+  category: Coding
+  card:
+    title: Coding Mode
+    subtitle: Editor + docs + tracker
+    image: ""
+    accent: "#4f8cff"
+variables:
+  editor_path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+  project_path: '%USERPROFILE%\Documents\Project'
+  docs_url: "https://docs.python.org/3/"
+  tracker_url: "https://example.invalid/issues"
+  editor_window: Visual Studio Code
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+  expected_windows:
+    - title_contains: "{{ editor_window }}"
+  variable_hints:
+    editor_path: Set this to the local editor executable.
+    project_path: Set this to the local project directory.
+    docs_url: Set this to the reference documentation URL.
+    tracker_url: Set this to the issue tracker or planning board URL.
+    editor_window: Set this to visible editor window title text.
+preflight:
+  - name: Editor path is configured
+    action: assert.file_exists
+    path: "{{ editor_path }}"
+
+  - name: Project path exists
+    action: assert.path_exists
+    path: "{{ project_path }}"
+
+steps:
+  - name: Confirm coding workspace
+    action: confirm.ask
+    prompt: Open the configured editor, project, documentation, and tracker URLs?
+
+  - name: Open project in editor
+    action: app.launch
+    command: "{{ editor_path }}"
+    args:
+      - "{{ project_path }}"
+
+  - name: Open documentation
+    action: browser.open
+    url: "{{ docs_url }}"
+    browser: chrome
+    profile: coding_mode
+    keep_open: true
+
+  - name: Open tracker
+    action: browser.open
+    url: "{{ tracker_url }}"
+    browser: chrome
+    profile: coding_mode
+    keep_open: true
+
+  - name: Wait for local review
+    action: wait.for_user
+    prompt: Confirm the editor and reference pages are ready.
+
+verify:
+  - name: Project path remains available
+    action: assert.path_exists
+    path: "{{ project_path }}"

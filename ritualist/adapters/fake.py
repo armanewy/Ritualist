@@ -85,9 +85,55 @@ class FakeWindowAdapter(RecordingAdapter):
         self.record("minimize", **kwargs)
         return self.response("minimize", _fake_window_region(kwargs))
 
+    def move_window(self, **kwargs: Any) -> TargetRegion:
+        self.record("move_window", **kwargs)
+        return self.response("move_window", _fake_layout_region(kwargs))
+
+    def resize_window(self, **kwargs: Any) -> TargetRegion:
+        self.record("resize_window", **kwargs)
+        return self.response("resize_window", _fake_layout_region(kwargs))
+
     def maximize(self, **kwargs: Any) -> TargetRegion:
         self.record("maximize", **kwargs)
         return self.response("maximize", _fake_window_region(kwargs))
+
+    def maximize_window(self, **kwargs: Any) -> TargetRegion:
+        self.record("maximize_window", **kwargs)
+        return self.response("maximize_window", _fake_window_region(kwargs))
+
+    def restore_window(self, **kwargs: Any) -> TargetRegion:
+        self.record("restore_window", **kwargs)
+        return self.response("restore_window", _fake_window_region(kwargs))
+
+    def snap_left(self, **kwargs: Any) -> TargetRegion:
+        self.record("snap_left", **kwargs)
+        return self.response("snap_left", _fake_snap_region(kwargs, "left"))
+
+    def snap_right(self, **kwargs: Any) -> TargetRegion:
+        self.record("snap_right", **kwargs)
+        return self.response("snap_right", _fake_snap_region(kwargs, "right"))
+
+    def snap_top(self, **kwargs: Any) -> TargetRegion:
+        self.record("snap_top", **kwargs)
+        return self.response("snap_top", _fake_snap_region(kwargs, "top"))
+
+    def snap_bottom(self, **kwargs: Any) -> TargetRegion:
+        self.record("snap_bottom", **kwargs)
+        return self.response("snap_bottom", _fake_snap_region(kwargs, "bottom"))
+
+    def list_monitors(self) -> list[ScreenRect]:
+        self.record("list_monitors")
+        default = [ScreenRect(0, 0, 1920, 1080)]
+        value = self.responses.get("list_monitors", default)
+        if isinstance(value, list):
+            if not value:
+                return default
+            if all(isinstance(item, ScreenRect) for item in value):
+                return value
+            if len(value) > 1:
+                return value.pop(0)
+            return value[0]
+        return value
 
     def wait(self, **kwargs: Any) -> TargetRegion:
         self.record("wait", **kwargs)
@@ -99,6 +145,32 @@ def _fake_window_region(kwargs: dict[str, Any]) -> TargetRegion:
         rect=ScreenRect(10, 20, 300, 200),
         window_title=kwargs.get("title_contains") or kwargs.get("process_name") or "Window",
     )
+
+
+def _fake_layout_region(kwargs: dict[str, Any]) -> TargetRegion:
+    rect = ScreenRect(
+        int(kwargs.get("x", 10)),
+        int(kwargs.get("y", 20)),
+        int(kwargs.get("width", 300)),
+        int(kwargs.get("height", 200)),
+    )
+    return TargetRegion(
+        rect=rect,
+        window_title=kwargs.get("title_contains") or kwargs.get("process_name") or "Window",
+    )
+
+
+def _fake_snap_region(kwargs: dict[str, Any], edge: str) -> TargetRegion:
+    if edge == "left":
+        rect = ScreenRect(0, 0, 960, 1080)
+    elif edge == "right":
+        rect = ScreenRect(960, 0, 960, 1080)
+    elif edge == "top":
+        rect = ScreenRect(0, 0, 1920, 540)
+    else:
+        rect = ScreenRect(0, 540, 1920, 540)
+    title = kwargs.get("title_contains") or kwargs.get("process_name") or "Window"
+    return TargetRegion(rect=rect, window_title=title)
 
 
 class FakeDesktopAdapter(RecordingAdapter):

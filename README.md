@@ -90,9 +90,27 @@ python -m ritualist inspect-window "Battle.net"
 python -m ritualist run gaming_mode
 ```
 
-`init` is safe to rerun. It creates missing directories, installs bundled samples if absent, and applies narrow sample migrations such as adding `keep_open: true` to older installed `gaming_mode` recipes.
+`init` is safe to rerun. It creates missing directories, installs the default bundled `gaming_mode` sample if absent, and applies narrow sample migrations such as adding `keep_open: true` to older installed `gaming_mode` recipes.
 
 The sample recipe sets `keep_open: true` on `browser.open`, so after the workflow reaches the browser step, the Ritualist CLI stays alive even if a later desktop step fails or the final Play confirmation is cancelled. Press `Ctrl+C` to exit the Ritualist CLI and let Playwright close its browser process.
+
+## Starter Workspace Templates
+
+Bundled starter templates live under `ritualist\sample_recipes` for local editing and review:
+
+- `coding_mode.yaml`: editor, project directory, documentation, and tracker.
+- `meeting_mode.yaml`: calendar, notes, meeting app, and meeting lobby.
+- `research_mode.yaml`: notes app, research workspace, and source URLs.
+- `streaming_mode.yaml`: streaming app, dashboard, and chat without starting a broadcast.
+
+These templates are samples only. `ritualist init` still installs only `gaming_mode.yaml`; the workspace templates are not run or imported automatically. Each template uses variables for local app paths and URLs, includes confirmation before opening its workspace, avoids passwords and destructive actions, and uses only structured recipe actions.
+
+Validate and dry-run a template before using it:
+
+```powershell
+python -m ritualist validate .\ritualist\sample_recipes\coding_mode.yaml
+python -m ritualist dry-run .\ritualist\sample_recipes\coding_mode.yaml
+```
 
 ## Test
 
@@ -287,7 +305,7 @@ dist\Ritualist\Ritualist.exe
 
 `Ritualist.exe` launches the GUI through `ritualist.desktop_entry`; it does not run any ritual automatically. The normal development CLI stays available through `python -m ritualist` and the `ritualist` console command.
 
-Bundled sample recipes are collected into the app bundle so **Initialize App** can still install `gaming_mode.yaml`. User data still belongs in the platform user-data directory shown by `ritualist paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Ritualist`.
+Bundled sample recipes are collected into the app bundle so **Initialize App** can still install `gaming_mode.yaml`, and starter workspace templates remain available as packaged samples. User data still belongs in the platform user-data directory shown by `ritualist paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Ritualist`.
 
 Manual packaged-build smoke checks:
 

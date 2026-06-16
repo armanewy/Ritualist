@@ -66,6 +66,16 @@ def runs_path() -> Path:
     return app_data_path() / "runs"
 
 
+def layouts_dir() -> Path:
+    path = layouts_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def layouts_path() -> Path:
+    return app_data_path() / "layouts"
+
+
 def browser_profiles_dir() -> Path:
     path = browser_profiles_path()
     path.mkdir(parents=True, exist_ok=True)

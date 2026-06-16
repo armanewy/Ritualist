@@ -19,7 +19,14 @@ from .actions.base import (
 from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
-from .models import DesktopClickTextStep, ExecutableStep, Recipe, WindowMatchMixin, WindowWaitStep
+from .models import (
+    DesktopClickTextStep,
+    ExecutableStep,
+    Recipe,
+    WindowMatchMixin,
+    WindowTitleScopeMixin,
+    WindowWaitStep,
+)
 from .overlay import (
     ActionPreview,
     BestEffortOverlayController,
@@ -44,6 +51,22 @@ from .runtime_models import (
 
 
 RuntimeEventCallback = Callable[[RuntimeEvent], None]
+
+WINDOW_LAYOUT_ACTIONS = {
+    "window.move",
+    "window.resize",
+    "window.maximize",
+    "window.restore",
+    "window.snap_left",
+    "window.snap_right",
+    "window.snap_top",
+    "window.snap_bottom",
+}
+WINDOW_PREVIEW_ACTIONS = {
+    "window.focus",
+    "window.minimize",
+    *WINDOW_LAYOUT_ACTIONS,
+}
 
 
 class WorkflowExecutor:
@@ -138,7 +161,7 @@ class WorkflowExecutor:
 
             if self.dry_run:
                 status = "dry-run"
-                message = f"would run {step.action}"
+                message = _dry_run_message(step)
                 dry_run_step = True
                 self.logger.info("dry-run step %s/%s: %s", index, total, step.display_name)
                 self._emit_log_message(
@@ -507,16 +530,16 @@ class WorkflowExecutor:
                     exact=step.exact,
                     timeout_seconds=timeout,
                 )
-            if step.action in {"window.focus", "window.minimize", "window.maximize"} and isinstance(
-                step, WindowMatchMixin
+            if step.action in WINDOW_PREVIEW_ACTIONS and isinstance(
+                step, (WindowMatchMixin, WindowTitleScopeMixin)
             ):
                 finder = getattr(self.adapters.window, "find_window_region", None)
                 if finder is None:
-                    return TargetRegion(window_title=_window_match_label(step))
+                    return TargetRegion(window_title=_window_scope_label(step))
                 timeout = min(step.timeout_seconds or 10.0, 2.0)
                 return finder(
-                    title_contains=step.title_contains,
-                    process_name=step.process_name,
+                    title_contains=getattr(step, "title_contains", None),
+                    process_name=getattr(step, "process_name", None),
                     timeout_seconds=timeout,
                 )
         except Exception as exc:  # noqa: BLE001 - preview is best-effort only.
@@ -711,8 +734,22 @@ def _preview_label(step: ExecutableStep) -> str | None:
         return "Ritualist: focusing window"
     if step.action == "window.minimize":
         return "Ritualist: minimizing window"
+    if step.action == "window.move":
+        return "Ritualist: moving window"
+    if step.action == "window.resize":
+        return "Ritualist: resizing window"
     if step.action == "window.maximize":
         return "Ritualist: maximizing window"
+    if step.action == "window.restore":
+        return "Ritualist: restoring window"
+    if step.action == "window.snap_left":
+        return "Ritualist: snapping window left"
+    if step.action == "window.snap_right":
+        return "Ritualist: snapping window right"
+    if step.action == "window.snap_top":
+        return "Ritualist: snapping window top"
+    if step.action == "window.snap_bottom":
+        return "Ritualist: snapping window bottom"
     return None
 
 
@@ -724,11 +761,19 @@ def _window_match_label(step: WindowMatchMixin) -> str:
     return "window"
 
 
+def _window_scope_label(step: WindowMatchMixin | WindowTitleScopeMixin) -> str:
+    if isinstance(step, WindowMatchMixin):
+        return _window_match_label(step)
+    return step.title_contains
+
+
 def _confirmation_window_title(step: ExecutableStep, region: TargetRegion | None) -> str | None:
     if region and region.window_title:
         return region.window_title
     if isinstance(step, DesktopClickTextStep):
         return step.window_title_contains
+    if isinstance(step, WindowTitleScopeMixin):
+        return step.title_contains
     if isinstance(step, WindowMatchMixin):
         return _window_match_label(step)
     return None
@@ -740,3 +785,35 @@ def _confirmation_target_text(step: ExecutableStep, region: TargetRegion | None)
     if isinstance(step, DesktopClickTextStep):
         return step.text
     return None
+
+
+def _dry_run_message(step: ExecutableStep) -> str:
+    layout_message = _dry_run_layout_message(step)
+    if layout_message is not None:
+        return layout_message
+    return f"would run {step.action}"
+
+
+def _dry_run_layout_message(step: ExecutableStep) -> str | None:
+    if step.action not in WINDOW_LAYOUT_ACTIONS or not isinstance(step, WindowTitleScopeMixin):
+        return None
+
+    title = step.title_contains
+    if step.action == "window.move":
+        return f"would move window '{title}' to {getattr(step, 'x')},{getattr(step, 'y')}"
+    if step.action == "window.resize":
+        return (
+            f"would resize window '{title}' to "
+            f"{getattr(step, 'width')}x{getattr(step, 'height')}"
+        )
+    operation = {
+        "window.maximize": "maximize window",
+        "window.restore": "restore window",
+        "window.snap_left": "snap window left",
+        "window.snap_right": "snap window right",
+        "window.snap_top": "snap window top",
+        "window.snap_bottom": "snap window bottom",
+    }.get(step.action)
+    if operation is None:
+        return None
+    return f"would {operation} '{title}'"

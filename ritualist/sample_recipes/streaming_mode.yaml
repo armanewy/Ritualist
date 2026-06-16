@@ -1,0 +1,75 @@
+version: "0.1"
+id: streaming_mode
+name: Streaming Mode
+description: Open a local streaming workspace without starting a broadcast.
+home:
+  category: Media
+  card:
+    title: Streaming Mode
+    subtitle: OBS + dashboard + chat
+    image: ""
+    accent: "#d06b47"
+variables:
+  streaming_app_path: 'C:\Program Files\obs-studio\bin\64bit\obs64.exe'
+  streaming_app_cwd: 'C:\Program Files\obs-studio\bin\64bit'
+  streaming_dashboard_url: "https://dashboard.example.invalid/live"
+  streaming_chat_url: "https://chat.example.invalid/popout"
+  streaming_app_window: OBS
+environment:
+  required_capabilities:
+    - app_launch
+    - browser_control
+    - file_read
+    - playwright
+    - windows_uia
+    - window_management
+  expected_windows:
+    - title_contains: "{{ streaming_app_window }}"
+  variable_hints:
+    streaming_app_path: Set this to the local streaming app executable.
+    streaming_app_cwd: Set this to the streaming app working directory if required.
+    streaming_dashboard_url: Set this to the local user's streaming dashboard URL.
+    streaming_chat_url: Set this to the local user's chat URL.
+    streaming_app_window: Set this to visible streaming app window title text.
+preflight:
+  - name: Streaming app path is configured
+    action: assert.file_exists
+    path: "{{ streaming_app_path }}"
+
+  - name: Streaming app working directory exists
+    action: assert.path_exists
+    path: "{{ streaming_app_cwd }}"
+
+steps:
+  - name: Confirm streaming workspace
+    action: confirm.ask
+    prompt: Open the configured streaming app, dashboard, and chat without starting a broadcast?
+
+  - name: Launch streaming app
+    action: app.launch
+    command: "{{ streaming_app_path }}"
+    cwd: "{{ streaming_app_cwd }}"
+
+  - name: Open streaming dashboard
+    action: browser.open
+    url: "{{ streaming_dashboard_url }}"
+    browser: chrome
+    profile: streaming_mode
+    keep_open: true
+
+  - name: Open streaming chat
+    action: browser.open
+    url: "{{ streaming_chat_url }}"
+    browser: chrome
+    profile: streaming_mode
+    keep_open: true
+
+  - name: Wait for manual broadcast setup
+    action: wait.for_user
+    prompt: Review scenes, audio, dashboard, and chat manually before broadcasting.
+
+verify:
+  - name: Streaming app window is visible
+    action: assert.window_exists
+    title_contains: "{{ streaming_app_window }}"
+    optional: true

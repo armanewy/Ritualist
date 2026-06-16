@@ -123,6 +123,32 @@ def test_overlay_failure_does_not_fail_workflow():
     assert [call[0] for call in fakes.window.calls] == ["find_window_region", "focus"]
 
 
+def test_window_layout_actions_show_overlay_preview():
+    recipe = Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Run",
+            "steps": [
+                {
+                    "action": "window.snap_left",
+                    "title_contains": "Battle.net",
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    overlay = RecordingOverlay()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), overlay=overlay).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.window.calls] == ["find_window_region", "snap_left"]
+    assert overlay.previews[0].action == "window.snap_left"
+    assert overlay.previews[0].label == "Ritualist: snapping window left"
+    assert overlay.previews[0].region is not None
+    assert overlay.previews[0].region.window_title == "Battle.net"
+
+
 def test_overlay_can_be_disabled_by_config():
     recipe = Recipe.model_validate(
         {

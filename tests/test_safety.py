@@ -72,6 +72,49 @@ def test_click_text_requires_window_scope(tmp_path):
         load_recipe(path)
 
 
+def test_window_maximize_preserves_process_scope(tmp_path):
+    path = tmp_path / "unsafe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: unsafe
+            name: Unsafe
+            steps:
+              - action: window.maximize
+                process_name: Battle.net.exe
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.steps[0].process_name == "Battle.net.exe"
+
+
+def test_new_window_layout_actions_require_title_scope(tmp_path):
+    path = tmp_path / "unsafe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: unsafe
+            name: Unsafe
+            steps:
+              - action: window.move
+                process_name: Battle.net.exe
+                x: 100
+                y: 200
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError, match="title_contains"):
+        load_recipe(path)
+
+
 def test_recipe_id_must_be_safe(tmp_path):
     path = tmp_path / "unsafe.yaml"
     path.write_text(
