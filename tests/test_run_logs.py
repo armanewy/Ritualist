@@ -240,6 +240,28 @@ def test_append_operator_note_adds_note_to_finished_run(tmp_path):
     assert loaded.metadata["last_operator_note_at"] == entry["at"]
 
 
+def test_active_run_writer_preserves_externally_appended_note_counters(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [{"action": "app.launch", "command": "demo.exe"}],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    writer.start(recipe, dry_run=False)
+    assert writer.run_dir is not None
+    entry = append_operator_note(writer.run_dir, "Note added while run is active.")
+    writer.heartbeat(step_id=1, step_name="app.launch")
+
+    loaded = load_run(writer.run_dir)
+    assert loaded is not None
+    assert loaded.notes == [entry]
+    assert loaded.metadata["operator_notes_count"] == 1
+    assert loaded.metadata["last_operator_note_at"] == entry["at"]
+
+
 def test_run_log_writer_maps_dry_run_status_to_runtime_step_state(tmp_path):
     recipe = Recipe.model_validate(
         {

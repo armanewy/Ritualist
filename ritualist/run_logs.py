@@ -299,10 +299,24 @@ class RunLogWriter:
     def _write_run_json(self) -> None:
         if self._run_json is None:
             return
+        self._refresh_operator_note_metadata()
         self._run_json.write_text(
             json.dumps(self._metadata, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    def _refresh_operator_note_metadata(self) -> None:
+        if self.run_dir is None:
+            return
+        notes = _read_operator_notes(self.run_dir)
+        if not notes:
+            self._metadata.setdefault("operator_notes_count", 0)
+            self._metadata.setdefault("last_operator_note_at", None)
+            return
+        self._metadata["operator_notes_count"] = len(notes)
+        last_at = notes[-1].get("at")
+        if isinstance(last_at, str) and last_at:
+            self._metadata["last_operator_note_at"] = last_at
 
     def _set_run_state(
         self,
