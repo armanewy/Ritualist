@@ -105,6 +105,12 @@ from .target_resolution import (
     resolve_target,
     target_plan_payload,
 )
+from .themes import (
+    list_themes,
+    load_theme,
+    theme_show_payload,
+    validate_theme,
+)
 from .watch_me import WatchMeDraft, WatchMeService, WatchMeSession
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
@@ -118,6 +124,7 @@ target_app = typer.Typer(help="Discover and preview local target start plans.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
 canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
 canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
+theme_app = typer.Typer(help="Inspect and validate safe declarative Ritualist themes.")
 watch_app = typer.Typer(help="Explicitly observe a setup session and create a disabled draft.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
@@ -127,6 +134,7 @@ app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(canvas_app, name="canvas")
+app.add_typer(theme_app, name="theme")
 app.add_typer(watch_app, name="watch-me")
 canvas_app.add_typer(canvas_pack_app, name="pack")
 canvas_app.add_typer(canvas_theme_app, name="theme")
@@ -503,6 +511,38 @@ def _print_canvas_validation(validation: object) -> None:
     console.print(
         f"[bold]Validation:[/] [{style}]{escape(status)}[/] "
         f"({int(data.get('component_count') or 0)} components)"
+    )
+    for message in data.get("errors", []):
+        console.print(f"[red]error[/] {escape(str(message))}")
+    for message in data.get("warnings", []):
+        console.print(f"[yellow]warning[/] {escape(str(message))}")
+
+
+def _print_theme_document(payload: dict[str, object]) -> None:
+    theme = payload.get("theme", {})
+    if not isinstance(theme, dict):
+        theme = {}
+    validation = payload.get("validation", {})
+    title = str(theme.get("name") or "")
+    theme_id = str(theme.get("id") or "")
+    table = Table(title=f"Theme: {escape(title)} ({escape(theme_id)})")
+    table.add_column("Token", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    tokens = theme.get("tokens", {})
+    for name, value in sorted(tokens.items()) if isinstance(tokens, dict) else []:
+        table.add_row(escape(str(name)), escape(str(value)))
+    console.print(table)
+    _print_theme_validation(validation)
+
+
+def _print_theme_validation(validation: object) -> None:
+    data = validation if isinstance(validation, dict) else validation.to_dict()
+    status = "valid" if data.get("valid") else "invalid"
+    style = "green" if data.get("valid") else "red"
+    console.print(
+        f"[bold]Theme validation:[/] [{style}]{escape(status)}[/] "
+        f"({int(data.get('token_count') or 0)} tokens, "
+        f"{int(data.get('asset_count') or 0)} assets)"
     )
     for message in data.get("errors", []):
         console.print(f"[red]error[/] {escape(str(message))}")
@@ -921,6 +961,80 @@ def canvas_theme_import(
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
     _print_visual_pack_import(record, json_output=json_output)
+
+
+@theme_app.command("list")
+def theme_list(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable theme list."),
+    ] = False,
+) -> None:
+    """List bundled and user themes without loading executable code."""
+    rows = list_themes()
+    if json_output:
+        console.print_json(data=[row.to_dict() for row in rows])
+        return
+    table = Table(title="Ritualist Themes")
+    table.add_column("ID")
+    table.add_column("Name")
+    table.add_column("Source")
+    table.add_column("Path")
+    for row in rows:
+        table.add_row(
+            escape(row.theme_id),
+            escape(row.name),
+            escape(row.source),
+            escape(str(row.path)),
+        )
+    console.print(table)
+    if not rows:
+        console.print("No themes found.")
+
+
+@theme_app.command("show")
+def theme_show(
+    theme: Annotated[str, typer.Argument(help="Theme id or theme.yaml path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable theme document."),
+    ] = False,
+) -> None:
+    """Show a safe declarative theme without executing behavior."""
+    try:
+        document = load_theme(theme)
+        payload = theme_show_payload(document)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_theme_document(payload)
+
+
+@theme_app.command("validate")
+def theme_validate(
+    theme: Annotated[str, typer.Argument(help="Theme id or theme.yaml path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable validation result."),
+    ] = False,
+) -> None:
+    """Validate a theme as data-only visual tokens."""
+    try:
+        result = validate_theme(theme)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=result.to_dict())
+        if not result.valid:
+            raise typer.Exit(1)
+        return
+    _print_theme_validation(result.to_dict())
+    if not result.valid:
+        raise typer.Exit(1)
 
 
 @watch_app.command("start")
