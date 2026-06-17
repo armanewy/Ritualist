@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -30,7 +31,7 @@ EXPECTED_CHECK_IDS = {
     "declining_play_stopped",
     "show_run_declined_confirmation",
     "hard_kill_repairs_interrupted",
-    "watch_me_preview_privacy",
+    "no_recording_or_preview_capture",
     "canvas_theme_pack_import_export_no_autorun",
     "arbitrary_component_code_rejected",
     "component_perf_100_300_recorded",
@@ -68,6 +69,10 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "RITUALIST_E2E_APP_DATA_DIR",
         "release_v0_2_alpha_1.yaml",
         "NEEDS_HUMAN_REVIEW",
+        "no_recording_or_preview_capture",
+        "cli_help_no_recording_surface",
+        "visible_text_scan_no_recording_surface",
+        "forbidden_marker_scan",
         "EvidenceDir",
         "theme_evidence",
         "theme_id",
@@ -132,6 +137,59 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         '"edit-mode-builder"',
     ):
         assert expected in script
+
+    assert "watch_me_preview_privacy" not in script
+    assert 'Invoke-NamedButton $window "Stop Watch Me"' not in script
+
+
+def test_release_acceptance_recording_surface_match_records_fail(tmp_path: Path) -> None:
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell is None:
+        pytest.skip("PowerShell is not available")
+
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+    function_block = (
+        "function Find-TermMatches"
+        + script.split("function Find-TermMatches", 1)[1].split("function Invoke-NamedButton", 1)[0]
+    )
+    probe = tmp_path / "probe-recording-surface.ps1"
+    probe.write_text(
+        "\n".join(
+            [
+                "$ErrorActionPreference = 'Stop'",
+                function_block,
+                "$Results = @{}",
+                "function Set-Check {",
+                "param([string]$Id, [string]$Status, [string]$Message, [hashtable]$Evidence = @{})",
+                "$Results[$Id] = [ordered]@{ id = $Id; status = $Status; message = $Message; evidence = $Evidence }",
+                "}",
+                '$termMatches = Find-TermMatches "Visible stale Watch Me and OCR text" @("Watch Me", "OCR")',
+                "if ($termMatches.Count -eq 0) {",
+                'Set-Check "no_recording_or_preview_capture" "PASS" "unexpected pass" @{ matches = $termMatches }',
+                "}",
+                "else {",
+                'Set-Check "no_recording_or_preview_capture" "FAIL" "recording surface present" @{ matches = $termMatches }',
+                "}",
+                '$Results["no_recording_or_preview_capture"] | ConvertTo-Json -Depth 4',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(probe)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["id"] == "no_recording_or_preview_capture"
+    assert payload["status"] == "FAIL"
+    assert set(payload["evidence"]["matches"]) == {"Watch Me", "OCR"}
 
 
 def test_release_acceptance_harness_rejects_repo_root_evidence_dir() -> None:

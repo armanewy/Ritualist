@@ -124,6 +124,30 @@ $ForbiddenMarkers = @(
     "html",
     "dom"
 )
+$RecordingSurfaceTerms = @(
+    "Watch Me",
+    "watch-me",
+    "watch_me",
+    "Create from what I do",
+    "Stop Watch Me",
+    "Create Draft",
+    "recording",
+    "recording mode",
+    "observation session",
+    "live observation",
+    "teach by watching",
+    "macro recording",
+    "record/replay",
+    "recorder",
+    "screenshot",
+    "screen capture",
+    "screen recording",
+    "OCR",
+    "keylog",
+    "keystroke",
+    "preview capture",
+    "preview-capture"
+)
 $FakeBattleNetTitle = "Battle.net Fixture"
 $FakeWallpaperTitle = "Ritualist Wallpaper Fixture"
 
@@ -352,6 +376,43 @@ function Find-NamedElement {
         $Name
     )
     return $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Get-UiTextSnapshot {
+    param([object]$Window)
+    if (-not $Window) {
+        return @()
+    }
+    $rows = @()
+    $elements = $Window.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition
+    )
+    foreach ($element in $elements) {
+        $name = $element.Current.Name
+        $automationId = $element.Current.AutomationId
+        if ([string]::IsNullOrWhiteSpace($name) -and [string]::IsNullOrWhiteSpace($automationId)) {
+            continue
+        }
+        $rows += [ordered]@{
+            name = $name
+            automation_id = $automationId
+            control_type = $element.Current.ControlType.ProgrammaticName
+            is_enabled = [bool]$element.Current.IsEnabled
+        }
+    }
+    return $rows
+}
+
+function Find-TermMatches {
+    param([string]$Text, [string[]]$Terms)
+    $termMatches = @()
+    foreach ($term in $Terms) {
+        if ([regex]::IsMatch($Text, [regex]::Escape($term), [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            $termMatches += $term
+        }
+    }
+    return @($termMatches | Select-Object -Unique)
 }
 
 function Invoke-NamedButton {
@@ -1352,42 +1413,88 @@ function Invoke-CanvasStaticActions {
             }
         }
 
-        $watchStarted = Invoke-NamedButton $window "Create from what I do" 10
-        Start-Sleep -Seconds 2
-        $watchStopped = Invoke-NamedButton $window "Stop Watch Me" 10
-        Start-Sleep -Seconds 2
-        $watchDrafted = Invoke-NamedButton $window "Create Draft" 10
-        Start-Sleep -Seconds 2
-        [void](Invoke-NamedButton $window "Discard" 5)
-        $watchDir = Join-Path $script:FixtureAppData "watch-me"
-        $latestWatch = if (Test-Path $watchDir) {
-            Get-ChildItem -Path $watchDir -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $rootHelp = Invoke-CapturedCommand "cli-help-no-recording-surface" "python" @("-m", "ritualist", "--help")
+        $canvasHelp = Invoke-CapturedCommand "canvas-help-no-recording-surface" "python" @("-m", "ritualist", "canvas", "--help")
+        $helpText = "$($rootHelp.stdout_text)`n$($rootHelp.stderr_text)`n$($canvasHelp.stdout_text)`n$($canvasHelp.stderr_text)"
+        $helpMatches = Find-TermMatches $helpText $RecordingSurfaceTerms
+
+        $uiRows = Get-UiTextSnapshot $window
+        $uiSnapshot = Join-Path $SnapshotRoot "no-recording-ui-text.json"
+        Write-JsonFile $uiSnapshot $uiRows 8 | Out-Null
+        $uiText = ($uiRows | ForEach-Object { "$($_.name)`n$($_.automation_id)" }) -join "`n"
+        $uiMatches = Find-TermMatches $uiText $RecordingSurfaceTerms
+
+        $captureDataRoot = Join-Path $script:FixtureAppData "watch-me"
+        $captureSessionDirs = if (Test-Path $captureDataRoot) {
+            @(Get-ChildItem -Path $captureDataRoot -Directory -ErrorAction SilentlyContinue)
         }
         else {
-            $null
+            @()
         }
-        $scanMatches = @()
-        if ($latestWatch) {
+        $captureFiles = if (Test-Path $captureDataRoot) {
+            @(Get-ChildItem -Path $captureDataRoot -Recurse -File -ErrorAction SilentlyContinue)
+        }
+        else {
+            @()
+        }
+        $forbiddenDataMatches = @()
+        if ($captureFiles.Count -gt 0) {
             foreach ($marker in $ForbiddenMarkers) {
-                $match = Select-String -Path (Join-Path $latestWatch.FullName "*") -Pattern $marker -CaseSensitive:$false -ErrorAction SilentlyContinue
+                $match = Select-String -Path @($captureFiles | ForEach-Object { $_.FullName }) -Pattern $marker -CaseSensitive:$false -ErrorAction SilentlyContinue
                 if ($match) {
-                    $scanMatches += $marker
+                    $forbiddenDataMatches += $marker
                 }
             }
         }
-        if ($watchStarted -and $watchStopped -and $watchDrafted -and $latestWatch -and $scanMatches.Count -eq 0) {
-            Set-Check "watch_me_preview_privacy" "PASS" "Watch Me draft was review-only and forbidden marker scan was clean." @{
-                session_dir = $latestWatch.FullName
-                forbidden_matches = $scanMatches
+
+        $surfaceAbsent = (
+            $rootHelp.exit_code -eq 0 -and
+            $canvasHelp.exit_code -eq 0 -and
+            $helpMatches.Count -eq 0 -and
+            $uiMatches.Count -eq 0 -and
+            $captureSessionDirs.Count -eq 0 -and
+            $forbiddenDataMatches.Count -eq 0
+        )
+        if ($surfaceAbsent) {
+            Set-Check "no_recording_or_preview_capture" "PASS" "No recording or preview-capture creation surface was exposed." @{
+                cli_help_no_recording_surface = [ordered]@{
+                    root_help_stdout = $rootHelp.stdout
+                    root_help_stderr = $rootHelp.stderr
+                    canvas_help_stdout = $canvasHelp.stdout
+                    canvas_help_stderr = $canvasHelp.stderr
+                    matches = $helpMatches
+                }
+                visible_text_scan_no_recording_surface = [ordered]@{
+                    ui_text_snapshot = $uiSnapshot
+                    matches = $uiMatches
+                }
+                forbidden_marker_scan = [ordered]@{
+                    capture_data_root = $captureDataRoot
+                    session_dirs = @($captureSessionDirs | ForEach-Object { $_.FullName })
+                    files_scanned = @($captureFiles | ForEach-Object { $_.FullName })
+                    matches = $forbiddenDataMatches
+                }
             }
         }
         else {
-            Set-Check "watch_me_preview_privacy" "FAIL" "Watch Me evidence was missing or forbidden marker scan found data." @{
-                started = $watchStarted
-                stopped = $watchStopped
-                drafted = $watchDrafted
-                session_dir = if ($latestWatch) { $latestWatch.FullName } else { $null }
-                forbidden_matches = $scanMatches
+            Set-Check "no_recording_or_preview_capture" "FAIL" "Recording or preview-capture surface evidence is still present." @{
+                cli_help_no_recording_surface = [ordered]@{
+                    root_help_stdout = $rootHelp.stdout
+                    root_help_stderr = $rootHelp.stderr
+                    canvas_help_stdout = $canvasHelp.stdout
+                    canvas_help_stderr = $canvasHelp.stderr
+                    matches = $helpMatches
+                }
+                visible_text_scan_no_recording_surface = [ordered]@{
+                    ui_text_snapshot = $uiSnapshot
+                    matches = $uiMatches
+                }
+                forbidden_marker_scan = [ordered]@{
+                    capture_data_root = $captureDataRoot
+                    session_dirs = @($captureSessionDirs | ForEach-Object { $_.FullName })
+                    files_scanned = @($captureFiles | ForEach-Object { $_.FullName })
+                    matches = $forbiddenDataMatches
+                }
             }
         }
     }

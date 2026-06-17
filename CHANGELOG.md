@@ -20,7 +20,6 @@ Canvas-era alpha release candidate focused on a customizable local command surfa
 - Added Primitive Kernel metadata, policy/governance, read-only primitive families, deterministic intent plan preview, and generic target resolution.
 - Added Canvas Foundation, Canvas Use Mode, Canvas Edit Mode foundation/UI MVP, performance modes, theme tokens, and Canvas runtime/performance smoke commands.
 - Added Browser Clean Start options for Ritualist-managed profiles.
-- Added explicit Watch Me drafting sessions with safe high-level signals, redaction, disabled drafts, and draft previews.
 - Added local `.ritualistcanvas` and `.ritualisttheme` pack export/import with quarantine and visual-only validation.
 
 ### Safety Constraints
@@ -29,7 +28,8 @@ Canvas-era alpha release candidate focused on a customizable local command surfa
 - Theme packs contain theme tokens only in this release and cannot contain recipes, actions, intents, components, or remembered approvals.
 - Intent planning remains deterministic and inspectable; no AI/freeform planning is included.
 - Browser clean-start handling does not click arbitrary page prompts or automate passwords/login credentials.
-- Watch Me does not record keystrokes, passwords, screenshots, page contents, cookies, clipboard contents, or private/incognito tabs.
+- Local Learning, Activity Journal, Activity Signals, Ritual Suggestions, and
+  Review Before Create are not included as runnable features in this release.
 
 ## v0.1.0-alpha.1
 
