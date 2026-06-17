@@ -112,15 +112,18 @@ def _run_record(
     recipe_id: str = "gaming_mode",
     status: str = "success",
     message: str = "run completed",
+    extra_metadata: dict[str, Any] | None = None,
 ) -> RunRecord:
+    metadata = {
+        "recipe_id": recipe_id,
+        "final_state": status,
+        "final_message": message,
+    }
+    metadata.update(extra_metadata or {})
     return RunRecord(
         run_id=run_id,
         path=Path("runs") / run_id,
-        metadata={
-            "recipe_id": recipe_id,
-            "final_state": status,
-            "final_message": message,
-        },
+        metadata=metadata,
         steps=[
             {
                 "index": 1,
@@ -342,6 +345,43 @@ def test_recent_activity_shows_stopped_failed_and_interrupted_runs() -> None:
 
     assert statuses == ["stopped", "failed", "interrupted"]
     assert "declined confirmation" in model.last_run_messages["gaming_mode"]
+
+
+def test_recent_activity_exposes_cleanup_state() -> None:
+    model = build_canvas_runtime_model(
+        _canvas(),
+        context=CanvasRuntimeContext(
+            recipe_ids={"gaming_mode"},
+            target_ids={"diablo_iv"},
+            recent_runs=(
+                _run_record(
+                    "stopped",
+                    status="stopped",
+                    message="Confirmation declined",
+                    extra_metadata={
+                        "stopped_reason": "stopped_user_declined_confirmation",
+                        "cleanup_offer": {
+                            "options": [
+                                {
+                                    "id": "clean_up_ritualist_opened",
+                                    "available": True,
+                                }
+                            ]
+                        },
+                        "cleanup_choice": {"choice": "keep_setup_open"},
+                        "ownership_ledger": [{"kind": "browser"}],
+                    },
+                ),
+            ),
+        ),
+    )
+
+    item = model.component_state("activity").data["items"][0]
+
+    assert item["stopped_reason"] == "stopped_user_declined_confirmation"
+    assert item["cleanup_available"] is True
+    assert item["cleanup_choice"] == "keep_setup_open"
+    assert item["ownership_count"] == 1
 
 
 def test_canvas_to_home_model_consumes_runtime_model() -> None:

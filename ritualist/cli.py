@@ -1573,7 +1573,12 @@ def show_run(
     table.add_column("Value")
     for key in ("recipe_id", "recipe_name", "status", "dry_run", "started_at", "ended_at"):
         table.add_row(escape(key), escape(str(metadata.get(key, ""))))
-    for key in ("current_run_state", "current_step_state", "final_state"):
+    for key in (
+        "current_run_state",
+        "current_step_state",
+        "final_state",
+        "stopped_reason",
+    ):
         if _metadata_has_value(metadata, key):
             table.add_row(escape(key), escape(str(metadata.get(key, ""))))
     if _metadata_has_value(metadata, "run_state_history"):
@@ -1589,6 +1594,27 @@ def show_run(
     for key in ("wait_metadata", "paused_metadata", "confirming_metadata"):
         if _metadata_has_value(metadata, key):
             table.add_row(escape(key), escape(_format_metadata_value(metadata.get(key))))
+    if _metadata_has_value(metadata, "declined_target"):
+        table.add_row("declined_target", escape(_format_metadata_value(metadata.get("declined_target"))))
+    if _metadata_has_value(metadata, "ownership_ledger"):
+        table.add_row(
+            "ownership_ledger",
+            escape(_format_ownership_ledger(metadata.get("ownership_ledger"))),
+        )
+    if _metadata_has_value(metadata, "cleanup_offer"):
+        table.add_row("cleanup_offer", escape(_format_cleanup_offer(metadata.get("cleanup_offer"))))
+    if _metadata_has_value(metadata, "cleanup_choice"):
+        table.add_row("cleanup_choice", escape(_format_metadata_value(metadata.get("cleanup_choice"))))
+    if _metadata_has_value(metadata, "remembered_cleanup_preference_applied"):
+        table.add_row(
+            "remembered_cleanup_preference_applied",
+            escape(str(metadata.get("remembered_cleanup_preference_applied"))),
+        )
+    if _metadata_has_value(metadata, "remembered_approval_applied"):
+        table.add_row(
+            "remembered_approval_applied",
+            escape(_format_metadata_value(metadata.get("remembered_approval_applied"))),
+        )
     if metadata.get("final_message"):
         table.add_row("final_message", escape(str(metadata.get("final_message", ""))))
     table.add_row("path", escape(str(record.path)))
@@ -2163,6 +2189,38 @@ def _format_event_summaries(value: object) -> str:
         elif entry is not None:
             labels.append(str(entry))
     return "; ".join(labels) if labels else _format_metadata_value(value)
+
+
+def _format_ownership_ledger(value: object) -> str:
+    if not isinstance(value, list):
+        return _format_metadata_value(value)
+    rows: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "resource")
+        description = str(item.get("description") or "").strip()
+        cleanup = str(item.get("cleanup_action") or "none")
+        risk = str(item.get("cleanup_risk") or "unknown")
+        available = "cleanup available" if item.get("cleanup_available") else "manual/no cleanup"
+        rows.append(f"{kind}: {description} ({available}; {cleanup}; {risk})")
+    return "; ".join(rows) if rows else _format_metadata_value(value)
+
+
+def _format_cleanup_offer(value: object) -> str:
+    if not isinstance(value, dict):
+        return _format_metadata_value(value)
+    default = str(value.get("default") or "")
+    options = value.get("options")
+    option_labels: list[str] = []
+    if isinstance(options, list):
+        for option in options:
+            if isinstance(option, dict):
+                label = str(option.get("label") or option.get("id") or "")
+                if label:
+                    option_labels.append(label)
+    suffix = f" ({', '.join(option_labels)})" if option_labels else ""
+    return f"default: {default}{suffix}".strip()
 
 
 def _format_step_run_details(metadata: object) -> str:

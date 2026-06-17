@@ -411,12 +411,40 @@ def _recent_activity(
             "message": message,
             "last_step": summary.last_step,
             "path": str(record.path),
+            "stopped_reason": str(record.metadata.get("stopped_reason") or ""),
+            "cleanup_available": _cleanup_available(record.metadata.get("cleanup_offer")),
+            "cleanup_choice": _cleanup_choice(record.metadata.get("cleanup_choice")),
+            "ownership_count": _ownership_count(record.metadata.get("ownership_ledger")),
         }
         activity.append(row)
         if recipe_id and recipe_id not in messages:
             messages[recipe_id] = message
             statuses[recipe_id] = status
     return activity, messages, statuses
+
+
+def _cleanup_available(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    options = value.get("options")
+    if not isinstance(options, list):
+        return False
+    for option in options:
+        if isinstance(option, dict) and option.get("id") == "clean_up_ritualist_opened":
+            return bool(option.get("available"))
+    return False
+
+
+def _cleanup_choice(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return str(value.get("choice") or "")
+
+
+def _ownership_count(value: object) -> int:
+    if isinstance(value, list):
+        return len(value)
+    return 0
 
 
 def _active_state(context: CanvasRuntimeContext, reference: str) -> dict[str, Any]:

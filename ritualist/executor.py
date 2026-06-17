@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import shlex
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -60,6 +62,16 @@ from .runtime_models import (
     StepStarted,
     StepState,
     StepWaiting,
+)
+from .run_logs import (
+    CLEAN_UP_RITUALIST_OPENED,
+    FAILED_REASON,
+    INTERRUPTED_REASON,
+    KEEP_SETUP_OPEN,
+    OPEN_RUN_LOG,
+    STOPPED_BY_STOP_BUTTON,
+    STOPPED_USER_CANCELLED,
+    STOPPED_USER_DECLINED_CONFIRMATION,
 )
 
 
@@ -125,6 +137,9 @@ class WorkflowExecutor:
         self._paused_step_index: int | None = None
         self._browser_keep_open_active = False
         self._browser_used = False
+        self._stopped_reason: str | None = None
+        self._declined_target: dict[str, Any] | None = None
+        self._ownership_ledger: list[dict[str, Any]] = []
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
@@ -133,6 +148,9 @@ class WorkflowExecutor:
         self._browser_keep_open_active = False
         self._browser_used = False
         self._paused_step_index = None
+        self._stopped_reason = None
+        self._declined_target = None
+        self._ownership_ledger = []
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
         self._start_runtime_run(recipe, total)
@@ -167,6 +185,7 @@ class WorkflowExecutor:
             stop_requested=self.runtime_control.is_stopping(),
         )
         self._change_run_state(final_state, message=_run_finished_message(final_state))
+        self._finalize_stop_reason(summary, final_state)
         if self.run_logger is not None:
             self._finish_run_logger(summary=summary, final_state=final_state)
         self._emit_run_finished(summary, final_state)
@@ -240,6 +259,7 @@ class WorkflowExecutor:
         try:
             self._checkpoint_control()
         except RuntimeStoppedError as exc:
+            self._stopped_reason = STOPPED_BY_STOP_BUTTON
             self._change_run_state(RunState.STOPPING, message=str(exc))
             result = StepResult(
                 index=index,
@@ -368,6 +388,8 @@ class WorkflowExecutor:
                     result_metadata.update(action_metadata)
                     if _step_requests_keep_open(step):
                         self._browser_keep_open_active = True
+                    if status == "success":
+                        self._record_owned_resource(step)
                     self._checkpoint_control()
                     self.logger.info("finished step %s/%s: %s", index, total, step.display_name)
                     self._emit_log_message(
@@ -382,10 +404,16 @@ class WorkflowExecutor:
         except RuntimeStoppedError as exc:
             status = "cancelled"
             message = str(exc)
+            self._stopped_reason = STOPPED_BY_STOP_BUTTON
             self._change_run_state(RunState.STOPPING, message=message)
         except UserCancelledError as exc:
             status = "cancelled"
             message = str(exc)
+            self._stopped_reason = (
+                STOPPED_USER_DECLINED_CONFIRMATION
+                if _is_declined_confirmation_message(message)
+                else STOPPED_USER_CANCELLED
+            )
         except Exception as exc:  # noqa: BLE001 - convert adapter failures to run results.
             if step.optional:
                 status = "skipped"
@@ -399,6 +427,7 @@ class WorkflowExecutor:
             else:
                 status = "failed"
                 message = str(exc)
+                self._stopped_reason = FAILED_REASON
                 self.logger.exception("step failed: %s", step.display_name)
                 self._emit_log_message(
                     "error",
@@ -801,8 +830,25 @@ class WorkflowExecutor:
         finish = getattr(self.run_logger, "finish", None)
         if finish is None:
             return
+        cleanup_offer = _cleanup_offer(
+            final_state=final_state,
+            stopped_reason=self._stopped_reason,
+            ownership_ledger=self._ownership_ledger,
+        )
+        cleanup_choice = _default_cleanup_choice(cleanup_offer)
         try:
-            finish(success=summary.success, final_state=final_state.value)
+            finish(
+                success=summary.success,
+                final_state=final_state.value,
+                final_message=_final_run_message(final_state, stopped_reason=self._stopped_reason),
+                stopped_reason=self._stopped_reason,
+                declined_target=self._declined_target,
+                ownership_ledger=list(self._ownership_ledger),
+                cleanup_offer=cleanup_offer,
+                cleanup_choice=cleanup_choice,
+                remembered_cleanup_preference_applied=False,
+                remembered_approval_applied=None,
+            )
         except TypeError:
             finish(success=summary.success)
 
@@ -843,6 +889,9 @@ class WorkflowExecutor:
         )
         approved = bool(self.confirmer(prompt))
         resolved_state = StepState.RUNNING if approved else StepState.CANCELLED
+        if not approved:
+            self._stopped_reason = STOPPED_USER_DECLINED_CONFIRMATION
+            self._declined_target = _declined_target_metadata(metadata)
         self._emit_runtime_event(
             ConfirmationResolved(
                 **self._runtime_event_fields(),
@@ -870,6 +919,31 @@ class WorkflowExecutor:
         else:
             self._change_run_state(RunState.STOPPING, message="confirmation declined")
         return approved
+
+    def _record_owned_resource(self, step: ExecutableStep) -> None:
+        item = _owned_resource_for_step(step, keep_open_active=self._browser_keep_open_active)
+        if item is None:
+            return
+        self._ownership_ledger.append(item)
+
+    def _finalize_stop_reason(self, summary: RunSummary, final_state: RunState) -> None:
+        if final_state == RunState.FAILED:
+            self._stopped_reason = FAILED_REASON
+            return
+        if final_state == RunState.INTERRUPTED:
+            self._stopped_reason = INTERRUPTED_REASON
+            return
+        if final_state != RunState.STOPPED:
+            return
+        if self._stopped_reason is not None:
+            return
+        if self.runtime_control.is_stopping():
+            self._stopped_reason = STOPPED_BY_STOP_BUTTON
+            return
+        if any(_is_declined_confirmation_message(result.message) for result in summary.results):
+            self._stopped_reason = STOPPED_USER_DECLINED_CONFIRMATION
+            return
+        self._stopped_reason = STOPPED_USER_CANCELLED
 
     def _clear_transient_step_metadata(self) -> None:
         metadata = getattr(self.run_logger, "_metadata", {}) if self.run_logger is not None else {}
@@ -1228,6 +1302,172 @@ def _run_finished_message(state: RunState) -> str:
     if state == RunState.INTERRUPTED:
         return "run interrupted"
     return f"run ended with state {state.value}"
+
+
+def _final_run_message(state: RunState, *, stopped_reason: str | None) -> str:
+    if stopped_reason == STOPPED_USER_DECLINED_CONFIRMATION:
+        return "Confirmation declined; completed setup may remain open. No confirmed risky action was performed."
+    if stopped_reason == STOPPED_BY_STOP_BUTTON:
+        return "Run stopped by user; setup remains open unless cleanup is chosen."
+    if stopped_reason == STOPPED_USER_CANCELLED:
+        return "Run cancelled by user; setup remains open unless cleanup is chosen."
+    if stopped_reason == FAILED_REASON:
+        return "Run failed; setup remains open for inspection."
+    if stopped_reason == INTERRUPTED_REASON:
+        return "Ritualist exited before finalizing this run."
+    if state == RunState.SUCCESS:
+        return "Run completed."
+    if state == RunState.STOPPED:
+        return "Run stopped."
+    return _run_finished_message(state)
+
+
+def _is_declined_confirmation_message(message: str | None) -> bool:
+    text = str(message or "").casefold()
+    return "declined confirmation" in text or "confirmation declined" in text
+
+
+def _owned_resource_for_step(step: ExecutableStep, *, keep_open_active: bool) -> dict[str, Any] | None:
+    if step.action == "browser.open":
+        cleanup_available = bool(getattr(step, "keep_open", False))
+        return {
+            "kind": "browser",
+            "description": "Ritualist-managed browser page/window opened",
+            "owned_by_ritual": True,
+            "cleanup_available": cleanup_available,
+            "cleanup_action": "close_browser",
+            "cleanup_risk": "low",
+        }
+    if step.action == "browser.media":
+        return {
+            "kind": "media",
+            "description": "Ritualist-started browser media",
+            "owned_by_ritual": True,
+            "cleanup_available": keep_open_active,
+            "cleanup_action": "pause_media",
+            "cleanup_risk": "low",
+        }
+    if step.action == "app.launch":
+        return {
+            "kind": "app",
+            "description": f"App launched by Ritualist: {_safe_command_label(getattr(step, 'command', ''))}",
+            "owned_by_ritual": True,
+            "cleanup_available": False,
+            "cleanup_action": "manual_review",
+            "cleanup_risk": "medium",
+        }
+    if step.action in WINDOW_LAYOUT_ACTIONS:
+        return {
+            "kind": "window_layout",
+            "description": f"Window layout changed by Ritualist: {step.action}",
+            "owned_by_ritual": True,
+            "cleanup_available": False,
+            "cleanup_action": "manual_restore",
+            "cleanup_risk": "medium",
+        }
+    return None
+
+
+def _safe_command_label(command: object) -> str:
+    raw = str(command or "").strip()
+    if not raw:
+        return "unknown app"
+    try:
+        first = shlex.split(raw, posix=False)[0]
+    except (ValueError, IndexError):
+        first = raw.split(maxsplit=1)[0] if raw.split() else ""
+    first = first.strip().strip("\"'")
+    if not first:
+        return "app command"
+    parsed = urlsplit(first)
+    if parsed.scheme and parsed.netloc:
+        return "app URL"
+    basename = first.replace("\\", "/").split("/")[-1].strip()
+    if not basename or _looks_like_sensitive_fragment(basename):
+        return "app command"
+    return basename
+
+
+def _looks_like_sensitive_fragment(value: str) -> bool:
+    text = value.casefold()
+    if any(token in text for token in ("token", "secret", "password", "passwd", "apikey", "api_key")):
+        return True
+    return bool(re.search(r"[?&#=]", value))
+
+
+def _cleanup_offer(
+    *,
+    final_state: RunState,
+    stopped_reason: str | None,
+    ownership_ledger: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if final_state not in {RunState.STOPPED, RunState.FAILED}:
+        return None
+    safe_cleanup_items = [
+        item
+        for item in ownership_ledger
+        if item.get("owned_by_ritual")
+        and item.get("cleanup_available")
+        and item.get("cleanup_risk") == "low"
+    ]
+    options = [
+        {
+            "id": KEEP_SETUP_OPEN,
+            "label": "Keep setup open",
+            "default": True,
+        },
+        {
+            "id": CLEAN_UP_RITUALIST_OPENED,
+            "label": "Clean up things Ritualist opened",
+            "default": False,
+            "available": bool(safe_cleanup_items),
+            "items": safe_cleanup_items,
+        },
+        {
+            "id": OPEN_RUN_LOG,
+            "label": "Open run log",
+            "default": False,
+        },
+    ]
+    return {
+        "reason": stopped_reason,
+        "default": KEEP_SETUP_OPEN,
+        "options": options,
+        "message": "Choose cleanup after the stop; Ritualist will not claim to undo irreversible changes.",
+    }
+
+
+def _default_cleanup_choice(cleanup_offer: dict[str, Any] | None) -> dict[str, Any] | None:
+    if cleanup_offer is None:
+        return None
+    return {
+        "choice": KEEP_SETUP_OPEN,
+        "applied": False,
+        "remembered": False,
+    }
+
+
+def _declined_target_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if key
+        in {
+            "confirmation_id",
+            "action",
+            "step_name",
+            "target_scope",
+            "target_type",
+            "window_title",
+            "browser_title",
+            "browser_url",
+            "target_text",
+            "target_role",
+            "target_test_id",
+            "control_type",
+        }
+        and value
+    }
 
 
 def _preview_label(step: ExecutableStep) -> str | None:

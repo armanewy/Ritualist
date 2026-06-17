@@ -504,6 +504,31 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
             "started_at": "2026-06-15T12:00:00+00:00",
             "ended_at": "2026-06-15T12:01:00+00:00",
             "final_message": "Ritualist exited before finalizing this run.",
+            "stopped_reason": "interrupted",
+            "declined_target": {"target_text": "Play", "window_title": "Battle.net"},
+            "ownership_ledger": [
+                {
+                    "kind": "browser",
+                    "description": "Ritualist-managed browser page/window opened",
+                    "owned_by_ritual": True,
+                    "cleanup_available": True,
+                    "cleanup_action": "close_browser",
+                    "cleanup_risk": "low",
+                }
+            ],
+            "cleanup_offer": {
+                "default": "keep_setup_open",
+                "options": [
+                    {"id": "keep_setup_open", "label": "Keep setup open"},
+                    {
+                        "id": "clean_up_ritualist_opened",
+                        "label": "Clean up things Ritualist opened",
+                        "available": True,
+                    },
+                    {"id": "open_run_log", "label": "Open run log"},
+                ],
+            },
+            "cleanup_choice": {"choice": "keep_setup_open", "applied": False},
         },
         steps=[
             {
@@ -524,6 +549,13 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
     assert "Gaming Mode" in result.output
     assert "interrupted" in result.output
     assert "Ritualist exited before finalizing this run." in result.output
+    assert "stopped_reason" in result.output
+    assert "declined_target" in result.output
+    assert "ownership_ledger" in result.output
+    assert "close_browser" in result.output
+    assert "cleanup_offer" in result.output
+    assert "Keep setup open" in result.output
+    assert "cleanup_choice" in result.output
     assert "Runbook summary:" in result.output
     assert "Preflight: not configured (0 passed, 0 failed)" in result.output
     assert "Actions completed: 1" in result.output

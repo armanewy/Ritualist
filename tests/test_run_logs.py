@@ -8,6 +8,9 @@ from ritualist.executor import WorkflowExecutor
 from ritualist.models import Recipe
 from ritualist.overlay import ScreenRect, TargetRegion
 from ritualist.run_logs import (
+    CLEAN_UP_RITUALIST_OPENED,
+    KEEP_SETUP_OPEN,
+    STOPPED_USER_DECLINED_CONFIRMATION,
     RunLogWriter,
     append_operator_note,
     list_recent_runs,
@@ -374,6 +377,229 @@ def test_run_log_writer_records_stopped_status_for_declined_confirmation(tmp_pat
     assert run_json["status"] == "stopped"
     assert run_json["final_state"] == "stopped"
     assert run_json["current_run_state"] == "stopped"
+    assert run_json["stopped_reason"] == STOPPED_USER_DECLINED_CONFIRMATION
+    assert run_json["final_message"] == (
+        "Confirmation declined; completed setup may remain open. No confirmed risky action was performed."
+    )
+    assert run_json["declined_target"]["target_text"] == "Play"
+    assert run_json["declined_target"]["window_title"] == "Battle.net"
+    assert run_json["cleanup_offer"]["default"] == KEEP_SETUP_OPEN
+    assert run_json["cleanup_choice"] == {
+        "choice": KEEP_SETUP_OPEN,
+        "applied": False,
+        "remembered": False,
+    }
+
+
+def test_declined_confirmation_run_records_owned_resources_and_safe_cleanup_offer(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test/watch",
+                    "keep_open": True,
+                },
+                {"action": "browser.media", "play": True},
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _prompt: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    ledger = run_json["ownership_ledger"]
+    assert [item["kind"] for item in ledger] == ["browser", "media"]
+    assert all(item["owned_by_ritual"] for item in ledger)
+    assert all(item["cleanup_available"] for item in ledger)
+    cleanup = next(
+        option
+        for option in run_json["cleanup_offer"]["options"]
+        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+    )
+    assert cleanup["available"] is True
+    assert [item["cleanup_action"] for item in cleanup["items"]] == [
+        "close_browser",
+        "pause_media",
+    ]
+
+
+def test_app_launch_ownership_does_not_claim_irreversible_cleanup(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {"action": "app.launch", "command": "C:/Games/Installer.exe"},
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _prompt: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    ledger = run_json["ownership_ledger"]
+    assert ledger[0]["kind"] == "app"
+    assert ledger[0]["cleanup_available"] is False
+    assert ledger[0]["cleanup_action"] == "manual_review"
+    cleanup = next(
+        option
+        for option in run_json["cleanup_offer"]["options"]
+        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+    )
+    assert cleanup["available"] is False
+
+
+def test_app_launch_ownership_label_strips_args_urls_and_sensitive_fragments(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {
+                    "action": "app.launch",
+                    "command": '"C:/Games/Launcher.exe" --token secret-value',
+                },
+                {
+                    "action": "app.launch",
+                    "command": "https://example.test/start?token=secret",
+                },
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _prompt: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    run_json_text = (summary.run_dir / "run.json").read_text(encoding="utf-8")
+    steps_text = (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8")
+    run_json = json.loads(run_json_text)
+    descriptions = [item["description"] for item in run_json["ownership_ledger"]]
+
+    assert descriptions == [
+        "App launched by Ritualist: Launcher.exe",
+        "App launched by Ritualist: app URL",
+    ]
+    assert "secret-value" not in run_json_text
+    assert "token=secret" not in run_json_text
+    assert "secret-value" not in steps_text
+    assert "token=secret" not in steps_text
+
+
+def test_declined_browser_confirmation_redacts_persisted_url(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {
+                    "action": "browser.click_text",
+                    "text": "Submit",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.responses["page_context"] = {
+        "title": "Checkout",
+        "url": "https://user:pass@example.test/pay?token=secret&order=123#fragment",
+    }
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda _prompt: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    run_json_text = (summary.run_dir / "run.json").read_text(encoding="utf-8")
+    run_json = json.loads(run_json_text)
+
+    assert run_json["declined_target"]["browser_url"] == "https://example.test/pay"
+    assert "user:pass" not in run_json_text
+    assert "token=secret" not in run_json_text
+    assert "fragment" not in run_json_text
+
+
+def test_non_keep_open_browser_ownership_does_not_offer_cleanup(tmp_path):
+    recipe = Recipe.model_validate(
+        {
+            "id": "log_test",
+            "name": "Log Test",
+            "steps": [
+                {"action": "browser.open", "url": "https://example.test/watch"},
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    writer = RunLogWriter(base_dir=tmp_path)
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda _prompt: False,
+        run_logger=writer,
+    ).run(recipe)
+
+    assert summary.run_dir is not None
+    assert fakes.browser.closed is True
+    run_json = json.loads((summary.run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_json["ownership_ledger"][0]["kind"] == "browser"
+    assert run_json["ownership_ledger"][0]["cleanup_available"] is False
+    cleanup = next(
+        option
+        for option in run_json["cleanup_offer"]["options"]
+        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+    )
+    assert cleanup["available"] is False
 
 
 def test_run_log_writer_throttles_steady_heartbeat_writes(tmp_path):

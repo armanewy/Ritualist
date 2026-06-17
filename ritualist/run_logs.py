@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import sys
 import time
 import uuid
@@ -19,6 +21,16 @@ from .paths import runs_dir
 RUN_LOG_SCHEMA_VERSION = 2
 OPERATOR_NOTES_FILENAME = "operator_notes.jsonl"
 OPERATOR_NOTE_SCHEMA_VERSION = "operator_note.v1"
+
+STOPPED_USER_DECLINED_CONFIRMATION = "stopped_user_declined_confirmation"
+STOPPED_USER_CANCELLED = "stopped_user_cancelled"
+STOPPED_BY_STOP_BUTTON = "stopped_by_stop_button"
+FAILED_REASON = "failed"
+INTERRUPTED_REASON = "interrupted"
+
+KEEP_SETUP_OPEN = "keep_setup_open"
+CLEAN_UP_RITUALIST_OPENED = "clean_up_ritualist_opened"
+OPEN_RUN_LOG = "open_run_log"
 
 
 @dataclass(frozen=True)
@@ -106,6 +118,13 @@ class RunLogWriter:
             "last_step_phase": None,
             "current_phase": None,
             "final_message": None,
+            "stopped_reason": None,
+            "declined_target": None,
+            "ownership_ledger": [],
+            "cleanup_offer": None,
+            "cleanup_choice": None,
+            "remembered_cleanup_preference_applied": False,
+            "remembered_approval_applied": None,
             "current_run_state": "running",
             "current_step_state": None,
             "final_state": None,
@@ -210,14 +229,38 @@ class RunLogWriter:
         )
         self._write_run_json()
 
-    def finish(self, *, success: bool, final_state: str | None = None) -> None:
+    def finish(
+        self,
+        *,
+        success: bool,
+        final_state: str | None = None,
+        final_message: str | None = None,
+        stopped_reason: str | None = None,
+        declined_target: dict[str, Any] | None = None,
+        ownership_ledger: list[dict[str, Any]] | None = None,
+        cleanup_offer: dict[str, Any] | None = None,
+        cleanup_choice: dict[str, Any] | None = None,
+        remembered_cleanup_preference_applied: bool | None = None,
+        remembered_approval_applied: dict[str, Any] | None = None,
+    ) -> None:
         if self._run_json is None:
             return
         resolved_final_state = final_state or ("success" if success else "stopped")
         self._metadata["status"] = _terminal_status(resolved_final_state, success=success)
         self._metadata["ended_at"] = _now_iso()
         self._metadata["last_heartbeat_at"] = self._metadata["ended_at"]
-        self._metadata["final_message"] = None
+        self._metadata["final_message"] = final_message
+        self._metadata["stopped_reason"] = stopped_reason
+        self._metadata["declined_target"] = declined_target
+        if ownership_ledger is not None:
+            self._metadata["ownership_ledger"] = ownership_ledger
+        self._metadata["cleanup_offer"] = cleanup_offer
+        self._metadata["cleanup_choice"] = cleanup_choice
+        if remembered_cleanup_preference_applied is not None:
+            self._metadata["remembered_cleanup_preference_applied"] = (
+                remembered_cleanup_preference_applied
+            )
+        self._metadata["remembered_approval_applied"] = remembered_approval_applied
         self._metadata["final_state"] = resolved_final_state
         self._set_run_state(resolved_final_state, event="run.finished")
         self._append_event_summary("run.finished", run_state=resolved_final_state)
@@ -426,7 +469,39 @@ def _safe_message(result: StepResult) -> str:
         if result.status == "success":
             return "opened URL"
         return "browser.open did not complete"
+    if result.action == "app.launch":
+        if result.dry_run:
+            return "would launch app"
+        if result.status == "success":
+            return f"launched {_safe_app_command_label(result.message)}"
+        return "app.launch did not complete"
     return result.message
+
+
+def _safe_app_command_label(message: str) -> str:
+    raw = str(message or "").strip()
+    if raw.casefold().startswith("launched "):
+        raw = raw[9:].strip()
+    try:
+        first = shlex.split(raw, posix=False)[0]
+    except (ValueError, IndexError):
+        first = raw.split(maxsplit=1)[0] if raw.split() else ""
+    first = first.strip().strip("\"'")
+    if not first:
+        return "app"
+    if "://" in first:
+        return "app URL"
+    basename = first.replace("\\", "/").split("/")[-1].strip()
+    if not basename or _looks_like_sensitive_fragment(basename):
+        return "app"
+    return basename
+
+
+def _looks_like_sensitive_fragment(value: str) -> bool:
+    text = value.casefold()
+    if any(token in text for token in ("token", "secret", "password", "passwd", "apikey", "api_key")):
+        return True
+    return bool(re.search(r"[?&#=]", value))
 
 
 def _runtime_step_state(status: str) -> str:
@@ -492,6 +567,10 @@ def reconcile_running_runs(
         metadata["interrupted_at"] = metadata["ended_at"]
         metadata["final_message"] = message
         metadata["interruption_reason"] = reason
+        metadata["stopped_reason"] = INTERRUPTED_REASON
+        metadata.setdefault("ownership_ledger", [])
+        metadata["cleanup_offer"] = None
+        metadata["cleanup_choice"] = None
         metadata["current_run_state"] = "interrupted"
         metadata["final_state"] = "interrupted"
         _append_metadata_run_state(
