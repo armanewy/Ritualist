@@ -22,6 +22,7 @@ from .canvas import (
     build_canvas_runtime_model,
     build_canvas_view_model,
     canvas_show_payload,
+    canvas_performance_diagnostics,
     create_edit_session,
     create_default_canvases,
     create_mock_canvas,
@@ -1740,6 +1741,7 @@ def perf_canvas_use(
             ),
         )
         view_duration_ms = max(0.0, (time.perf_counter() - view_started) * 1000)
+        performance_budget = canvas_performance_diagnostics(document)
         report.counts.update(
             {
                 "components": len(model.components),
@@ -1765,6 +1767,7 @@ def perf_canvas_use(
             "warnings_count": len(model.runtime.unresolved_binding_warnings),
             "theme_id": model.runtime.theme.get("id", ""),
             "theme_validation": model.runtime.theme.get("validation", {}),
+            "performance_budget": performance_budget,
         },
         side_effects="none",
     )
@@ -1775,6 +1778,8 @@ def perf_canvas_use(
     _print_performance_report(report)
     console.print(f"advisory_budget_ms: {budget_ms:.3f}")
     console.print(f"view_model_build_duration_ms: {view_duration_ms:.3f}")
+    console.print(f"visual_estimated_cost: {performance_budget['estimated_cost']}")
+    console.print(f"visual_warning_count: {performance_budget['warning_count']}")
     console.print("side_effects: none")
 
 

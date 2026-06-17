@@ -3,15 +3,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from ritualist.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
+    CanvasComponentPerformanceProfile,
+    CanvasComponentUpdateRate,
     CanvasDocument,
     CANVAS_PERFORMANCE_SCHEMA_VERSION,
     CanvasPerformanceMode,
+    canvas_performance_diagnostics,
     performance_settings_for_mode,
 )
 from ritualist.canvas.app import build_canvas_use_payload
@@ -42,6 +46,70 @@ def test_perf_canvas_use_command_still_works() -> None:
     assert payload["view_summary"]["component_count"] == 12
     assert payload["view_summary"]["theme_id"] == "ritualist_default"
     assert payload["view_summary"]["theme_validation"]["valid"] is True
+    budget = payload["view_summary"]["performance_budget"]
+    assert budget["schema_version"] == "ritualist.canvas.performance_diagnostics.v1"
+    assert budget["component_count"] == 12
+    assert budget["estimated_cost"] in {"low", "medium", "high"}
+    assert budget["component_profiles"]["by_type"]
+
+
+def test_static_canvas_has_low_visual_cost() -> None:
+    canvas = CanvasDocument(
+        id="static_perf",
+        name="Static Performance",
+        components=(
+            CanvasComponent(
+                id="label",
+                type="text.label",
+                width=220,
+                height=64,
+                props={"text": "Static"},
+            ),
+            CanvasComponent(id="shape", type="shape", width=120, height=80),
+        ),
+    )
+
+    diagnostics = canvas_performance_diagnostics(canvas)
+
+    assert diagnostics["estimated_cost"] == "low"
+    assert diagnostics["live_widgets"] == 0
+    assert diagnostics["warnings"] == []
+
+
+def test_many_live_widgets_emit_performance_warning() -> None:
+    canvas = CanvasDocument(
+        id="live_perf",
+        name="Live Performance",
+        components=tuple(
+            CanvasComponent(
+                id=f"clock_{index}",
+                type="clock",
+                width=120,
+                height=80,
+            )
+            for index in range(90)
+        ),
+    )
+
+    diagnostics = canvas_performance_diagnostics(canvas)
+
+    assert diagnostics["live_widgets"] == 90
+    assert diagnostics["estimated_cost"] == "high"
+    assert any("live widgets" in warning for warning in diagnostics["warnings"])
+
+
+def test_component_performance_profile_rejects_unsupported_update_rate() -> None:
+    with pytest.raises(ValueError):
+        CanvasComponentPerformanceProfile(component_type="bad", update_rate="turbo")
+
+
+def test_component_performance_profile_rejects_updates_faster_than_policy() -> None:
+    with pytest.raises(ValueError, match="faster than declared"):
+        CanvasComponentPerformanceProfile(
+            component_type="fast",
+            update_rate=CanvasComponentUpdateRate.MEDIUM,
+            max_update_interval_ms=50,
+        )
 
 
 def test_canvas_use_payload_does_not_discover_recipes_or_targets(monkeypatch) -> None:
