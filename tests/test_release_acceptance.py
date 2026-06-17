@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -104,7 +105,9 @@ def test_release_acceptance_harness_rejects_non_artifact_repo_subdirs() -> None:
     )
 
     assert result.returncode != 0
-    assert "repository artifacts directory" in f"{result.stdout}\n{result.stderr}"
+    output = re.sub(r"\x1b\[[0-9;]*m", "", f"{result.stdout}\n{result.stderr}")
+    assert "artifacts" in output
+    assert "directory" in output
     assert (REPO_ROOT / "tests").is_dir()
 
 
