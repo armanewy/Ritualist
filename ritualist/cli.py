@@ -20,6 +20,7 @@ from .canvas import (
     CanvasRuntimeController,
     CanvasRuntimeContext,
     build_canvas_runtime_model,
+    build_canvas_view_model,
     canvas_show_payload,
     create_default_canvases,
     create_mock_canvas,
@@ -764,6 +765,31 @@ def canvas_action(
         console.print(escape(result.message))
 
 
+@canvas_app.command("use")
+def canvas_use(
+    canvas: Annotated[
+        str | None,
+        typer.Argument(help="Canvas id or YAML path. Omit with --mock."),
+    ] = None,
+    mock: Annotated[
+        bool,
+        typer.Option("--mock", help="Launch Canvas Use Mode with generated mock components."),
+    ] = False,
+    mock_components: Annotated[
+        int,
+        typer.Option("--mock-components", min=1, help="Generated component count for --mock."),
+    ] = 24,
+) -> None:
+    """Launch Canvas Use Mode with the bundled typed renderer."""
+    try:
+        from ritualist.canvas.app import run_canvas_use
+
+        run_canvas_use(canvas or "gaming_desktop", mock=mock, mock_components=mock_components)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+
+
 @diagnostics_app.command("collect")
 def diagnostics_collect(
     preset: Annotated[
@@ -1350,6 +1376,72 @@ def perf_canvas_runtime(
     _print_performance_report(report)
     console.print(f"advisory_budget_ms: {budget_ms:.3f}")
     console.print(f"runtime_state_build_duration_ms: {runtime_duration_ms:.3f}")
+    console.print("side_effects: none")
+
+
+@perf_app.command("canvas-use")
+def perf_canvas_use(
+    mock_components: Annotated[
+        int,
+        typer.Option("--mock-components", min=1, help="Number of generated Canvas components to model."),
+    ] = 120,
+    budget_ms: Annotated[
+        float,
+        typer.Option("--budget-ms", help="Advisory duration budget in milliseconds."),
+    ] = 250.0,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure Canvas Use view-model generation with no GUI or adapter side effects."""
+    view_duration_ms = 0.0
+    with measure_operation("perf.canvas-use") as report:
+        document = create_mock_canvas(mock_components)
+        view_started = time.perf_counter()
+        model = build_canvas_view_model(
+            document,
+            context=CanvasRuntimeContext(
+                recipe_ids={"gaming_mode"},
+                target_ids={"diablo_iv"},
+                recent_runs=(),
+                resolve_targets=False,
+            ),
+        )
+        view_duration_ms = max(0.0, (time.perf_counter() - view_started) * 1000)
+        report.counts.update(
+            {
+                "components": len(model.components),
+                "warnings": len(model.runtime.unresolved_binding_warnings),
+            }
+        )
+
+    if budget_ms > 0 and report.duration_ms > budget_ms:
+        report.warnings.append(
+            f"Canvas Use view-model generation exceeded advisory budget: "
+            f"{report.duration_ms:.3f} ms > {budget_ms:.3f} ms"
+        )
+
+    payload = _performance_payload(
+        report,
+        advisory_budget_ms=budget_ms,
+        view_model_build_duration_ms=view_duration_ms,
+        canvas_id=document.id,
+        view_summary={
+            "schema_version": model.to_dict()["schema_version"],
+            "canvas_id": model.canvas.id,
+            "component_count": len(model.components),
+            "warnings_count": len(model.runtime.unresolved_binding_warnings),
+        },
+        side_effects="none",
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(f"advisory_budget_ms: {budget_ms:.3f}")
+    console.print(f"view_model_build_duration_ms: {view_duration_ms:.3f}")
     console.print("side_effects: none")
 
 

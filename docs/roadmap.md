@@ -17,13 +17,13 @@ artifact, and test contracts are clear.
 ## Canvas Sequence
 
 - Canvas Foundation: complete.
-- Canvas Runtime Components: current. Components now have typed runtime state
+- Canvas Runtime Components: complete. Components now have typed runtime state
   and explicit action dispatch through existing safe services.
-- Canvas Use Mode: next. Render the Canvas runtime model in the Home/QML
-  surface before building a visual editor.
+- Canvas Use Mode: current. The MVP renderer uses the Canvas view model,
+  component geometry, runtime state, and explicit safe dispatch.
 - Canvas Edit Mode: later. Editing should configure typed native components,
   never arbitrary user-supplied QML, JavaScript, HTML, or Python.
-- Visual polish: after Use Mode and runtime dogfood.
+- Visual polish: after packaged Canvas Use Mode dogfood.
 
 ## Near-Term Primitive Direction
 

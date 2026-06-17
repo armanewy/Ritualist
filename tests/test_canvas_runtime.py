@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ from ritualist.canvas import (
     CanvasRuntimeContext,
     CanvasRuntimeController,
     build_canvas_runtime_model,
+    build_canvas_view_model,
     canvas_to_home_model,
 )
 from ritualist.cli import app
@@ -173,6 +175,66 @@ def test_canvas_runtime_model_builds_from_canvas_without_executing_actions() -> 
     assert model.component_state("activity").data["items"][0]["status"] == "success"
 
 
+def test_canvas_use_view_model_includes_layout_and_runtime_state() -> None:
+    model = build_canvas_view_model(
+        _canvas(),
+        context=CanvasRuntimeContext(
+            recipe_ids={"gaming_mode"},
+            target_ids={"diablo_iv"},
+            runtime_state={
+                "gaming_mode": {
+                    "status": "running",
+                    "current_step": "Ask before clicking Play",
+                }
+            },
+            recent_runs=(),
+        ),
+    )
+
+    payload = model.to_dict()
+    components = {component["id"]: component for component in payload["components"]}
+
+    assert payload["schema_version"] == "ritualist.canvas.view_model.v1"
+    assert payload["canvas"]["id"] == "runtime_canvas"
+    assert components["card"]["width"] == 320
+    assert components["status"]["state"] == "running"
+    assert components["status"]["message"] == "Ask before clicking Play"
+    assert components["label"]["display_only"] is True
+    assert components["card"]["enabled_actions"] == [
+        "run",
+        "dry_run",
+        "doctor",
+        "edit_recipe",
+        "open_logs",
+    ]
+
+
+def test_canvas_use_view_model_covers_required_component_types() -> None:
+    model = build_canvas_view_model(
+        _canvas(),
+        context=CanvasRuntimeContext(
+            recipe_ids={"gaming_mode"},
+            target_ids={"diablo_iv"},
+            recent_runs=(),
+        ),
+    )
+
+    component_types = {component.type for component in model.components}
+
+    assert {
+        "ritual.card",
+        "ritual.status",
+        "ritual.controller",
+        "target.card",
+        "target.status",
+        "doctor.badge",
+        "recent.activity",
+        "category.dock",
+        "text.label",
+        "clock",
+    } <= component_types
+
+
 def test_canvas_runtime_model_reports_unresolved_recipe_and_target() -> None:
     canvas = CanvasDocument(
         id="unresolved_canvas",
@@ -330,6 +392,19 @@ def test_ritual_card_actions_route_through_fake_service() -> None:
     ]
 
 
+def test_doctor_badge_action_routes_through_fake_service() -> None:
+    service = _FakeService()
+    controller = CanvasRuntimeController(
+        action_service=service,
+        context=CanvasRuntimeContext(recipe_ids={"gaming_mode"}),
+    )
+
+    result = controller.dispatch(_canvas(), "doctor", "doctor")
+
+    assert result.ok
+    assert service.calls == [("doctor_recipe", "gaming_mode", False)]
+
+
 def test_unresolved_recipe_prevents_run_dispatch() -> None:
     controller = CanvasRuntimeController(
         action_service=_FakeService(),
@@ -447,6 +522,25 @@ def test_canvas_runtime_build_does_not_call_low_level_adapters(monkeypatch) -> N
     assert model.component_state("card").status == "ready"
 
 
+def test_canvas_use_view_model_does_not_call_low_level_adapters(monkeypatch) -> None:
+    def fail_adapters() -> None:
+        raise AssertionError("Canvas Use model build must not create adapters")
+
+    monkeypatch.setattr("ritualist.adapters.create_default_adapters", fail_adapters)
+
+    model = build_canvas_view_model(
+        _canvas(),
+        context=CanvasRuntimeContext(
+            recipe_ids={"gaming_mode"},
+            target_ids={"diablo_iv"},
+            recent_runs=(),
+            resolve_targets=False,
+        ),
+    )
+
+    assert model.components
+
+
 def test_canvas_runtime_and_action_cli_json(tmp_path: Path) -> None:
     canvas_path = tmp_path / "canvas.yaml"
     from ritualist.canvas.storage import save_canvas
@@ -466,6 +560,49 @@ def test_canvas_runtime_and_action_cli_json(tmp_path: Path) -> None:
     assert "would dispatch canvas action doctor" in action_result.output
 
 
+def test_canvas_use_cli_help() -> None:
+    result = CliRunner().invoke(app, ["canvas", "use", "--help"])
+
+    assert result.exit_code == 0
+    assert "Canvas Use Mode" in result.output
+
+
+def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
+    calls: list[tuple[str, bool, int]] = []
+
+    def fake_run_canvas_use(canvas: str, *, mock: bool, mock_components: int) -> int:
+        calls.append((canvas, mock, mock_components))
+        return 0
+
+    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+
+    result = CliRunner().invoke(
+        app,
+        ["canvas", "use", "gaming_desktop", "--mock-components", "3"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("gaming_desktop", False, 3)]
+
+
+def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> None:
+    calls: list[tuple[str, bool, int]] = []
+
+    def fake_run_canvas_use(canvas: str, *, mock: bool, mock_components: int) -> int:
+        calls.append((canvas, mock, mock_components))
+        return 0
+
+    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+
+    result = CliRunner().invoke(
+        app,
+        ["canvas", "use", "--mock", "--mock-components", "12"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("gaming_desktop", True, 12)]
+
+
 def test_canvas_runtime_perf_cli_json() -> None:
     result = CliRunner().invoke(
         app,
@@ -475,3 +612,16 @@ def test_canvas_runtime_perf_cli_json() -> None:
     assert result.exit_code == 0
     assert '"operation": "perf.canvas-runtime"' in result.output
     assert '"side_effects": "none"' in result.output
+
+
+def test_canvas_use_perf_cli_json() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["perf", "canvas-use", "--mock-components", "10", "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["operation"] == "perf.canvas-use"
+    assert payload["view_summary"]["component_count"] == 10
+    assert payload["side_effects"] == "none"

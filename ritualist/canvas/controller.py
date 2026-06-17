@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ritualist.errors import RitualistError
 from ritualist.home.actions import HomeActionService
@@ -35,6 +35,10 @@ class CanvasRuntimeController:
         *,
         dry_run: bool = False,
         params: dict[str, Any] | None = None,
+        runtime_event_callback: Callable[[Any], None] | None = None,
+        status_callback: Callable[[Any], None] | None = None,
+        confirmer: Callable[[Any], bool] | None = None,
+        control: RuntimeControl | None = None,
     ) -> CanvasComponentActionResult:
         normalized = normalize_canvas_bindings(document)
         component = _find_component(normalized, component_id)
@@ -50,7 +54,14 @@ class CanvasRuntimeController:
                 data={"component_type": component.type, "params": params or {}},
             )
         if component.type in {"ritual.card", "doctor.badge"}:
-            return self._dispatch_recipe_action(component, action)
+            return self._dispatch_recipe_action(
+                component,
+                action,
+                runtime_event_callback=runtime_event_callback,
+                status_callback=status_callback,
+                confirmer=confirmer,
+                control=control,
+            )
         if component.type == "ritual.controller":
             return self._dispatch_controller_action(component, action)
         if component.type in {"target.card", "target.status"}:
@@ -64,6 +75,11 @@ class CanvasRuntimeController:
         self,
         component: CanvasComponent,
         action: str,
+        *,
+        runtime_event_callback: Callable[[Any], None] | None = None,
+        status_callback: Callable[[Any], None] | None = None,
+        confirmer: Callable[[Any], bool] | None = None,
+        control: RuntimeControl | None = None,
     ) -> CanvasComponentActionResult:
         recipe_ref = _recipe_reference(component)
         if not recipe_ref:
@@ -71,10 +87,24 @@ class CanvasRuntimeController:
         if self.context.recipe_ids is not None and recipe_ref not in self.context.recipe_ids:
             raise RitualistError(f"{component.id}: recipe binding '{recipe_ref}' is unresolved")
         if action == "run":
-            result = self.action_service.run_recipe(recipe_ref, dry_run=False)
+            result = self.action_service.run_recipe(
+                recipe_ref,
+                dry_run=False,
+                runtime_event_callback=runtime_event_callback,
+                status_callback=status_callback,
+                confirmer=confirmer,
+                control=control,
+            )
             return _success(component, action, f"run dispatched for {recipe_ref}", _result_data(result))
         if action == "dry_run":
-            result = self.action_service.run_recipe(recipe_ref, dry_run=True)
+            result = self.action_service.run_recipe(
+                recipe_ref,
+                dry_run=True,
+                runtime_event_callback=runtime_event_callback,
+                status_callback=status_callback,
+                confirmer=confirmer,
+                control=control,
+            )
             return _success(component, action, f"dry-run dispatched for {recipe_ref}", _result_data(result))
         if action == "doctor":
             result = self.action_service.doctor_recipe(recipe_ref)
@@ -142,6 +172,10 @@ def dispatch_canvas_action(
     dry_run: bool = False,
     params: dict[str, Any] | None = None,
     controller: CanvasRuntimeController | None = None,
+    runtime_event_callback: Callable[[Any], None] | None = None,
+    status_callback: Callable[[Any], None] | None = None,
+    confirmer: Callable[[Any], bool] | None = None,
+    control: RuntimeControl | None = None,
 ) -> CanvasComponentActionResult:
     document = load_canvas(canvas_id)
     resolved_controller = controller or CanvasRuntimeController()
@@ -151,6 +185,10 @@ def dispatch_canvas_action(
         action_id,
         dry_run=dry_run,
         params=params,
+        runtime_event_callback=runtime_event_callback,
+        status_callback=status_callback,
+        confirmer=confirmer,
+        control=control,
     )
 
 

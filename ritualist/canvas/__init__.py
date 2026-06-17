@@ -38,7 +38,12 @@ from .runtime import (
     CanvasRuntimeModel,
     build_canvas_runtime_model,
 )
-from .view_model import CanvasViewModel, build_canvas_view_model
+from .view_model import (
+    CANVAS_VIEW_MODEL_SCHEMA_VERSION,
+    CanvasUseComponentView,
+    CanvasViewModel,
+    build_canvas_view_model,
+)
 from .registry import (
     CanvasComponentRegistry,
     create_component_registry,
@@ -66,6 +71,7 @@ from .storage import (
 __all__ = [
     "CANVAS_SCHEMA_VERSION",
     "CANVAS_RUNTIME_SCHEMA_VERSION",
+    "CANVAS_VIEW_MODEL_SCHEMA_VERSION",
     "CanvasBackground",
     "CanvasBindingKind",
     "CanvasComponentAction",
@@ -97,6 +103,7 @@ __all__ = [
     "CanvasTheme",
     "CanvasThemeTokens",
     "CanvasUpdateBehavior",
+    "CanvasUseComponentView",
     "CanvasValidationResult",
     "CanvasViewModel",
     "CanvasWriteResult",

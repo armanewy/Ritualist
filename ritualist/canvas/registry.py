@@ -413,6 +413,11 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             size=(180, 80),
             minimum=(120, 48),
             behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("doctor",),
+            untrusted=False,
         ),
         _component(
             "recent.activity",

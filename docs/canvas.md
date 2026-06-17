@@ -6,12 +6,13 @@ the current renderer/surface. Canvas Foundation v1 adds the data model,
 component registry, validation, storage, default templates, and performance
 smoke. Canvas Runtime Components v1 adds model/controller bindings from those
 typed components to existing Ritualist recipe, Doctor, target, runtime, and
-run-history services.
+run-history services. Canvas Use Mode MVP adds a bundled typed QML renderer for
+using a Canvas document as a runtime command surface.
 
 The current pipeline is:
 
 ```text
-Canvas document -> component registry -> validated component instances -> runtime model -> renderer/runtime events
+Canvas document -> component registry -> validated component instances -> runtime model -> use view model -> renderer/runtime events
 ```
 
 Canvas loading and structural validation are side-effect free. They do not run
@@ -185,6 +186,44 @@ python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run
 python -m ritualist perf canvas-runtime --mock-components 100 --json
 ```
 
+## Canvas Use Mode
+
+Use Mode renders a Canvas document with absolute component geometry and live
+runtime state from the Canvas view model. It is intentionally a functional MVP,
+not a visual polish pass.
+
+Launch it with:
+
+```powershell
+python -m ritualist canvas use gaming_desktop
+python -m ritualist canvas use --mock --mock-components 100
+```
+
+Supported component rendering in the MVP:
+
+- `ritual.card`
+- `ritual.status`
+- `ritual.controller`
+- `target.card`
+- `target.status`
+- `doctor.badge`
+- `recent.activity`
+- `category.dock`
+- `text.label`
+- `image`
+- `shape`
+- `clock`
+
+Use Mode consumes `CanvasViewModel`, which combines component layout, props,
+bindings, runtime state, warnings, and enabled actions. It does not call
+low-level adapters during load. It does not run Doctor, scan UI Automation,
+resolve targets, or read run logs on the UI thread.
+
+Explicit user actions dispatch through `CanvasRuntimeController`. Display-only
+components expose no actions. Unknown actions and unsupported component/action
+pairs are rejected. Existing recipe confirmation and policy gates remain inside
+the runtime services.
+
 ## Bindings
 
 Bindings describe what a component points at:
@@ -262,9 +301,9 @@ compatible and performs live binding checks by default. Pass
 
 ## Use Mode And Edit Mode
 
-Canvas metadata names Use Mode and Edit Mode, but v1 does not implement a
-visual editor. Use Mode means components are rendered as a command surface. Edit
-Mode is future UI work for moving/resizing/configuring typed components.
+Canvas metadata names Use Mode and Edit Mode. Use Mode is implemented as a
+runtime command surface. Edit Mode is future UI work for
+moving/resizing/configuring typed components.
 
 ## Shell Boundary
 
@@ -311,6 +350,8 @@ python -m ritualist perf canvas-model --mock-components 100 --json
 python -m ritualist perf canvas-model --mock-components 300 --json
 python -m ritualist perf canvas-runtime --mock-components 100 --json
 python -m ritualist perf canvas-runtime --mock-components 300 --json
+python -m ritualist perf canvas-use --mock-components 100 --json
+python -m ritualist perf canvas-use --mock-components 300 --json
 ```
 
 These commands report durations and advisory warnings without enforcing hard
