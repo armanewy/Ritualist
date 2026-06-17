@@ -1352,42 +1352,60 @@ function Invoke-CanvasStaticActions {
             }
         }
 
-        $watchStarted = Invoke-NamedButton $window "Create from what I do" 10
-        Start-Sleep -Seconds 2
-        $watchStopped = Invoke-NamedButton $window "Stop Watch Me" 10
-        Start-Sleep -Seconds 2
-        $watchDrafted = Invoke-NamedButton $window "Create Draft" 10
-        Start-Sleep -Seconds 2
-        [void](Invoke-NamedButton $window "Discard" 5)
-        $watchDir = Join-Path $script:FixtureAppData "watch-me"
-        $latestWatch = if (Test-Path $watchDir) {
-            Get-ChildItem -Path $watchDir -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $cliHelp = Invoke-CapturedCommand "packaged-help-no-recording" $script:RitualistExe @("--help")
+        $forbiddenSurfaceTerms = @(
+            "watch-me",
+            "watch me",
+            "create from what i do",
+            "stop watch me",
+            "recording mode",
+            "live observation",
+            "teach by watching",
+            "macro recording",
+            "record/replay"
+        )
+        $treeSurfaceMatches = @()
+        foreach ($term in $forbiddenSurfaceTerms) {
+            if (Test-WindowTreeContainsText $tree $term) {
+                $treeSurfaceMatches += $term
+            }
         }
-        else {
-            $null
-        }
-        $scanMatches = @()
-        if ($latestWatch) {
-            foreach ($marker in $ForbiddenMarkers) {
-                $match = Select-String -Path (Join-Path $latestWatch.FullName "*") -Pattern $marker -CaseSensitive:$false -ErrorAction SilentlyContinue
-                if ($match) {
-                    $scanMatches += $marker
+        $helpText = "$($cliHelp.stdout_text)`n$($cliHelp.stderr_text)".ToLowerInvariant()
+        $cliSurfaceMatches = @(
+            $forbiddenSurfaceTerms |
+                Where-Object { $helpText.Contains($_) }
+        )
+        $recordingEvents = @(
+            Get-E2EEvents |
+                Where-Object {
+                    $name = [string]$_.event
+                    $name -match "watch[_\.-]?me|recording|live[_\.-]?observation|teach"
                 }
-            }
-        }
-        if ($watchStarted -and $watchStopped -and $watchDrafted -and $latestWatch -and $scanMatches.Count -eq 0) {
-            Set-Check "watch_me_preview_privacy" "PASS" "Watch Me draft was review-only and forbidden marker scan was clean." @{
-                session_dir = $latestWatch.FullName
-                forbidden_matches = $scanMatches
+        )
+        $watchDir = Join-Path $script:FixtureAppData "watch-me"
+        $watchDirExists = Test-Path $watchDir
+        if ($treeSurfaceMatches.Count -eq 0 -and $cliHelp.exit_code -eq 0 -and $cliSurfaceMatches.Count -eq 0 -and $recordingEvents.Count -eq 0 -and -not $watchDirExists) {
+            Set-Check "no_recording_or_preview_capture" "PASS" "No Watch Me, recording, live observation, or preview-capture surface was exposed." @{
+                window_tree = $tree
+                ui_surface_matches = $treeSurfaceMatches
+                cli_help_stdout = $cliHelp.stdout
+                cli_help_stderr = $cliHelp.stderr
+                cli_surface_matches = $cliSurfaceMatches
+                recording_event_count = $recordingEvents.Count
+                watch_me_app_data_dir_exists = $watchDirExists
             }
         }
         else {
-            Set-Check "watch_me_preview_privacy" "FAIL" "Watch Me evidence was missing or forbidden marker scan found data." @{
-                started = $watchStarted
-                stopped = $watchStopped
-                drafted = $watchDrafted
-                session_dir = if ($latestWatch) { $latestWatch.FullName } else { $null }
-                forbidden_matches = $scanMatches
+            Set-Check "no_recording_or_preview_capture" "FAIL" "A removed recording/Watch Me surface was still observable." @{
+                window_tree = $tree
+                ui_surface_matches = $treeSurfaceMatches
+                cli_help_exit_code = $cliHelp.exit_code
+                cli_help_stdout = $cliHelp.stdout
+                cli_help_stderr = $cliHelp.stderr
+                cli_surface_matches = $cliSurfaceMatches
+                recording_events = $recordingEvents
+                watch_me_app_data_dir = $watchDir
+                watch_me_app_data_dir_exists = $watchDirExists
             }
         }
     }

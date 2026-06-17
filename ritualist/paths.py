@@ -140,16 +140,6 @@ def browser_profiles_path() -> Path:
     return app_data_path() / "browser-profiles"
 
 
-def watch_me_dir() -> Path:
-    path = watch_me_path()
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def watch_me_path() -> Path:
-    return app_data_path() / "watch-me"
-
-
 def default_log_file() -> Path:
     return logs_dir() / "ritualist.log"
 
@@ -167,7 +157,6 @@ def ensure_app_dirs() -> dict[str, Path]:
         "themes": themes_dir(),
         "imported_theme_packs": imported_theme_packs_dir(),
         "browser_profiles": browser_profiles_dir(),
-        "watch_me": watch_me_dir(),
     }
     return paths
 

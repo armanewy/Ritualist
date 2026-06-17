@@ -126,13 +126,14 @@ checks:
       - run_log
       - show_run_output
     pass_when: "Relaunch repairs the abandoned run to interrupted with a clear final message."
-  - id: watch_me_preview_privacy
-    blocker: "Watch Me preview does not capture forbidden data."
+  - id: no_recording_or_preview_capture
+    blocker: "No Watch Me or recording preview-capture surface exists."
     expected_evidence:
-      - watch_me_session
-      - watch_me_draft
-      - forbidden_marker_scan
-    pass_when: "Watch Me draft is disabled/review-only and contains no forbidden markers."
+      - ui_surface_scan
+      - cli_help_scan
+      - e2e_event_scan
+      - app_data_scan
+    pass_when: "No Watch Me, recording, live observation, or preview-capture surface is visible or active."
   - id: canvas_theme_pack_import_export_no_autorun
     blocker: "Canvas/theme pack import/export does not auto-run behavior."
     expected_evidence:

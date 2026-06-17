@@ -1,6 +1,6 @@
 # Ritualist v0.2.0-alpha.1 Release Candidate Notes
 
-Ritualist v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC runbooks. It keeps the existing CLI/classic GUI workflow and adds a typed Canvas command surface, deterministic planning, read-only diagnostics primitives, safe Watch Me drafting, and local visual pack separation.
+Ritualist v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC runbooks. It keeps the existing CLI/classic GUI workflow and adds a typed Canvas command surface, deterministic planning, read-only diagnostics primitives, and local visual pack separation.
 
 ## What Works
 
@@ -12,7 +12,6 @@ Ritualist v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC 
 - Deterministic intent plan preview and generic target resolution preview.
 - Primitive Kernel metadata, policy/governance, read-only primitive families, and Doctor visibility.
 - Structured browser runbook actions plus clean-start options for Ritualist-managed browser profiles.
-- Explicit Watch Me sessions that create disabled drafts from safe high-level signals only.
 - Local `.ritualistcanvas` and `.ritualisttheme` export/import into quarantine.
 
 ## Build The Packaged App
@@ -66,7 +65,9 @@ Use this sequence for a real packaged `gaming_mode` trace:
 - Canvas Use/Edit Mode is functional but still an alpha surface.
 - Real Battle.net/UIA labels can change by locale, app state, and launcher updates.
 - Target resolution can report `not_found` if Diablo IV is not discoverable through running processes, shortcuts, explicit paths, installed-app metadata, removable media, or local memory.
-- Watch Me drafts are disabled and require review, Doctor, and dry-run before use.
+- Local Learning, Activity Journal, Activity Signals, Ritual Suggestions, and
+  Review Before Create are product direction, not implemented behavior in this
+  alpha candidate.
 - Theme packs reject assets in this candidate until explicit theme asset references exist.
 - PyInstaller may report Conda-environment optional DLL warnings; the release checklist records whether startup still works.
 

@@ -30,7 +30,7 @@ EXPECTED_CHECK_IDS = {
     "declining_play_stopped",
     "show_run_declined_confirmation",
     "hard_kill_repairs_interrupted",
-    "watch_me_preview_privacy",
+    "no_recording_or_preview_capture",
     "canvas_theme_pack_import_export_no_autorun",
     "arbitrary_component_code_rejected",
     "component_perf_100_300_recorded",
@@ -130,8 +130,11 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "monitor",
         "Exit Desktop Canvas",
         '"edit-mode-builder"',
+        "no_recording_or_preview_capture",
     ):
         assert expected in script
+
+    assert "watch_me_preview_privacy" not in script
 
 
 def test_release_acceptance_harness_rejects_repo_root_evidence_dir() -> None:

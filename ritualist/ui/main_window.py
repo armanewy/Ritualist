@@ -35,7 +35,6 @@ from ritualist.recipe_loader import discover_recipes, load_recipe
 from ritualist.recipe_step_builder import RecipeStepAppendController
 from ritualist.run_logs import RunLogWriter, reconcile_running_runs
 from ritualist.runtime_control import RuntimeControl
-from ritualist.watch_me import WatchMeService
 
 from .dialogs import ask_confirmation, show_error
 from .diagnostics_dialog import DiagnosticsDialog
@@ -57,8 +56,6 @@ class MainWindow(QMainWindow):
         self.step_append_controller = RecipeStepAppendController()
         self.overlay_controller, self._overlay_warning = self._create_overlay_controller()
         self._diagnostics_dialog: DiagnosticsDialog | None = None
-        self._watch_me_service = WatchMeService(adapters=create_default_adapters())
-        self._watch_me_session_id: str | None = None
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -107,17 +104,6 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.close_browser_button = QPushButton("Close Browser")
         self.close_browser_button.clicked.connect(self.close_keep_open_browser)
-        self.watch_start_button = QPushButton("Create from what I do")
-        self.watch_start_button.clicked.connect(self.start_watch_me)
-        self.watch_stop_button = QPushButton("Stop Watch Me")
-        self.watch_stop_button.clicked.connect(self.stop_watch_me)
-        self.watch_stop_button.setEnabled(False)
-        self.watch_draft_button = QPushButton("Create Draft")
-        self.watch_draft_button.clicked.connect(self.create_watch_me_draft)
-        self.watch_draft_button.setEnabled(False)
-        self.watch_discard_button = QPushButton("Discard Watch Me")
-        self.watch_discard_button.clicked.connect(self.discard_watch_me)
-        self.watch_discard_button.setEnabled(False)
         self.pause_button = QPushButton("Pause")
         self.pause_button.clicked.connect(self.pause_run)
         self.pause_button.setEnabled(False)
@@ -132,10 +118,6 @@ class MainWindow(QMainWindow):
         button_row.addWidget(self.resume_button)
         button_row.addWidget(self.stop_button)
         button_row.addWidget(self.close_browser_button)
-        button_row.addWidget(self.watch_start_button)
-        button_row.addWidget(self.watch_stop_button)
-        button_row.addWidget(self.watch_draft_button)
-        button_row.addWidget(self.watch_discard_button)
         button_row.addStretch(1)
         layout.addLayout(button_row)
 
@@ -237,73 +219,6 @@ class MainWindow(QMainWindow):
             self.recipe_path = None
             self.steps_table.setRowCount(0)
         self.append_log("Recipes refreshed")
-
-    def start_watch_me(self) -> None:
-        try:
-            session = self._watch_me_service.start()
-        except Exception as exc:  # noqa: BLE001 - show GUI-safe error.
-            show_error(self, "Watch Me Failed", str(exc))
-            return
-        self._watch_me_session_id = session.session_id
-        self.watch_start_button.setEnabled(False)
-        self.watch_stop_button.setEnabled(True)
-        self.watch_draft_button.setEnabled(False)
-        self.watch_discard_button.setEnabled(True)
-        self.status_label.setText("Watch Me recording")
-        self.append_log(f"Watch Me started: {session.session_id}")
-        self.append_log("Recording indicator active. Stop Watch Me before creating a draft.")
-
-    def stop_watch_me(self) -> None:
-        if not self._watch_me_session_id:
-            return
-        try:
-            session = self._watch_me_service.stop(self._watch_me_session_id)
-        except Exception as exc:  # noqa: BLE001
-            show_error(self, "Watch Me Failed", str(exc))
-            return
-        self.watch_stop_button.setEnabled(False)
-        self.watch_start_button.setEnabled(True)
-        self.watch_draft_button.setEnabled(True)
-        self.watch_discard_button.setEnabled(True)
-        self.status_label.setText("Watch Me stopped")
-        self.append_log(f"Watch Me stopped: {session.session_id} ({len(session.events)} events)")
-
-    def create_watch_me_draft(self) -> None:
-        if not self._watch_me_session_id:
-            return
-        try:
-            draft = self._watch_me_service.create_draft(self._watch_me_session_id)
-            session = self._watch_me_service.load(self._watch_me_session_id)
-        except Exception as exc:  # noqa: BLE001
-            show_error(self, "Watch Me Failed", str(exc))
-            return
-        self.watch_draft_button.setEnabled(False)
-        self.status_label.setText("Watch Me draft created")
-        self.append_log(f"Watch Me draft created: {session.draft_path}")
-        self.append_log(
-            f"Draft recipe {draft.recipe.get('id')} is disabled until you review and save it."
-        )
-        if draft.preview:
-            self.append_log("Draft preview:")
-            for item in draft.preview:
-                self.append_log(f"- {item}")
-        self.append_log("Run Doctor and dry-run before using the draft.")
-
-    def discard_watch_me(self) -> None:
-        if not self._watch_me_session_id:
-            return
-        try:
-            session = self._watch_me_service.discard(self._watch_me_session_id)
-        except Exception as exc:  # noqa: BLE001
-            show_error(self, "Watch Me Failed", str(exc))
-            return
-        self._watch_me_session_id = None
-        self.watch_start_button.setEnabled(True)
-        self.watch_stop_button.setEnabled(False)
-        self.watch_draft_button.setEnabled(False)
-        self.watch_discard_button.setEnabled(False)
-        self.status_label.setText("Watch Me discarded")
-        self.append_log(f"Watch Me discarded: {session.session_id}")
 
     def load_current_recipe(self) -> None:
         text = self.path_edit.text().strip()

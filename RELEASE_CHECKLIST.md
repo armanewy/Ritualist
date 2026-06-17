@@ -537,7 +537,7 @@ Manual gate remains open:
 - A human still needs to validate packaged Home, Canvas Use Mode, classic GUI,
   real `gaming_mode` run control, native confirmation z-order over
   Chrome/Battle.net, declined Play status, interrupted repair after hard kill,
-  Watch Me preview privacy, Canvas/theme pack behavior, and 100/300 component
+  recording-surface absence, Canvas/theme pack behavior, and 100/300 component
   performance feel on the real Windows desktop.
 
 ## UIA-Assisted Real Desktop Dogfood - 2026-06-17
@@ -578,11 +578,10 @@ Packaged Canvas action checks:
   Diablo IV target plan preview without launching apps, clicking UI, installing
   software, or writing target-start files. On this desktop the target state was
   `not_found`, with local-resolution suggestions.
-- Watch Me was started, stopped, drafted, and discarded from packaged Canvas.
-  Session `20260617T143930Z_7a7f9328` produced a disabled/review-only draft,
-  did not install or auto-run behavior, recorded no browser URL, and matched no
-  forbidden markers (`password`, `secret`, `token`, `cookie`, `clipboard`,
-  `screenshot`, `keystroke`, `keylog`, `html`, or `dom`) in draft/session files.
+- Earlier packaged desktop evidence included a recording/draft surface. That
+  evidence is obsolete for the release gate; final release evidence must show
+  that Watch Me, recording, live observation, screenshot, keylogging, OCR, and
+  preview-capture creation surfaces are absent.
 
 Real `gaming_mode` run checks:
 
@@ -617,13 +616,14 @@ Performance and pack-safety checks:
   10.916 ms with 0 warnings.
 - These are command-path timings only, not a human subjective feel pass for
   visible 100/300 component desktop interaction.
-- Focused pack-safety and run-log tests passed:
-  `python -m pytest -q tests/test_canvas_packs.py tests/test_watch_me.py
-  tests/test_canvas_runtime.py
+- Focused pack-safety, run-log, and pre-removal recording-surface tests passed
+  in this turn. That recording coverage is obsolete for the release gate; final
+  validation must replace it with absence/removal tests. Relevant non-recording
+  selectors from that command were:
+  `python -m pytest -q tests/test_canvas_packs.py tests/test_canvas_runtime.py
   tests/test_cli.py::test_runs_repairs_and_reports_interrupted_records
   tests/test_cli.py::test_show_run_prints_runtime_v2_state_metadata
   tests/test_cli.py::test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive`
-  reported `55 passed`.
 - Canvas/theme pack import/export safety was covered by focused tests in this
   turn, not by live desktop import/export commands. Treat that checklist item as
   not revalidated here if the release gate requires an actual command-path or
@@ -635,9 +635,11 @@ Release note:
 
 ## Packaged Release Acceptance Harness - 2026-06-17
 
-Status: Machine-verifiable packaged GUI/runtime acceptance plus source CLI
-supplemental command evidence passed with no `FAIL` or `NEEDS_HUMAN_REVIEW`
-checks. The harness marks `v0.2.0-alpha.1` taggable, but no tag has been
+Status: Pre-removal machine-verifiable packaged GUI/runtime acceptance plus
+source CLI supplemental command evidence passed with no `FAIL` or
+`NEEDS_HUMAN_REVIEW` checks. That result is obsolete for the current release
+gate because Watch Me/recording surfaces have since been removed and the
+acceptance spec now requires structured absence evidence. No tag has been
 created.
 
 Harness/spec added:
@@ -689,7 +691,8 @@ Acceptance summary:
 - `PASS`: 22
 - `FAIL`: 0
 - `NEEDS_HUMAN_REVIEW`: 0
-- `taggable`: `true`
+- `taggable`: `true` in the pre-removal summary only; obsolete for the current
+  gate.
 - `tag_created`: `false`
 
 Objective checks that passed:
@@ -701,7 +704,7 @@ Objective checks that passed:
   `ritual.status` transitions, Pause/Resume/Stop, target preview status, native
   confirmation z-order over the fake Battle.net fixture, declined Play stop
   handling, recent activity run-history update, hard-kill repair to
-  `interrupted`, and Watch Me preview privacy.
+  `interrupted`, and pre-removal Watch Me preview privacy.
 - Recent activity evidence includes a packaged `canvas.ui_heartbeat` payload
   where `recent_activity_run_ids` contains
   `20260617T210234Z_gaming_mode` with stopped reason
@@ -717,9 +720,10 @@ Objective checks that passed:
 
 Release blockers still open:
 
-- None in the current packaged acceptance summary.
+- Fresh packaged acceptance evidence must validate
+  `no_recording_or_preview_capture` after Watch Me/recording code removal.
 
 Release note:
 
-- No `v0.2.0-alpha.1` tag was created. The current acceptance summary marks the
-  release taggable, but tagging remains a separate release-owner action.
+- No `v0.2.0-alpha.1` tag was created. The pre-removal acceptance summary is no
+  longer sufficient to mark the release taggable.

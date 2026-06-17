@@ -60,6 +60,28 @@ COORDINATE_CLICK_ACTIONS = frozenset(
         "mouse.click_coordinates",
     }
 )
+RECORD_REPLAY_ACTION_PREFIXES = (
+    "macro.",
+    "record.",
+    "recorder.",
+    "recording.",
+    "replay.",
+    "watch-me.",
+    "watch_me.",
+)
+RECORD_REPLAY_ACTIONS = frozenset(
+    {
+        "macro.record",
+        "macro.replay",
+        "record.start",
+        "record.stop",
+        "recorder.start",
+        "recording.start",
+        "replay.run",
+        "watch-me.start",
+        "watch_me.start",
+    }
+)
 
 
 class PackValidationError(RecipeValidationError):
@@ -835,6 +857,8 @@ def _validate_action_name(action: str) -> None:
         raise PackValidationError(f"arbitrary code actions are not allowed in packs: {action}")
     if _is_coordinate_click_action(action):
         raise PackValidationError(f"coordinate click actions are not allowed in packs: {action}")
+    if _is_record_replay_action(action):
+        raise PackValidationError(f"record/replay actions are not allowed in packs: {action}")
 
 
 def _blocked_import_actions(actions: list[str], registry: ActionRegistry) -> list[str]:
@@ -1327,6 +1351,10 @@ def _is_coordinate_click_action(action: str) -> bool:
     if action in COORDINATE_CLICK_ACTIONS:
         return True
     return "click" in action and "coordinate" in action
+
+
+def _is_record_replay_action(action: str) -> bool:
+    return action in RECORD_REPLAY_ACTIONS or action.startswith(RECORD_REPLAY_ACTION_PREFIXES)
 
 
 def _is_safe_variable_name(name: str) -> bool:

@@ -1501,7 +1501,7 @@ def _not_found_suggestions() -> tuple[str, ...]:
         "Choose a local executable or shortcut for this target.",
         "Insert the CD/USB/removable media if this target is installed from media.",
         "Run inspect-window to inspect visible app/window titles.",
-        "Use a future Watch Me flow to remember a successful manual start path.",
+        "Save a reviewed local target binding after you find the correct manual start path.",
     )
 
 
