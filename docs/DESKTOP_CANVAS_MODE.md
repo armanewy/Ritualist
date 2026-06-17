@@ -109,8 +109,8 @@ Requirements:
   desktop host.
 - Always available even if every other host mode is disabled.
 - Must not require a Windows desktop session in automated non-Windows tests.
-- Must preserve current Canvas action, confirmation, run-control, Watch Me, and
-  Edit Mode behavior.
+- Must preserve current Canvas action, confirmation, run-control, and Edit Mode
+  behavior.
 
 ### `desktop_work_area`
 

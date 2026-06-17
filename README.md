@@ -17,7 +17,7 @@ This alpha implementation includes:
 - Step-by-step logging, per-run logs, and status
 - Tests for the workflow engine using fake adapters
 
-Release-candidate details for `v0.2.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
+Release-candidate details for `v0.2.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Product boundaries are documented in [docs/PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
 
 ## Install
 
@@ -91,25 +91,6 @@ ritualist home --mock
 ```
 
 The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
-
-## Watch Me Drafts
-
-Watch Me is an explicit draft helper for local setup sessions. Start it only when
-you want Ritualist to observe high-level, safe signals, then stop it and create a
-disabled draft:
-
-```powershell
-python -m ritualist watch-me start
-python -m ritualist watch-me stop <session-id>
-python -m ritualist watch-me create-draft <session-id>
-```
-
-Watch Me may record process/app names, foreground window titles, window bounds,
-monitor layout, timestamps, and redacted browser URLs from Ritualist-managed
-context. It does not record keystrokes, passwords, screenshots, OCR, page
-contents, cookies, tokens, clipboard contents, or private/incognito tabs. Drafts
-are written under the local Watch Me session folder, not installed into recipes;
-review the draft, run Doctor, and dry-run before saving it as a real ritual.
 
 ## Canvas Foundation
 

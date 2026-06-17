@@ -155,6 +155,6 @@ Target Resolution v1 does not add:
 - gameplay automation
 
 If a target is not found, Ritualist should suggest choosing a local executable
-or shortcut, inserting media, inspecting visible windows, or using a future
-local "Watch Me" memory flow. It must not infer a download URL or silently
-install anything.
+or shortcut, inserting media, inspecting visible windows, or using future local,
+review-only Ritual Suggestions from consented Activity Signals. It must not
+infer a download URL, silently install anything, or rely on recording.
