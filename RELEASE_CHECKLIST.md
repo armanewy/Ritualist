@@ -473,3 +473,69 @@ Manual release blockers still open:
   repairs the run as `interrupted`.
 - No `v0.2.0-alpha.1` tag was created. Tagging remains blocked until the manual
   packaged desktop dogfood checks above pass.
+
+## Source Blob / Line-Ending Verification - 2026-06-17
+
+Status: Passed.
+
+Evidence:
+
+- At verification time, HEAD and `origin/main` were at `24da7c2`
+  (`Allow safe browser wait pack imports without browser extras`).
+- Working tree clean before this checklist note was added.
+- Canvas source/test files verified LF-delimited in working tree, Git index, and
+  Git HEAD.
+- Key files:
+  - `ritualist/canvas/runtime.py`: 538 LF, 0 CR, longest line 114.
+  - `ritualist/canvas/controller.py`: 254 LF, 0 CR, longest line 112.
+  - `ritualist/canvas/view_model.py`: 121 LF, 0 CR, longest line 106.
+  - `tests/test_canvas_runtime.py`: 667 LF, 0 CR, longest line 107.
+- `python scripts\check_line_endings.py --stats --check-git-head --check-git-index`
+  passed for 34 managed files.
+- No source normalization diff was produced; release validation should proceed to
+  manual packaged desktop dogfood rather than another line-ending rewrite.
+
+## Manual Packaged Dogfood Kickoff - 2026-06-17
+
+Status: Automated setup passed; real desktop dogfood still required.
+
+Validation commit: `24da7c2`
+(`Allow safe browser wait pack imports without browser extras`).
+
+Automated command path:
+
+- `git pull --ff-only`: already up to date.
+- `python -m pip install -e ".[all,dev]"`: passed.
+- `python -m playwright install chromium`: passed.
+- `python -m pytest -q`: `713 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python -m ritualist --help`: passed.
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+
+Packaged file checks:
+
+- `dist\Ritualist\Ritualist.exe`: present.
+- `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`: present.
+- `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`:
+  present.
+- `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`: present.
+- `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`: present.
+
+Non-visual packaged smokes:
+
+- `dist\Ritualist\Ritualist.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
+  for 8 seconds.
+- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` with
+  `QT_QPA_PLATFORM=offscreen` stayed alive for 8 seconds.
+- `dist\Ritualist\Ritualist.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
+  stayed alive for 8 seconds.
+
+Manual gate remains open:
+
+- Do not tag `v0.2.0-alpha.1` yet.
+- A human still needs to validate packaged Home, Canvas Use Mode, classic GUI,
+  real `gaming_mode` run control, native confirmation z-order over
+  Chrome/Battle.net, declined Play status, interrupted repair after hard kill,
+  Watch Me preview privacy, Canvas/theme pack behavior, and 100/300 component
+  performance feel on the real Windows desktop.
