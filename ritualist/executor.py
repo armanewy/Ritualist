@@ -1628,7 +1628,7 @@ def _dry_run_message(step: ExecutableStep) -> str:
         if getattr(step, "clean_start", False):
             options.append("clean start")
         if getattr(step, "dismiss_restore_prompt", False):
-            options.append("restore prompt dismissal")
+            options.append("safe restore prompt handling")
         if getattr(step, "use_dedicated_profile", True):
             options.append(f"managed profile '{getattr(step, 'profile', 'default')}'")
         suffix = f" ({', '.join(options)})" if options else ""

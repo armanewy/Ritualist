@@ -208,7 +208,7 @@ def test_browser_open_unknown_prompt_is_not_dismissed(tmp_path, monkeypatch):
     assert page.urls == ["https://example.test/one"]
 
 
-def test_browser_open_known_restore_prompt_dismisses_known_button(tmp_path, monkeypatch):
+def test_browser_open_restore_prompt_text_in_page_content_is_not_dismissed(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     page = FakePage()
     page.visible_text.add("Restore pages?")
@@ -227,7 +227,7 @@ def test_browser_open_known_restore_prompt_dismisses_known_button(tmp_path, monk
         dismiss_restore_prompt=True,
     )
 
-    assert page.clicked == [("role", "button:Cancel")]
+    assert page.clicked == []
     assert page.urls == ["https://example.test/one"]
 
 

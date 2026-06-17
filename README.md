@@ -371,12 +371,12 @@ GUI/tray mode is the better long-running shape for media rituals because the app
 `browser.open` uses Ritualist-managed browser profile folders under the local
 `browser-profiles` directory. Set `clean_start: true` to launch with safe
 Chromium startup flags that reduce first-run and session-restore prompts without
-deleting profile data. Set `dismiss_restore_prompt: true` only for managed
-profiles where Ritualist may best-effort dismiss the known Chrome restore-pages
-prompt. This dismissal is deliberately narrow: it looks for known restore prompt
-text and known dismiss buttons only, does not click arbitrary prompts, and does
-not touch page contents. `use_dedicated_profile: false` is rejected in v0.1 so
-Ritualist cannot silently operate on a user's normal browser profile.
+deleting profile data. `dismiss_restore_prompt: true` is accepted for forward
+compatibility, but v0.1 treats it as a safe no-op unless Ritualist has a browser
+UI-scoped mechanism available. Ritualist does not use webpage text or buttons to
+dismiss Chrome restore prompts, because page content can imitate browser prompts.
+`use_dedicated_profile: false` is rejected in v0.1 so Ritualist cannot silently
+operate on a user's normal browser profile.
 
 ## Structured Browser Runbooks
 

@@ -288,38 +288,12 @@ class PlaywrightBrowserAdapter:
         raise RitualistError("browser action requires a structured target")
 
 
-_RESTORE_PROMPT_TEXTS = (
-    "Restore pages?",
-    "Chrome didn't shut down correctly.",
-)
-_RESTORE_DISMISS_BUTTONS = (
-    "Cancel",
-    "Close",
-    "No thanks",
-)
-
-
 def _dismiss_known_restore_prompt(page: Any) -> bool:
-    visible = False
-    for text in _RESTORE_PROMPT_TEXTS:
-        try:
-            locator = page.get_by_text(text, exact=True).first
-        except Exception:  # noqa: BLE001 - try the next known prompt signature.
-            continue
-        if _locator_visible_quietly(locator, timeout_seconds=0.2):
-            visible = True
-            break
-    if not visible:
-        return False
-
-    for button_name in _RESTORE_DISMISS_BUTTONS:
-        try:
-            button = page.get_by_role("button", name=button_name, exact=True).first
-            if _locator_visible_quietly(button, timeout_seconds=0.2):
-                button.click(timeout=500)
-                return True
-        except Exception:  # noqa: BLE001 - try the next known dismiss option.
-            continue
+    # Playwright page locators address web content, not browser chrome. A page can
+    # legitimately contain "Restore pages?" and a "Cancel" button, so clicking via
+    # DOM locators would be unscoped prompt dismissal. Clean-start launch flags are
+    # the supported prevention path until a browser-UI-scoped adapter exists.
+    _ = page
     return False
 
 

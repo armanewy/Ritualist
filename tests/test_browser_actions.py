@@ -94,7 +94,7 @@ def test_browser_open_dry_run_describes_clean_start_options():
 
     assert summary.results[0].status == "dry-run"
     assert "clean start" in summary.results[0].message
-    assert "restore prompt dismissal" in summary.results[0].message
+    assert "safe restore prompt handling" in summary.results[0].message
     assert "managed profile 'gaming_mode'" in summary.results[0].message
 
 
