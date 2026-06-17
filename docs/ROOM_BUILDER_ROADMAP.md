@@ -1,0 +1,113 @@
+# Room Builder Roadmap
+
+Room Builder is the product-facing name for Canvas Edit Mode. The foundation
+should be staged so each layer is testable before the next layer adds more UI.
+
+## Stage 1: Theme Token Schema
+
+Add safe declarative theme tokens:
+
+- theme document model
+- typed token validation
+- token resolver
+- sample `ritualist.paper` theme
+- theme CLI list/show/validate
+- tests for invalid colors, references, recursion, remote assets, and code-like
+  fields
+
+No QML redesign is required in this stage.
+
+## Stage 2: Theme-To-Canvas Bridge
+
+Load selected themes for Canvas Use Mode and expose a read-only token map to
+built-in QML components. Invalid themes should fail validation before render.
+Missing optional values should fall back to app defaults.
+
+Acceptance evidence should include selected theme id and validation status.
+
+## Stage 3: Accessibility Diagnostics
+
+Add contrast and legibility diagnostics for themes and Canvas/component styling.
+Warnings should preserve local customization freedom; malformed or unsafe values
+should remain errors.
+
+## Stage 4: Visual Performance Budgets
+
+Add component performance profiles and Canvas performance diagnostics. Record
+100 and 300 component outputs before adding heavier visuals or animations.
+
+## Stage 5: Starter Rooms
+
+Introduce curated Room templates using existing Canvas infrastructure:
+
+- Minimal
+- Gaming
+- Work/Project
+- Focus/Study
+- Helpdesk
+
+Room aliases may map to Canvas commands internally. No new risky behavior should
+be introduced.
+
+## Stage 6: Use Mode Visual Refresh
+
+Refresh built-in component visuals using tokens and built-in variants only.
+Required states must remain visible: ready, running, waiting, confirming,
+paused, stopped, failed, and interrupted.
+
+Packaged acceptance must still pass or honestly mark human-review items.
+
+## Stage 7: Edit Model Foundation
+
+Add model/controller support before the full editor UI:
+
+- edit session lifecycle
+- selection model
+- move/resize model
+- snap grid data
+- property inspector schema data
+- undo/redo command model
+- dirty state
+- save/cancel flow
+- validation before save
+
+Editor previews must not auto-run behavior.
+
+## Stage 8: Room Builder UI MVP
+
+Build a minimal visual editor:
+
+- top bar with Done and Cancel
+- component palette
+- canvas preview
+- properties panel
+- selected component outline
+- safe move/resize controls
+- save/discard confirmation
+
+Behavior bindings should be shown and validated, not executed from preview.
+
+## Required Evidence
+
+Each stage should run:
+
+- `python -m pytest -q`
+- `python -m compileall -q ritualist tests`
+
+Stages that change runtime UI should also run packaged acceptance with a unique
+artifact directory.
+
+## Explicitly Out Of Scope
+
+- true shell replacement
+- taskbar hiding
+- kiosk mode
+- video backgrounds
+- marketplace behavior
+- arbitrary custom components
+- arbitrary QML, HTML, JavaScript, or Python
+- remote execution
+- cloud sync
+- password automation
+- gameplay automation
+- coordinate clicks in product runtime
