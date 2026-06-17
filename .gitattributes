@@ -1,0 +1,18 @@
+# Keep source readable in GitHub, diffs, tracebacks, and Codex patches.
+# Windows-oriented scripts keep CRLF; ordinary source/docs use LF.
+* text=auto
+
+*.py text eol=lf
+*.qml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.txt text eol=lf
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
