@@ -125,6 +125,7 @@ $ForbiddenMarkers = @(
     "dom"
 )
 $FakeBattleNetTitle = "Battle.net Fixture"
+$FakeWallpaperTitle = "Ritualist Wallpaper Fixture"
 
 function Write-JsonFile {
     param([string]$Path, [object]$Value, [int]$Depth = 8)
@@ -503,6 +504,17 @@ function Stop-FakeExternalApps {
     }
 }
 
+function Stop-FakeWallpaperFixture {
+    $fakeScript = Join-Path $FixtureRoot "fake-wallpaper.ps1"
+    $windows = @(Get-TopLevelWindows | Where-Object { $_.title -eq $FakeWallpaperTitle })
+    foreach ($window in $windows) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($window.process_id)" -ErrorAction SilentlyContinue
+        if ($process -and $process.CommandLine -and $process.CommandLine.Contains($fakeScript)) {
+            Stop-Process -Id ([int]$window.process_id) -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Start-FakeExternalApp {
     Stop-FakeExternalApps
     $fakeScript = Join-Path $FixtureRoot "fake-battlenet.ps1"
@@ -516,6 +528,36 @@ function Start-FakeExternalApp {
     )
     [void](Get-WindowByName $FakeBattleNetTitle 20)
     return $process
+}
+
+function Start-FakeWallpaperFixture {
+    Stop-FakeWallpaperFixture
+    $fakeScript = Join-Path $FixtureRoot "fake-wallpaper.ps1"
+    $process = Start-AcceptanceProcess "powershell.exe" @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-STA",
+        "-File",
+        $fakeScript
+    )
+    [void](Get-WindowByName $FakeWallpaperTitle 20)
+    return $process
+}
+
+function Get-WallpaperCompatibilityProcesses {
+    $names = @("wallpaper32", "wallpaper64", "wallpaper_engine", "Lively", "Lively.UI.WinUI")
+    return @(
+        Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $names -contains $_.ProcessName } |
+            ForEach-Object {
+                [ordered]@{
+                    process_id = [int]$_.Id
+                    name = $_.ProcessName
+                    observed_only = $true
+                }
+            }
+    )
 }
 
 function Invoke-CapturedCommand {
@@ -788,6 +830,47 @@ $form.Controls.AddRange(@($title, $diablo, $play, $status))
 [System.Windows.Forms.Application]::Run($form)
 '@ | Set-Content -Path $fakeApp -Encoding UTF8
 
+    $fakeWallpaper = Join-Path $FixtureRoot "fake-wallpaper.ps1"
+    @'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Ritualist Wallpaper Fixture"
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+$form.ShowInTaskbar = $false
+$form.StartPosition = "Manual"
+$form.Location = $screen.Location
+$form.Size = $screen.Size
+$form.BackColor = [System.Drawing.Color]::FromArgb(35, 58, 92)
+$label = New-Object System.Windows.Forms.Label
+$label.Text = "Fake animated wallpaper fixture"
+$label.ForeColor = [System.Drawing.Color]::White
+$label.BackColor = [System.Drawing.Color]::Transparent
+$label.Font = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Bold)
+$label.AutoSize = $true
+$label.Location = New-Object System.Drawing.Point(36, 36)
+$form.Controls.Add($label)
+$script:tick = 0
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 250
+$timer.Add_Tick({
+    $script:tick = ($script:tick + 1) % 6
+    $colors = @(
+        [System.Drawing.Color]::FromArgb(35, 58, 92),
+        [System.Drawing.Color]::FromArgb(47, 83, 64),
+        [System.Drawing.Color]::FromArgb(78, 58, 103),
+        [System.Drawing.Color]::FromArgb(91, 68, 43),
+        [System.Drawing.Color]::FromArgb(42, 88, 101),
+        [System.Drawing.Color]::FromArgb(64, 72, 88)
+    )
+    $form.BackColor = $colors[$script:tick]
+})
+$timer.Start()
+[System.Windows.Forms.Application]::EnableVisualStyles()
+[System.Windows.Forms.Application]::Run($form)
+'@ | Set-Content -Path $fakeWallpaper -Encoding UTF8
+
     $recipe = @"
 version: "0.1"
 id: gaming_mode
@@ -944,10 +1027,16 @@ function Capture-CanvasVisualArtifact {
 }
 
 function Capture-DesktopWorkAreaCanvasArtifact {
-    $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "minimal_desktop", "--host", "desktop-work-area")
+    $wallpaperProcessesBefore = @()
+    $fakeWallpaperProcess = $null
+    $process = $null
     try {
+        $wallpaperProcessesBefore = Get-WallpaperCompatibilityProcesses
+        $fakeWallpaperProcess = Start-FakeWallpaperFixture
+        $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "minimal_desktop", "--host", "desktop-work-area")
         Start-Sleep -Seconds $ScenarioDwellSeconds
         $window = Get-WindowByName "Ritualist Canvas" 10
+        $fakeWallpaperWindow = Get-WindowByName $FakeWallpaperTitle 2
         $screenshot = Save-Screenshot "desktop-work-area-canvas"
         $frames = Capture-ScreenFrames "desktop-work-area-canvas" 2
         $processTree = Save-ProcessTree "desktop-work-area-canvas" $process.Id
@@ -956,6 +1045,7 @@ function Capture-DesktopWorkAreaCanvasArtifact {
         $zOrder = Get-Content -Path $zOrderPath -Raw | ConvertFrom-Json
         $screen = Get-PrimaryScreenGeometry
         $windowRow = @($zOrder | Where-Object { [int64]$_.process_id -eq [int64]$process.Id -and $_.title -eq "Ritualist Canvas" } | Select-Object -First 1)
+        $fakeWallpaperRow = @($zOrder | Where-Object { $_.title -eq $FakeWallpaperTitle } | Select-Object -First 1)
         $exitControl = Find-NamedElement $window "Exit Desktop Canvas"
         $events = Get-E2EEvents
         $hostReady = @(
@@ -967,12 +1057,26 @@ function Capture-DesktopWorkAreaCanvasArtifact {
         $exitInvoked = if ($window) { Invoke-NamedButton $window "Exit Desktop Canvas" 5 } else { $false }
         Start-Sleep -Seconds 2
         $exitClean = $process.HasExited
+        $wallpaperProcessesAfter = Get-WallpaperCompatibilityProcesses
         Add-VisualArtifact -Id "desktop-work-area-canvas" -CanvasId "minimal_desktop" -State "desktop_work_area" -NonBlank (Test-ScreenshotNonBlank $screenshot) -Evidence @{
             screenshot = $screenshot
             frames = $frames
             process_tree = $processTree
             window_tree = $windowTree
             z_order = $zOrderPath
+            fake_wallpaper_fixture = [ordered]@{
+                title = $FakeWallpaperTitle
+                process_id = if ($fakeWallpaperProcess) { $fakeWallpaperProcess.Id } else { $null }
+                window_present = [bool]$fakeWallpaperWindow
+                bounds = if ($fakeWallpaperRow) { $fakeWallpaperRow.bounds } else { $null }
+                running_during_capture = [bool]$fakeWallpaperWindow
+            }
+            wallpaper_app_processes = [ordered]@{
+                observed_only = $true
+                before = $wallpaperProcessesBefore
+                after = $wallpaperProcessesAfter
+                controlled_by_ritualist = $false
+            }
             screen_geometry = $screen
             window_bounds = $windowRow.bounds
             bounds_match_work_area = $boundsMatch
@@ -980,6 +1084,8 @@ function Capture-DesktopWorkAreaCanvasArtifact {
             exit_invoked = $exitInvoked
             exit_clean = $exitClean
             host_ready = if ($hostReady.Count -gt 0) { $hostReady[-1] } else { $null }
+            background_passthrough = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_passthrough } else { $null }
+            background_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_mode } else { $null }
             input_policy = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.input_policy } else { $null }
             click_through_implemented = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.click_through_implemented } else { $null }
             monitor = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.monitor } else { $null }
@@ -990,6 +1096,8 @@ function Capture-DesktopWorkAreaCanvasArtifact {
     }
     finally {
         Stop-AcceptanceProcess $process
+        Stop-AcceptanceProcess $fakeWallpaperProcess -Force
+        Stop-FakeWallpaperFixture
     }
 }
 
@@ -1020,6 +1128,8 @@ function Capture-DesktopWorkAreaWindowedFallbackArtifact {
             forced_windowed = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.forced_windowed } else { $false }
             requested_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.requested_mode } else { "" }
             applied = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.applied } else { "" }
+            background_passthrough = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_passthrough } else { $null }
+            background_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_mode } else { $null }
         }
     }
     finally {
@@ -1848,6 +1958,7 @@ finally {
         Stop-AcceptanceProcess $process -Force
     }
     Stop-FakeExternalApps
+    Stop-FakeWallpaperFixture
     Write-Summaries
 }
 

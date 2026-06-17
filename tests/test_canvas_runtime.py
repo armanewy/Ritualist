@@ -632,6 +632,8 @@ def _expected_host_payload(
         "taskbar_visible": True,
         "forced_windowed": forced_windowed,
         "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+        "background_passthrough": mode == "desktop_work_area",
+        "background_mode": "system_wallpaper" if mode == "desktop_work_area" else "ritualist_background",
         "input_policy": input_policy,
         "blank_area_input": (
             "captured_by_canvas_window"
@@ -809,6 +811,8 @@ def test_apply_desktop_work_area_host_uses_available_geometry() -> None:
     assert payload["input_policy"] == "capture_all"
     assert payload["blank_area_input"] == "captured_by_canvas_window"
     assert payload["click_through_implemented"] is False
+    assert payload["background_passthrough"] is True
+    assert payload["background_mode"] == "system_wallpaper"
     assert payload["bounds_match_work_area"] is True
     assert payload["taskbar_visible"] is True
 

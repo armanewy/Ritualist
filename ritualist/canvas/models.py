@@ -50,6 +50,13 @@ class CanvasPerformanceClass(StrEnum):
     HEAVY = "heavy"
 
 
+class CanvasBackgroundType(StrEnum):
+    SOLID = "solid"
+    GRADIENT = "gradient"
+    TRANSPARENT = "transparent"
+    SYSTEM_WALLPAPER = "system_wallpaper"
+
+
 class CanvasComponentRisk(StrEnum):
     READ_ONLY = "read_only"
     LAUNCHES_APP = "launches_app"
@@ -140,16 +147,66 @@ class CanvasPackMetadata(BaseModel):
 class CanvasBackground(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: str = "solid"
+    type: CanvasBackgroundType = CanvasBackgroundType.SOLID
     value: str = "#10141c"
 
-    @field_validator("type", "value")
+    @field_validator("type", mode="before")
     @classmethod
-    def nonblank(cls, value: str) -> str:
-        text = value.strip()
+    def normalize_type(cls, value: object) -> CanvasBackgroundType:
+        text = str(value or "").strip().casefold().replace("-", "_")
         if not text:
-            raise ValueError("canvas background fields must not be blank")
-        return text
+            return CanvasBackgroundType.SOLID
+        try:
+            return CanvasBackgroundType(text)
+        except ValueError as exc:
+            allowed = ", ".join(background_type.value for background_type in CanvasBackgroundType)
+            raise ValueError(f"canvas background type must be one of: {allowed}") from exc
+
+    @field_validator("value")
+    @classmethod
+    def normalize_value(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_visual_only_background(self) -> CanvasBackground:
+        value = self.value
+        value_lower = value.casefold()
+        forbidden_markers = (
+            "http://",
+            "https://",
+            "file://",
+            "javascript:",
+            "<script",
+            ".exe",
+            ".bat",
+            ".cmd",
+            ".ps1",
+            ".js",
+            ".mjs",
+            ".html",
+            ".htm",
+            ".qml",
+        )
+        if any(marker in value_lower for marker in forbidden_markers):
+            raise ValueError("canvas background must be visual-only and must not reference remote, script, or executable assets")
+        if self.type in {CanvasBackgroundType.SOLID, CanvasBackgroundType.GRADIENT}:
+            if not value:
+                raise ValueError("canvas background value must not be blank")
+            return self
+        if value == "#10141c":
+            self.value = ""
+            value = ""
+            value_lower = ""
+        allowed_passthrough_values = {
+            "",
+            "transparent",
+            "system",
+            "system_wallpaper",
+            "passthrough",
+        }
+        if value_lower not in allowed_passthrough_values:
+            raise ValueError("transparent canvas backgrounds must not reference external assets or wallpaper content")
+        return self
 
 
 class CanvasGrid(BaseModel):

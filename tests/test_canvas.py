@@ -9,6 +9,8 @@ from typer.testing import CliRunner
 
 from ritualist.canvas import (
     CANVAS_SCHEMA_VERSION,
+    CanvasBackground,
+    CanvasBackgroundType,
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -65,6 +67,39 @@ def _valid_canvas() -> CanvasDocument:
             ),
         ),
     )
+
+
+def test_canvas_background_accepts_transparent_and_system_wallpaper() -> None:
+    transparent = CanvasBackground(type="transparent", value="")
+    system_wallpaper = CanvasBackground(type="system-wallpaper")
+
+    assert {background_type.value for background_type in CanvasBackgroundType} == {
+        "solid",
+        "gradient",
+        "transparent",
+        "system_wallpaper",
+    }
+    assert transparent.type is CanvasBackgroundType.TRANSPARENT
+    assert transparent.model_dump(mode="json") == {"type": "transparent", "value": ""}
+    assert system_wallpaper.type is CanvasBackgroundType.SYSTEM_WALLPAPER
+    assert system_wallpaper.model_dump(mode="json") == {
+        "type": "system_wallpaper",
+        "value": "",
+    }
+
+
+@pytest.mark.parametrize(
+    "background",
+    [
+        {"type": "video"},
+        {"type": "transparent", "value": "https://example.invalid/wallpaper.mp4"},
+        {"type": "system_wallpaper", "value": "assets/wallpaper.js"},
+        {"type": "system_wallpaper", "value": "wallpaper.qml"},
+    ],
+)
+def test_canvas_background_rejects_live_remote_or_executable_modes(background: dict[str, str]) -> None:
+    with pytest.raises(ValidationError):
+        CanvasBackground.model_validate(background)
 
 
 def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:

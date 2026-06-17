@@ -12,8 +12,9 @@ performance budgets before visual polish expands.
 - Room Builder is the product-facing name for Canvas Edit Mode.
 - Use Mode is the live Room surface.
 - Run Mode is the active ritual state with status, controls, and logs.
-- Desktop Work-Area Use Mode must become a transparent component layer over the
-  user's existing Windows wallpaper or wallpaper app, not a wallpaper renderer.
+- Desktop Work-Area Use Mode is implemented as a transparent component layer
+  over the user's existing Windows wallpaper or wallpaper app, not a wallpaper
+  renderer.
 
 ## Desktop Layering
 

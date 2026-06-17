@@ -40,10 +40,11 @@ risky/mutating primitives.
 
 ## Wallpaper Compatibility
 
-Desktop Work-Area Canvas must become a transparent desktop component layer, not
-a wallpaper renderer. Wallpaper belongs to Windows and user-selected wallpaper
-apps such as Wallpaper Engine or Lively Wallpaper. Ritualist must not import,
-decode, render, manage, pause, stop, or replace live wallpapers.
+Desktop Work-Area Canvas is implemented as a transparent desktop component
+layer by default in `desktop_work_area` host mode, not as a wallpaper renderer.
+Wallpaper belongs to Windows and user-selected wallpaper apps such as Wallpaper
+Engine or Lively Wallpaper. Ritualist must not import, decode, render, manage,
+pause, stop, or replace live wallpapers.
 
 The layer model is:
 
@@ -77,8 +78,9 @@ Compatibility risks to test:
 
 Allowed background modes:
 
-- `system_wallpaper` / `transparent`: default for `desktop_work_area`; the
-  Canvas background is not painted and the system wallpaper shows through.
+- `system_wallpaper` / `transparent`: implemented default for
+  `desktop_work_area`; the Canvas background is not painted and the system
+  wallpaper shows through.
 - `ritualist_background`: existing opaque Ritualist background; allowed for
   `windowed` mode and for a future explicit user choice in desktop host modes.
 - `dim_system_wallpaper`: future optional translucent scrim or dim treatment;

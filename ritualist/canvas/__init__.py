@@ -33,6 +33,7 @@ from .host import (
 from .models import (
     CANVAS_SCHEMA_VERSION,
     CanvasBackground,
+    CanvasBackgroundType,
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -121,6 +122,7 @@ __all__ = [
     "CANVAS_PERFORMANCE_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_DIAGNOSTICS_SCHEMA_VERSION",
     "CanvasBackground",
+    "CanvasBackgroundType",
     "CanvasBindingKind",
     "CanvasComponentAction",
     "CanvasComponentActionResult",

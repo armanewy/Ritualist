@@ -53,6 +53,10 @@ class CanvasHostConfig:
             return CanvasInputPolicy.CAPTURE_ALL
         return CanvasInputPolicy.NORMAL_WINDOW
 
+    @property
+    def background_passthrough(self) -> bool:
+        return self.mode is CanvasHostMode.DESKTOP_WORK_AREA
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": CANVAS_HOST_SCHEMA_VERSION,
@@ -63,6 +67,8 @@ class CanvasHostConfig:
             "taskbar_visible": self.taskbar_policy is CanvasTaskbarPolicy.RESPECT,
             "forced_windowed": self.forced_windowed,
             "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+            "background_passthrough": self.background_passthrough,
+            "background_mode": "system_wallpaper" if self.background_passthrough else "ritualist_background",
             "input_policy": self.input_policy.value,
             "blank_area_input": (
                 "captured_by_canvas_window"

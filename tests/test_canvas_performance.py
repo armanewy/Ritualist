@@ -221,6 +221,11 @@ def test_canvas_use_qml_wires_desktop_work_area_exit_affordance() -> None:
     for snippet in (
         "ritualistCanvasHost",
         'hostSettings.mode === "desktop_work_area"',
+        "property bool backgroundPassthrough",
+        "hostSettings.background_passthrough === true",
+        'color: backgroundPassthrough ? "transparent"',
+        "visible: !root.backgroundPassthrough",
+        'root.backgroundPassthrough ? "transparent"',
         'text: "Exit Desktop Canvas"',
         'sequence: "Esc"',
     ):

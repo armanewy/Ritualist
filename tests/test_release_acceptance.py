@@ -110,6 +110,15 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "forced_windowed",
         "input_policy",
         "click_through_implemented",
+        "background_passthrough",
+        "background_mode",
+        "Ritualist Wallpaper Fixture",
+        "Start-FakeWallpaperFixture",
+        "Stop-FakeWallpaperFixture",
+        "fake_wallpaper_fixture",
+        "wallpaper_app_processes",
+        "observed_only",
+        "controlled_by_ritualist",
         "dpi",
         "monitor",
         "Exit Desktop Canvas",
@@ -166,5 +175,7 @@ def test_release_acceptance_harness_avoids_forbidden_input_primitives() -> None:
         "action: app.launch",
         "taskbar hiding",
         "kiosk mode",
+        "stop-wallpaperengine",
+        "wallpaper_engine.profile",
     ):
         assert forbidden not in script

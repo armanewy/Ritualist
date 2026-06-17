@@ -8,6 +8,7 @@ ApplicationWindow {
     height: 760
     visible: true
     title: "Ritualist Canvas"
+    color: backgroundPassthrough ? "transparent" : token("background", "#070c13")
 
     property var canvasController: typeof ritualistCanvasUseController === "undefined" ? null : ritualistCanvasUseController
     property var canvasPayload: typeof ritualistCanvasPayload === "undefined" ? ({}) : ritualistCanvasPayload
@@ -18,6 +19,7 @@ ApplicationWindow {
     property bool editMode: canvasController ? canvasController.editMode : false
     property bool mockMode: typeof ritualistMockMode === "undefined" ? false : ritualistMockMode
     property bool desktopWorkAreaHost: hostSettings.mode === "desktop_work_area"
+    property bool backgroundPassthrough: hostSettings.background_passthrough === true
     property bool animationsEnabled: performanceSettings.animations === undefined ? true : performanceSettings.animations
     property bool showPerformanceOverlay: performanceSettings.show_performance_overlay === true
     property int liveUpdateRateHz: Math.max(1, performanceSettings.live_update_rate_hz || 30)
@@ -553,6 +555,7 @@ ApplicationWindow {
     Rectangle {
         anchors.fill: parent
         color: root.token("background", "#070c13")
+        visible: !root.backgroundPassthrough
     }
 
     ColumnLayout {
@@ -820,9 +823,9 @@ ApplicationWindow {
                 Rectangle {
                     width: scroll.contentWidth
                     height: scroll.contentHeight
-                    color: root.token("background", "#070c13")
-                    border.color: root.editMode ? root.token("accent", "#3dd6a5") : root.token("border", "#1d2a3a")
-                    border.width: root.editMode ? 2 : 1
+                    color: root.backgroundPassthrough ? "transparent" : root.token("background", "#070c13")
+                    border.color: root.editMode ? root.token("accent", "#3dd6a5") : (root.backgroundPassthrough ? "transparent" : root.token("border", "#1d2a3a"))
+                    border.width: root.editMode ? 2 : (root.backgroundPassthrough ? 0 : 1)
                     radius: root.radiusLg
 
                     Repeater {
