@@ -2197,6 +2197,10 @@ def _print_watch_me_draft(draft: WatchMeDraft, *, json_output: bool) -> None:
     console.print("Status: disabled until you review and save it as a real ritual")
     console.print(f"Recipe id: {escape(str(draft.recipe.get('id', '')))}")
     console.print(f"Steps: {len(draft.recipe.get('steps', []))}")
+    if draft.preview:
+        console.print("Preview:")
+        for item in draft.preview:
+            console.print(f"- {escape(item)}")
     if draft.todo:
         console.print("TODO:")
         for item in draft.todo:
@@ -2645,3 +2649,4 @@ def _keep_alive_until_interrupted() -> None:
             time.sleep(3600)
     except KeyboardInterrupt:
         console.print("Exiting.")
+

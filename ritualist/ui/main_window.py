@@ -283,6 +283,10 @@ class MainWindow(QMainWindow):
         self.append_log(
             f"Draft recipe {draft.recipe.get('id')} is disabled until you review and save it."
         )
+        if draft.preview:
+            self.append_log("Draft preview:")
+            for item in draft.preview:
+                self.append_log(f"- {item}")
         self.append_log("Run Doctor and dry-run before using the draft.")
 
     def discard_watch_me(self) -> None:

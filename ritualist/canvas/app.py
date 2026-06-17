@@ -110,6 +110,7 @@ def run_canvas_use(
             self._watch_me_draft_available = False
             self._watch_me_status_label = "Watch Me ready"
             self._watch_me_draft_summary = ""
+            self._watch_me_draft_preview = ""
             self.actionCompleted.connect(self._complete_action)
             self.actionFailed.connect(self._mark_action_failed)
             self.runtimeEventReceived.connect(self._apply_runtime_event)
@@ -160,6 +161,10 @@ def run_canvas_use(
         @Property(str, notify=watchMeChanged)
         def watchMeDraftSummary(self) -> str:
             return self._watch_me_draft_summary
+
+        @Property(str, notify=watchMeChanged)
+        def watchMeDraftPreview(self) -> str:
+            return self._watch_me_draft_preview
 
         @Slot(str, str)
         def dispatchAction(self, component_id: str, action_id: str) -> None:
@@ -349,6 +354,7 @@ def run_canvas_use(
             self._watch_me_recording = True
             self._watch_me_draft_available = False
             self._watch_me_draft_summary = ""
+            self._watch_me_draft_preview = ""
             self._set_watch_me_status(f"Recording Watch Me session {session.session_id}")
 
         @Slot()
@@ -385,6 +391,7 @@ def run_canvas_use(
                 f"Draft {draft.recipe.get('id')} disabled for review; "
                 f"{len(draft.recipe.get('steps', []))} suggested step(s)."
             )
+            self._watch_me_draft_preview = "\n".join(draft.preview[:10])
             if session.draft_path:
                 self._watch_me_draft_summary += f" Saved to {session.draft_path}"
             self._set_watch_me_status("Watch Me draft created")
@@ -403,6 +410,7 @@ def run_canvas_use(
             self._watch_me_recording = False
             self._watch_me_draft_available = False
             self._watch_me_draft_summary = ""
+            self._watch_me_draft_preview = ""
             self._set_watch_me_status(f"Watch Me discarded: {session.session_id}")
 
         @Slot()

@@ -150,10 +150,43 @@ def test_watch_me_draft_validates_and_is_not_enabled_automatically(tmp_path: Pat
     assert {"action": "app.launch", "command": str(app_path)} in draft.recipe["steps"]
     assert any(step["action"] == "browser.open" for step in draft.recipe["steps"])
     assert draft.canvas_card["enabled"] is False
+    preview_text = "\n".join(draft.preview)
+    assert "app.launch" in preview_text
+    assert "browser.open" in preview_text
+    assert "https://example.test/dashboard" in preview_text
+    assert "token" not in preview_text
+    assert "secret" not in preview_text
     assert loaded.status is WatchMeStatus.DRAFT_CREATED
     assert loaded.draft_path is not None
     assert Path(loaded.draft_path).is_file()
     assert not (tmp_path / "recipes").exists()
+
+
+def test_watch_me_preview_includes_window_suggestions_and_todo_without_secrets(tmp_path: Path) -> None:
+    service = WatchMeService(store_dir=tmp_path, process_provider=lambda: [], clock=_clock())
+    session = service.start()
+    stopped = service.stop(session.session_id)
+    service.record_event(
+        stopped.session_id,
+        WatchMeSignalType.WINDOW_LAYOUT,
+        {
+            "windows": [
+                {
+                    "title": "Vendor App",
+                    "bounds": {"x": 10, "y": 20, "width": 640, "height": 480},
+                    "cookie": "secret",
+                }
+            ]
+        },
+    )
+
+    draft = service.create_draft(stopped.session_id)
+    preview_text = "\n".join(draft.preview)
+
+    assert "window: Vendor App at 10,20 640x480" in preview_text
+    assert "TODO:" in preview_text
+    assert "secret" not in json.dumps(draft.model_dump(mode="json"))
+    assert "cookie" not in json.dumps(draft.window_layout_suggestions)
 
 
 def test_watch_me_create_draft_requires_stopped_session(tmp_path: Path) -> None:
@@ -188,6 +221,7 @@ def test_canvas_use_qml_exposes_watch_me_controls() -> None:
         "watchMeRecording",
         "watchMeDraftAvailable",
         "watchMeDraftSummary",
+        "watchMeDraftPreview",
         "startWatchMe()",
         "stopWatchMe()",
         "createWatchMeDraft()",

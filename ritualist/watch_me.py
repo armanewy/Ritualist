@@ -120,6 +120,7 @@ class WatchMeDraft(BaseModel):
     window_layout_suggestions: list[dict[str, Any]] = Field(default_factory=list)
     todo: list[str] = Field(default_factory=list)
     redaction_summary: list[str] = Field(default_factory=list)
+    preview: list[str] = Field(default_factory=list)
 
 
 ProcessProvider = Callable[[], list[dict[str, Any]]]
@@ -370,6 +371,12 @@ def build_watch_me_draft(session: WatchMeSession) -> WatchMeDraft:
     }
     Recipe.model_validate(recipe)
 
+    preview = build_watch_me_preview(
+        steps=steps,
+        window_layout_suggestions=window_suggestions,
+        todo=todo,
+    )
+
     return WatchMeDraft(
         session_id=session.session_id,
         recipe=recipe,
@@ -393,7 +400,41 @@ def build_watch_me_draft(session: WatchMeSession) -> WatchMeDraft:
         window_layout_suggestions=window_suggestions,
         todo=todo,
         redaction_summary=list(session.redaction_summary),
+        preview=preview,
     )
+
+
+def build_watch_me_preview(
+    *,
+    steps: list[dict[str, Any]],
+    window_layout_suggestions: list[dict[str, Any]],
+    todo: list[str],
+) -> list[str]:
+    preview: list[str] = []
+    for index, step in enumerate(steps[:10], start=1):
+        action = str(step.get("action") or "step")
+        if action == "app.launch":
+            detail = _preview_value(step.get("command"))
+        elif action == "browser.open":
+            detail = _preview_value(step.get("url"))
+        elif action == "human.prompt":
+            detail = _preview_value(step.get("prompt"))
+        else:
+            detail = _preview_value(step.get("name") or step.get("id") or "")
+        suffix = f": {detail}" if detail else ""
+        preview.append(f"{index}. {action}{suffix}")
+    for window in window_layout_suggestions[:5]:
+        title = _preview_value(window.get("title"))
+        bounds = window.get("bounds")
+        if title and isinstance(bounds, dict):
+            preview.append(
+                "window: "
+                f"{title} at {bounds.get('x', '?')},{bounds.get('y', '?')} "
+                f"{bounds.get('width', '?')}x{bounds.get('height', '?')}"
+            )
+    for item in todo[:5]:
+        preview.append(f"TODO: {_preview_value(item)}")
+    return preview
 
 
 def _safe_event(
@@ -564,6 +605,18 @@ def _safe_url_path(path: str, notes: list[str]) -> str:
         notes.append("redacted sensitive URL path")
         return "/[redacted]"
     return path
+
+
+def _preview_value(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if _looks_like_url(text):
+        redacted, _notes = redact_url(text)
+        return redacted
+    if _contains_forbidden_marker(text):
+        return "[redacted]"
+    return text
 
 
 def _is_forbidden_key(key: str) -> bool:
