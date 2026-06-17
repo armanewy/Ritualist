@@ -1,0 +1,114 @@
+schema: ritualist.canvas.v1
+id: project_room
+name: Project Room
+description: Project setup Room with plan previews, launch placeholders, and recent runs.
+mode: desktop_canvas
+resolution_policy: responsive
+theme:
+  id: ritualist.paper
+  name: Ritualist Paper
+background:
+  type: solid
+  value: "{color.background}"
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: title
+    type: text.label
+    x: 56
+    y: 48
+    width: 420
+    height: 64
+    z: 1
+    props:
+      text: Project Room
+      size: 28
+  - id: project_clock
+    type: clock
+    x: 812
+    y: 48
+    width: 180
+    height: 80
+    z: 2
+    props:
+      format: short
+  - id: categories
+    type: category.dock
+    x: 56
+    y: 144
+    width: 200
+    height: 360
+    z: 3
+    props:
+      categories:
+        - Plan
+        - Launch
+        - Status
+  - id: workspace_plan
+    type: ritual.card
+    x: 288
+    y: 144
+    width: 320
+    height: 180
+    z: 10
+    props:
+      title: Prepare Workspace
+      subtitle: Preview a local project setup plan
+      primary_action: preview_plan
+    binding:
+      kind: intent
+      intent_id: workspace.prepare:basic
+  - id: diagnostics_plan
+    type: ritual.card
+    x: 640
+    y: 144
+    width: 320
+    height: 180
+    z: 11
+    props:
+      title: Project Diagnostics
+      subtitle: Preview redacted local diagnostics
+      primary_action: preview_plan
+    binding:
+      kind: intent
+      intent_id: diagnostics.collect:minimal
+  - id: editor_launcher
+    type: app.launcher
+    x: 288
+    y: 352
+    width: 220
+    height: 96
+    z: 12
+    props:
+      title: Editor
+      app_id: project_editor
+    binding:
+      kind: app.launcher
+      id: project_editor
+  - id: folder_launcher
+    type: app.launcher
+    x: 532
+    y: 352
+    width: 220
+    height: 96
+    z: 13
+    props:
+      title: Project Folder
+      app_id: project_folder
+    binding:
+      kind: app.launcher
+      id: project_folder
+  - id: recent_runs
+    type: recent.activity
+    x: 776
+    y: 352
+    width: 360
+    height: 184
+    z: 14
+    props:
+      title: Recent runs
+      limit: 6
+    binding:
+      kind: recent_runs
+      id: local

@@ -1,12 +1,15 @@
 schema: ritualist.canvas.v1
 id: helpdesk_desktop
-name: Helpdesk Desktop
-description: Local diagnostics and support canvas.
+name: Helpdesk Room
+description: Local diagnostics and support Room.
 mode: desktop_canvas
 resolution_policy: responsive
+theme:
+  id: ritualist.paper
+  name: Ritualist Paper
 background:
   type: solid
-  value: '#151922'
+  value: "{color.background}"
 grid:
   enabled: true
   size: 16
@@ -19,7 +22,7 @@ components:
     height: 72
     z: 1
     props:
-      text: Helpdesk Desktop
+      text: Helpdesk Room
   - id: doctor_badge
     type: doctor.badge
     x: 48

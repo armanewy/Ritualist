@@ -74,6 +74,16 @@ def load_canvas(id_or_path: str | Path) -> CanvasDocument:
     return _load_canvas_path(path)
 
 
+def load_bundled_canvas(canvas_id: str) -> CanvasDocument:
+    text = canvas_id.strip()
+    if not text:
+        raise RitualistError("bundled canvas id must not be blank")
+    for bundled in _bundled_canvas_paths():
+        if bundled.stem == text:
+            return _load_canvas_path(bundled)
+    raise RitualistError(f"bundled canvas not found: {text}")
+
+
 def save_canvas(document: CanvasDocument, path: Path | None = None, *, overwrite: bool = True) -> CanvasWriteResult:
     destination = path or (canvases_dir() / f"{document.id}.yaml")
     if destination.exists() and not overwrite:

@@ -1,9 +1,12 @@
 schema: ritualist.canvas.v1
 id: gaming_desktop
-name: Gaming Desktop
-description: Gaming-focused activity desktop.
+name: Gaming Room
+description: Gaming-focused Room with explicit ritual controls and target preview.
 mode: desktop_canvas
 resolution_policy: responsive
+theme:
+  id: ritualist_default
+  name: Ritualist Default
 background:
   type: gradient
   value: midnight_violet

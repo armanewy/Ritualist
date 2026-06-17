@@ -1,12 +1,15 @@
 schema: ritualist.canvas.v1
 id: minimal_desktop
-name: Minimal Desktop
-description: Minimal safe Canvas template.
+name: Minimal Room
+description: Calm starter Room with safe cards, status, clock, and recent activity.
 mode: desktop_canvas
 resolution_policy: responsive
+theme:
+  id: ritualist.paper
+  name: Ritualist Paper
 background:
   type: solid
-  value: '#0f141b'
+  value: "{color.background}"
 grid:
   enabled: true
   size: 16
@@ -14,27 +17,89 @@ components:
   - id: title
     type: text.label
     x: 64
-    y: 64
-    width: 320
+    y: 48
+    width: 420
     height: 64
     z: 1
     props:
-      text: Ritualist Canvas
-  - id: divider
-    type: spacer/divider
-    x: 64
-    y: 144
-    width: 480
-    height: 8
-    z: 1
-    props:
-      orientation: horizontal
-  - id: clock
+      text: Minimal Room
+      size: 28
+  - id: current_time
     type: clock
-    x: 64
-    y: 176
+    x: 528
+    y: 48
     width: 180
     height: 80
     z: 2
     props:
       format: short
+  - id: doctor_card
+    type: ritual.card
+    x: 64
+    y: 144
+    width: 300
+    height: 180
+    z: 10
+    props:
+      title: Doctor
+      subtitle: Check the sample ritual before running
+      recipe_id: gaming_mode
+      primary_action: doctor
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: dry_run_card
+    type: ritual.card
+    x: 392
+    y: 144
+    width: 300
+    height: 180
+    z: 11
+    props:
+      title: Dry Run
+      subtitle: Preview the sample ritual safely
+      recipe_id: gaming_mode
+      primary_action: dry_run
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: diagnostics_card
+    type: ritual.card
+    x: 720
+    y: 144
+    width: 300
+    height: 180
+    z: 12
+    props:
+      title: Diagnostics
+      subtitle: Preview minimal local diagnostics
+      primary_action: preview_plan
+    binding:
+      kind: intent
+      intent_id: diagnostics.collect:minimal
+  - id: ritual_status
+    type: ritual.status
+    x: 64
+    y: 368
+    width: 464
+    height: 112
+    z: 13
+    props:
+      title: Ritual status
+      recipe_id: gaming_mode
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: recent_activity
+    type: recent.activity
+    x: 560
+    y: 368
+    width: 460
+    height: 184
+    z: 14
+    props:
+      title: Recent activity
+      limit: 6
+    binding:
+      kind: recent_runs
+      id: local

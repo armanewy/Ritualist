@@ -127,6 +127,21 @@ python -m ritualist perf canvas-model --mock-components 300 --json
 
 See [docs/canvas.md](docs/canvas.md) for the schema, component registry, binding model, pack-domain separation, and performance rules.
 
+## Starter Rooms
+
+Rooms are the user-facing name for curated Canvas templates. A Room is a Canvas
+plus theme, components, safe bindings, and validation; it is not a Windows user
+account, sandbox, virtual desktop, shell replacement, or automation marketplace.
+
+```powershell
+python -m ritualist room list --json
+python -m ritualist room show minimal --json
+```
+
+Starter Rooms currently map to bundled Canvas templates: Minimal, Gaming,
+Project, Focus, and Helpdesk. See [docs/ROOMS.md](docs/ROOMS.md) for the Room
+language and the Canvas mapping.
+
 ## Home Alpha Dogfood
 
 Before a Home-focused alpha build, use the packaged app and development checkout to verify:

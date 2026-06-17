@@ -46,16 +46,28 @@ pause/resume/stop controls, logs, and recovery visible.
 The first starter Rooms should be small, typed, and built from existing safe
 Canvas infrastructure:
 
-- **Minimal Room**: a calm starter with status, recent activity, clock, and a few
-  safe ritual cards.
-- **Gaming Room**: the existing `gaming_desktop` direction, with target preview
-  and explicit confirmation. It must not automate gameplay.
-- **Work/Project Room**: project setup rituals, folder/app launchers, status, and
-  recent runs.
-- **Focus/Study Room**: a low-distraction room with current task, status, and
-  safe focus rituals.
-- **Helpdesk Room**: runbook cards, Doctor, status, recent runs, and evidence
-  surfaces.
+- **Minimal Room** (`minimal` -> `minimal_desktop`): a calm starter with
+  status, recent activity, clock, and safe ritual cards.
+- **Gaming Room** (`gaming` -> `gaming_desktop`): the existing gaming Canvas
+  direction, with target preview and explicit confirmation. It must not automate
+  gameplay.
+- **Project Room** (`project` -> `project_room`): project setup plan previews,
+  launcher placeholders, status, and recent runs.
+- **Focus Room** (`focus` -> `focus_room`): a low-distraction Room with current
+  task, local time, safe preview cards, and recent activity.
+- **Helpdesk Room** (`helpdesk` -> `helpdesk_desktop`): runbook cards, Doctor,
+  status, recent runs, and evidence surfaces.
+
+The starter Room CLI is a product-facing alias over bundled Canvas templates:
+
+```powershell
+python -m ritualist room list --json
+python -m ritualist room show minimal --json
+```
+
+`room show` reads the bundled starter template for evidence and onboarding
+consistency. `canvas show` keeps the existing Canvas behavior, including user
+Canvas overrides.
 
 ## Pack Separation
 

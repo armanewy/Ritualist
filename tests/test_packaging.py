@@ -57,7 +57,13 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
         "collect_basic_diagnostics.yaml",
         "browser_admin_console_workspace.yaml",
     }.issubset(sample_names)
-    assert {"gaming_desktop.yaml", "minimal_desktop.yaml"}.issubset(canvas_names)
+    assert {
+        "focus_room.yaml",
+        "gaming_desktop.yaml",
+        "helpdesk_desktop.yaml",
+        "minimal_desktop.yaml",
+        "project_room.yaml",
+    }.issubset(canvas_names)
 
 
 def test_ci_optional_deps_cover_home_and_perf_smokes():

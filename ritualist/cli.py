@@ -29,6 +29,7 @@ from .canvas import (
     default_canvas_document,
     dispatch_canvas_action,
     list_canvases,
+    load_bundled_canvas,
     load_canvas,
     save_canvas,
     validate_canvas,
@@ -100,6 +101,7 @@ from .run_logs import (
     summarize_run_record,
     summarize_step_results,
 )
+from .rooms import room_list_payload, room_show_payload
 from .runtime_control import RuntimeControl
 from .target_resolution import (
     compile_target_start_plan,
@@ -126,6 +128,7 @@ canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas docum
 canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
 canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
 theme_app = typer.Typer(help="Inspect and validate safe declarative Ritualist themes.")
+room_app = typer.Typer(help="Inspect starter Ritualist Rooms backed by Canvas templates.")
 watch_app = typer.Typer(help="Explicitly observe a setup session and create a disabled draft.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
@@ -136,6 +139,7 @@ app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(theme_app, name="theme")
+app.add_typer(room_app, name="room")
 app.add_typer(watch_app, name="watch-me")
 canvas_app.add_typer(canvas_pack_app, name="pack")
 canvas_app.add_typer(canvas_theme_app, name="theme")
@@ -625,6 +629,56 @@ def target_plan(
     _print_plan_preview(plan, doctor)
     if doctor.compatibility == "incompatible":
         raise typer.Exit(1)
+
+
+@room_app.command("list")
+def room_list(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable starter Room list."),
+    ] = False,
+) -> None:
+    """List starter Rooms backed by bundled Canvas templates."""
+    payload = room_list_payload()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    table = Table(title="Ritualist Rooms")
+    table.add_column("ID")
+    table.add_column("Name")
+    table.add_column("Canvas")
+    table.add_column("Category")
+    for row in payload["rooms"]:
+        table.add_row(
+            escape(str(row["id"])),
+            escape(str(row["name"])),
+            escape(str(row["canvas_id"])),
+            escape(str(row["category"])),
+        )
+    console.print(table)
+
+
+@room_app.command("show")
+def room_show(
+    room: Annotated[str, typer.Argument(help="Room id, e.g. minimal or gaming.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Room template."),
+    ] = False,
+) -> None:
+    """Show a starter Room without executing Canvas bindings."""
+    try:
+        payload = room_show_payload(room)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"Room: {escape(str(payload['room']['name']))}")
+    console.print(f"Canvas: {escape(str(payload['room']['canvas_id']))}")
+    _print_canvas_document(load_bundled_canvas(str(payload["room"]["canvas_id"])))
+    _print_canvas_validation(payload["validation"])
 
 
 @canvas_app.command("list")
