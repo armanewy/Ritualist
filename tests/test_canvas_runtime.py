@@ -12,11 +12,14 @@ from ritualist.canvas import (
     CanvasComponent,
     CanvasComponentBinding,
     CanvasDocument,
+    CanvasHostMode,
+    CanvasTaskbarPolicy,
     CanvasRuntimeContext,
     CanvasRuntimeController,
     build_canvas_runtime_model,
     build_canvas_view_model,
     canvas_to_home_model,
+    resolve_canvas_host_config,
 )
 from ritualist.cli import app
 from ritualist.canvas.controller import dispatch_canvas_action
@@ -605,13 +608,60 @@ def test_canvas_use_cli_help() -> None:
 
     assert result.exit_code == 0
     assert "Canvas Use Mode" in result.output
+    assert "--host" in result.output
+    assert "desktop-work-area" in result.output
+
+
+def test_canvas_host_config_documents_desktop_work_area_without_enabling_it() -> None:
+    config = resolve_canvas_host_config(
+        "desktop-work-area",
+        taskbar_policy="respect",
+        require_implemented=False,
+    )
+
+    assert config.mode is CanvasHostMode.DESKTOP_WORK_AREA
+    assert config.taskbar_policy is CanvasTaskbarPolicy.RESPECT
+    assert config.to_dict() == {
+        "schema_version": "ritualist.canvas.host.v1",
+        "mode": "desktop_work_area",
+        "taskbar_policy": "respect",
+        "implemented": False,
+        "taskbar_visible": True,
+    }
+
+
+def test_canvas_host_config_only_allows_windowed_to_launch_for_now() -> None:
+    config = resolve_canvas_host_config("windowed")
+
+    assert config.mode is CanvasHostMode.WINDOWED
+    assert config.to_dict()["implemented"] is True
+
+    with pytest.raises(RitualistError, match="not implemented yet"):
+        resolve_canvas_host_config("desktop-work-area")
+
+
+@pytest.mark.parametrize("policy", ["hide", "auto-hide", "replace", "kiosk"])
+def test_canvas_taskbar_policy_rejects_shell_like_values(policy: str) -> None:
+    with pytest.raises(RitualistError, match="only supports 'respect'"):
+        resolve_canvas_host_config("windowed", taskbar_policy=policy)
+
+
+def test_canvas_host_rejects_retired_overlay_name() -> None:
+    with pytest.raises(RitualistError, match="desktop_overlay.*retired"):
+        resolve_canvas_host_config("desktop-overlay", require_implemented=False)
 
 
 def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
-    calls: list[tuple[str, bool, int]] = []
+    calls: list[tuple[str, bool, int, dict[str, object]]] = []
 
-    def fake_run_canvas_use(canvas: str, *, mock: bool, mock_components: int) -> int:
-        calls.append((canvas, mock, mock_components))
+    def fake_run_canvas_use(
+        canvas: str,
+        *,
+        mock: bool,
+        mock_components: int,
+        host_config: object,
+    ) -> int:
+        calls.append((canvas, mock, mock_components, host_config.to_dict()))
         return 0
 
     monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
@@ -622,14 +672,33 @@ def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert calls == [("gaming_desktop", False, 3)]
+    assert calls == [
+        (
+            "gaming_desktop",
+            False,
+            3,
+            {
+                "schema_version": "ritualist.canvas.host.v1",
+                "mode": "windowed",
+                "taskbar_policy": "respect",
+                "implemented": True,
+                "taskbar_visible": True,
+            },
+        )
+    ]
 
 
 def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> None:
-    calls: list[tuple[str, bool, int]] = []
+    calls: list[tuple[str, bool, int, dict[str, object]]] = []
 
-    def fake_run_canvas_use(canvas: str, *, mock: bool, mock_components: int) -> int:
-        calls.append((canvas, mock, mock_components))
+    def fake_run_canvas_use(
+        canvas: str,
+        *,
+        mock: bool,
+        mock_components: int,
+        host_config: object,
+    ) -> int:
+        calls.append((canvas, mock, mock_components, host_config.to_dict()))
         return 0
 
     monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
@@ -640,7 +709,44 @@ def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> No
     )
 
     assert result.exit_code == 0
-    assert calls == [("gaming_desktop", True, 12)]
+    assert calls == [
+        (
+            "gaming_desktop",
+            True,
+            12,
+            {
+                "schema_version": "ritualist.canvas.host.v1",
+                "mode": "windowed",
+                "taskbar_policy": "respect",
+                "implemented": True,
+                "taskbar_visible": True,
+            },
+        )
+    ]
+
+
+def test_canvas_use_cli_rejects_unimplemented_desktop_host_before_launch(monkeypatch) -> None:
+    def fail_launch(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("unimplemented hosts must fail before launching Canvas")
+
+    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fail_launch)
+
+    result = CliRunner().invoke(app, ["canvas", "use", "gaming_desktop", "--host", "desktop-work-area"])
+
+    assert result.exit_code == 1
+    assert "not implemented yet" in " ".join(result.output.split())
+
+
+def test_canvas_use_cli_rejects_taskbar_hiding_before_launch(monkeypatch) -> None:
+    def fail_launch(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("unsupported taskbar policy must fail before launching Canvas")
+
+    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fail_launch)
+
+    result = CliRunner().invoke(app, ["canvas", "use", "gaming_desktop", "--taskbar-policy", "hide"])
+
+    assert result.exit_code == 1
+    assert "only supports 'respect'" in " ".join(result.output.split())
 
 
 def test_canvas_runtime_perf_cli_json() -> None:

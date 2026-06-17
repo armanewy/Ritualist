@@ -32,6 +32,7 @@ from .canvas import (
     list_canvases,
     load_bundled_canvas,
     load_canvas,
+    resolve_canvas_host_config,
     save_canvas,
     validate_canvas,
     validate_canvas_document,
@@ -982,12 +983,35 @@ def canvas_use(
         int,
         typer.Option("--mock-components", min=1, help="Generated component count for --mock."),
     ] = 24,
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            help=(
+                "Canvas host mode. Currently only 'windowed' launches; "
+                "'desktop-work-area' is reserved for the next milestone."
+            ),
+        ),
+    ] = "windowed",
+    taskbar_policy: Annotated[
+        str,
+        typer.Option(
+            "--taskbar-policy",
+            help="Taskbar policy for desktop hosts. Only 'respect' is currently implemented.",
+        ),
+    ] = "respect",
 ) -> None:
     """Launch Canvas Use Mode with the bundled typed renderer."""
     try:
+        host_config = resolve_canvas_host_config(host, taskbar_policy=taskbar_policy)
         from ritualist.canvas.app import run_canvas_use
 
-        run_canvas_use(canvas or "gaming_desktop", mock=mock, mock_components=mock_components)
+        run_canvas_use(
+            canvas or "gaming_desktop",
+            mock=mock,
+            mock_components=mock_components,
+            host_config=host_config,
+        )
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc

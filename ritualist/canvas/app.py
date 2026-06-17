@@ -24,6 +24,7 @@ from ritualist.watch_me import WatchMeService
 from .controller import CanvasRuntimeController
 from .edit import CanvasEditSession, create_edit_session
 from .edit_ui import CanvasEditUiBridge
+from .host import CanvasHostConfig, ensure_canvas_host_is_implemented, resolve_canvas_host_config
 from .models import CanvasBindingKind, CanvasDocument
 from .runtime import CanvasRuntimeContext
 from .storage import create_mock_canvas
@@ -62,8 +63,11 @@ def run_canvas_use(
     *,
     mock: bool = False,
     mock_components: int = 24,
+    host_config: CanvasHostConfig | None = None,
 ) -> int:
     """Launch Canvas Use Mode with a bundled, typed QML renderer."""
+    resolved_host_config = host_config or resolve_canvas_host_config()
+    ensure_canvas_host_is_implemented(resolved_host_config)
     try:
         from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
         from PySide6.QtGui import QDesktopServices
@@ -637,10 +641,12 @@ def run_canvas_use(
         target_ids=target_ids,
     )
     performance = load_app_config().canvas.performance_settings().to_dict()
+    host_payload = resolved_host_config.to_dict()
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("ritualistMockMode", mock)
     engine.rootContext().setContextProperty("ritualistE2EEnabled", e2e_enabled())
+    engine.rootContext().setContextProperty("ritualistCanvasHost", host_payload)
     engine.rootContext().setContextProperty("ritualistCanvasUseController", controller)
     engine.rootContext().setContextProperty("ritualistCanvasPayload", controller.payload)
     engine.rootContext().setContextProperty("ritualistCanvasEditPayload", controller.editPayload)
@@ -650,6 +656,7 @@ def run_canvas_use(
         engine.load(QUrl.fromLocalFile(str(qml_path)))
         if not engine.rootObjects():
             raise RitualistError(f"Canvas Use UI failed to load: {qml_path}")
+    record_event("canvas.host.ready", **host_payload)
     ready_payload = controller.payload
     ready_theme = {}
     if isinstance(ready_payload.get("canvas"), dict):
@@ -672,6 +679,7 @@ def run_canvas_use(
         theme_warning_count=len(ready_validation.get("warnings") or []),
         theme_accessibility_warning_count=int(ready_accessibility.get("warning_count") or 0),
         theme_accessibility_warnings=list(ready_accessibility.get("warnings") or []),
+        host=host_payload,
     )
     app.aboutToQuit.connect(controller.shutdown)
     try:

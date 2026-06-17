@@ -17,6 +17,16 @@ from .edit import (
 )
 from .edit_ui import CANVAS_EDIT_UI_SCHEMA_VERSION, CanvasEditUiBridge
 from .home_adapter import canvas_to_home_model, recipe_card_component
+from .host import (
+    CANVAS_HOST_SCHEMA_VERSION,
+    CanvasHostConfig,
+    CanvasHostMode,
+    CanvasTaskbarPolicy,
+    ensure_canvas_host_is_implemented,
+    normalize_canvas_host_mode,
+    normalize_canvas_taskbar_policy,
+    resolve_canvas_host_config,
+)
 from .models import (
     CANVAS_SCHEMA_VERSION,
     CanvasBackground,
@@ -103,6 +113,7 @@ __all__ = [
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_PLAN_SCHEMA_VERSION",
     "CANVAS_EDIT_UI_SCHEMA_VERSION",
+    "CANVAS_HOST_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_DIAGNOSTICS_SCHEMA_VERSION",
     "CanvasBackground",
@@ -128,6 +139,8 @@ __all__ = [
     "CanvasEditSession",
     "CanvasEditUiBridge",
     "CanvasGrid",
+    "CanvasHostConfig",
+    "CanvasHostMode",
     "CanvasImportedPolicy",
     "CanvasLayoutMode",
     "CanvasMetadata",
@@ -145,6 +158,7 @@ __all__ = [
     "CanvasRuntimeEvent",
     "CanvasRuntimeModel",
     "CanvasSelection",
+    "CanvasTaskbarPolicy",
     "CanvasTemplate",
     "CanvasTheme",
     "CanvasThemeTokens",
@@ -169,10 +183,13 @@ __all__ = [
     "dispatch_canvas_action",
     "default_canvas_document",
     "editable_binding_kinds",
+    "ensure_canvas_host_is_implemented",
     "list_canvases",
     "load_bundled_canvas",
     "load_canvas",
     "normalize_canvas_bindings",
+    "normalize_canvas_host_mode",
+    "normalize_canvas_taskbar_policy",
     "performance_settings_for_mode",
     "component_performance_profile",
     "recipe_card_component",
@@ -181,4 +198,5 @@ __all__ = [
     "validate_canvas_bindings",
     "validate_canvas_document",
     "validate_canvas_structure",
+    "resolve_canvas_host_config",
 ]
