@@ -89,6 +89,9 @@ class BrowserOpenStep(StepBase):
     profile: str = "default"
     new_window: bool = False
     keep_open: bool = False
+    clean_start: bool = False
+    dismiss_restore_prompt: bool = False
+    use_dedicated_profile: bool = True
 
     @field_validator("profile")
     @classmethod
@@ -97,6 +100,15 @@ class BrowserOpenStep(StepBase):
             raise ValueError(
                 "profile must be a safe filename-like identifier "
                 "(letters, numbers, hyphen, underscore)"
+            )
+        return value
+
+    @field_validator("use_dedicated_profile")
+    @classmethod
+    def require_dedicated_profile(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError(
+                "use_dedicated_profile must be true; Ritualist only opens managed browser profiles"
             )
         return value
 

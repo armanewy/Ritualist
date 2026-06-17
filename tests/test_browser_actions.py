@@ -39,6 +39,65 @@ def test_browser_wait_text_success_uses_fake_browser_adapter():
     assert fakes.browser.calls[1][2]["text"] == "Ready"
 
 
+def test_browser_open_passes_clean_start_options_to_adapter():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_open",
+            "name": "Browser Open",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "profile": "gaming_mode",
+                    "clean_start": True,
+                    "dismiss_restore_prompt": True,
+                    "use_dedicated_profile": True,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert fakes.browser.calls[0][0] == "open_url"
+    assert fakes.browser.calls[0][2] == {
+        "browser": "chromium",
+        "profile": "gaming_mode",
+        "new_window": False,
+        "keep_open": False,
+        "clean_start": True,
+        "dismiss_restore_prompt": True,
+        "use_dedicated_profile": True,
+    }
+
+
+def test_browser_open_dry_run_describes_clean_start_options():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_open",
+            "name": "Browser Open",
+            "steps": [
+                {
+                    "action": "browser.open",
+                    "url": "https://example.test",
+                    "profile": "gaming_mode",
+                    "clean_start": True,
+                    "dismiss_restore_prompt": True,
+                }
+            ],
+        }
+    )
+
+    summary = WorkflowExecutor(adapters=FakeAdapters().bundle(), config=AppConfig(), dry_run=True).run(recipe)
+
+    assert summary.results[0].status == "dry-run"
+    assert "clean start" in summary.results[0].message
+    assert "restore prompt dismissal" in summary.results[0].message
+    assert "managed profile 'gaming_mode'" in summary.results[0].message
+
+
 def test_browser_wait_text_timeout_fails_without_page_contents():
     recipe = Recipe.model_validate(
         {

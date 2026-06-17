@@ -143,7 +143,7 @@ python -m ritualist inspect-window "Battle.net"
 python -m ritualist run gaming_mode
 ```
 
-`init` is safe to rerun. It creates missing directories, installs the default bundled `gaming_mode` sample if absent, and applies narrow sample migrations such as adding `keep_open: true` to older installed `gaming_mode` recipes.
+`init` is safe to rerun. It creates missing directories, installs the default bundled `gaming_mode` sample if absent, and applies narrow sample migrations such as adding `keep_open: true` and browser clean-start options to older installed `gaming_mode` recipes.
 
 The sample recipe sets `keep_open: true` on `browser.open`, so after the workflow reaches the browser step, the Ritualist CLI stays alive even if a later desktop step fails or the final Play confirmation is cancelled. Press `Ctrl+C` to exit the Ritualist CLI and let Playwright close its browser process.
 
@@ -368,6 +368,16 @@ Playwright owns the browser process it launches. When a CLI run exits, the brows
 
 GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
 
+`browser.open` uses Ritualist-managed browser profile folders under the local
+`browser-profiles` directory. Set `clean_start: true` to launch with safe
+Chromium startup flags that reduce first-run and session-restore prompts without
+deleting profile data. Set `dismiss_restore_prompt: true` only for managed
+profiles where Ritualist may best-effort dismiss the known Chrome restore-pages
+prompt. This dismissal is deliberately narrow: it looks for known restore prompt
+text and known dismiss buttons only, does not click arbitrary prompts, and does
+not touch page contents. `use_dedicated_profile: false` is rejected in v0.1 so
+Ritualist cannot silently operate on a user's normal browser profile.
+
 ## Structured Browser Runbooks
 
 Ritualist supports a narrow browser runbook surface for pages it opened through
@@ -398,6 +408,9 @@ steps:
     url: https://example.test/dashboard
     profile: work_dashboard
     keep_open: true
+    clean_start: true
+    dismiss_restore_prompt: true
+    use_dedicated_profile: true
 
   - action: browser.wait_text
     text: Sign in

@@ -69,6 +69,9 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"
     assert rows[0][1].steps[0].keep_open is True
+    assert rows[0][1].steps[0].clean_start is True
+    assert rows[0][1].steps[0].dismiss_restore_prompt is True
+    assert rows[0][1].steps[0].use_dedicated_profile is True
 
 
 def test_initialize_app_migrates_existing_gaming_mode_keep_open(tmp_path, monkeypatch):
@@ -120,9 +123,20 @@ steps:
     data = yaml.safe_load((recipe_dir / "gaming_mode.yaml").read_text(encoding="utf-8"))
 
     assert report.migration.changed is True
-    assert report.migration.changes == ["added keep_open: true to first browser.open step"]
+    assert report.migration.changes == [
+        "added keep_open: true to first browser.open step",
+        "added clean_start: true to first browser.open step",
+        "added dismiss_restore_prompt: true to first browser.open step",
+        "added use_dedicated_profile: true to first browser.open step",
+    ]
     assert rows[0][1].steps[0].keep_open is True
+    assert rows[0][1].steps[0].clean_start is True
+    assert rows[0][1].steps[0].dismiss_restore_prompt is True
+    assert rows[0][1].steps[0].use_dedicated_profile is True
     assert data["steps"][0]["keep_open"] is True
+    assert data["steps"][0]["clean_start"] is True
+    assert data["steps"][0]["dismiss_restore_prompt"] is True
+    assert data["steps"][0]["use_dedicated_profile"] is True
     assert data["steps"][1]["action"] == "app.launch"
 
 
@@ -150,6 +164,9 @@ steps:
   - action: browser.open
     url: https://example.test
     keep_open: true
+    clean_start: true
+    dismiss_restore_prompt: true
+    use_dedicated_profile: true
 """.lstrip(),
         encoding="utf-8",
     )

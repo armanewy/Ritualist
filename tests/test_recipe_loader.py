@@ -34,6 +34,54 @@ def test_load_recipe_renders_variables(tmp_path):
     assert recipe.steps[0].url == "https://example.test"
 
 
+def test_load_recipe_accepts_browser_clean_start_options(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            steps:
+              - action: browser.open
+                url: https://example.test
+                profile: gaming_mode
+                clean_start: true
+                dismiss_restore_prompt: true
+                use_dedicated_profile: true
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    recipe = load_recipe(path)
+
+    assert recipe.steps[0].clean_start is True
+    assert recipe.steps[0].dismiss_restore_prompt is True
+    assert recipe.steps[0].use_dedicated_profile is True
+
+
+def test_load_recipe_rejects_non_dedicated_browser_profile(tmp_path):
+    path = tmp_path / "recipe.yaml"
+    path.write_text(
+        dedent(
+            """
+            version: "0.1"
+            id: test_recipe
+            name: Test
+            steps:
+              - action: browser.open
+                url: https://example.test
+                use_dedicated_profile: false
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RecipeValidationError, match="use_dedicated_profile"):
+        load_recipe(path)
+
+
 def test_load_recipe_supports_preflight_and_verify_assertions(tmp_path):
     marker = tmp_path / "marker.txt"
     marker.write_text("ok", encoding="utf-8")

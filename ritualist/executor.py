@@ -1623,6 +1623,16 @@ def _confirmation_metadata(
 
 
 def _dry_run_message(step: ExecutableStep) -> str:
+    if step.action == "browser.open":
+        options = []
+        if getattr(step, "clean_start", False):
+            options.append("clean start")
+        if getattr(step, "dismiss_restore_prompt", False):
+            options.append("restore prompt dismissal")
+        if getattr(step, "use_dedicated_profile", True):
+            options.append(f"managed profile '{getattr(step, 'profile', 'default')}'")
+        suffix = f" ({', '.join(options)})" if options else ""
+        return f"would open browser URL{suffix}"
     layout_message = _dry_run_layout_message(step)
     if layout_message is not None:
         return layout_message

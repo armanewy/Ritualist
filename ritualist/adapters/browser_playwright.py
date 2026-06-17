@@ -26,9 +26,20 @@ class PlaywrightBrowserAdapter:
         profile: str = "default",
         new_window: bool = False,
         keep_open: bool = False,
+        clean_start: bool = False,
+        dismiss_restore_prompt: bool = False,
+        use_dedicated_profile: bool = True,
     ) -> None:
         self._keep_open_requested = keep_open
-        page = self._ensure_page(browser=browser, profile=profile, new_window=new_window)
+        page = self._ensure_page(
+            browser=browser,
+            profile=profile,
+            new_window=new_window,
+            clean_start=clean_start,
+            use_dedicated_profile=use_dedicated_profile,
+        )
+        if dismiss_restore_prompt:
+            _dismiss_known_restore_prompt(page)
         page.goto(url, wait_until="domcontentloaded")
 
     def configure_media(
@@ -182,7 +193,20 @@ class PlaywrightBrowserAdapter:
         self._browser_name = None
         self._profile = None
 
-    def _ensure_page(self, *, browser: str, profile: str, new_window: bool) -> Any:
+    def _ensure_page(
+        self,
+        *,
+        browser: str,
+        profile: str,
+        new_window: bool,
+        clean_start: bool,
+        use_dedicated_profile: bool,
+    ) -> Any:
+        if not use_dedicated_profile:
+            raise RitualistError(
+                "browser.open use_dedicated_profile=false is not supported; "
+                "Ritualist only opens managed browser profiles"
+            )
         if not SAFE_ID_PATTERN.fullmatch(profile):
             raise RitualistError(
                 "browser profile must be a safe filename-like identifier "
@@ -216,6 +240,13 @@ class PlaywrightBrowserAdapter:
 
         if self._context is None:
             launch_options: dict[str, Any] = {"headless": False}
+            if clean_start:
+                launch_options["args"] = [
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-session-crashed-bubble",
+                    "--hide-crash-restore-bubble",
+                ]
             if browser == "chrome":
                 launch_options["channel"] = "chrome"
             elif browser == "msedge":
@@ -255,6 +286,50 @@ class PlaywrightBrowserAdapter:
         if test_id is not None:
             return self._page.get_by_test_id(test_id).first
         raise RitualistError("browser action requires a structured target")
+
+
+_RESTORE_PROMPT_TEXTS = (
+    "Restore pages?",
+    "Chrome didn't shut down correctly.",
+)
+_RESTORE_DISMISS_BUTTONS = (
+    "Cancel",
+    "Close",
+    "No thanks",
+)
+
+
+def _dismiss_known_restore_prompt(page: Any) -> bool:
+    visible = False
+    for text in _RESTORE_PROMPT_TEXTS:
+        try:
+            locator = page.get_by_text(text, exact=True).first
+        except Exception:  # noqa: BLE001 - try the next known prompt signature.
+            continue
+        if _locator_visible_quietly(locator, timeout_seconds=0.2):
+            visible = True
+            break
+    if not visible:
+        return False
+
+    for button_name in _RESTORE_DISMISS_BUTTONS:
+        try:
+            button = page.get_by_role("button", name=button_name, exact=True).first
+            if _locator_visible_quietly(button, timeout_seconds=0.2):
+                button.click(timeout=500)
+                return True
+        except Exception:  # noqa: BLE001 - try the next known dismiss option.
+            continue
+    return False
+
+
+def _locator_visible_quietly(locator: Any, *, timeout_seconds: float) -> bool:
+    try:
+        return _locator_visible(locator, timeout_seconds=timeout_seconds)
+    except DependencyMissingError:
+        raise
+    except Exception:  # noqa: BLE001 - hidden/unsupported locators are a no-op here.
+        return False
 
 
 def _locator_visible(locator: Any, *, timeout_seconds: float) -> bool:

@@ -123,6 +123,114 @@ def test_browser_open_uses_persistent_profile_and_new_window(tmp_path, monkeypat
     assert adapter._keep_open_requested is True
 
 
+def test_browser_open_clean_start_adds_prevention_launch_flags(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url("https://example.test/one", profile="gaming", clean_start=True)
+
+    _user_data_dir, options = fake_playwright.chromium.calls[0]
+    assert "--no-first-run" in options["args"]
+    assert "--no-default-browser-check" in options["args"]
+    assert "--disable-session-crashed-bubble" in options["args"]
+    assert "--hide-crash-restore-bubble" in options["args"]
+
+
+def test_browser_open_rejects_non_dedicated_profiles(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+
+    try:
+        adapter.open_url(
+            "https://example.test/one",
+            profile="gaming",
+            use_dedicated_profile=False,
+        )
+    except Exception as exc:
+        assert "managed browser profiles" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("non-dedicated browser profiles should be rejected")
+
+    assert fake_playwright.chromium.calls == []
+
+
+def test_browser_open_restore_prompt_absent_noops(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url(
+        "https://example.test/one",
+        profile="gaming",
+        dismiss_restore_prompt=True,
+    )
+
+    page = fake_playwright.chromium.context.pages[0]
+    assert page.clicked == []
+    assert page.urls == ["https://example.test/one"]
+
+
+def test_browser_open_unknown_prompt_is_not_dismissed(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    page = FakePage()
+    page.visible_text.add("Update Chrome?")
+    page.visible_roles.add(("button", "OK"))
+    fake_playwright.chromium.context.pages.append(page)
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url(
+        "https://example.test/one",
+        profile="gaming",
+        dismiss_restore_prompt=True,
+    )
+
+    assert page.clicked == []
+    assert page.urls == ["https://example.test/one"]
+
+
+def test_browser_open_known_restore_prompt_dismisses_known_button(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    page = FakePage()
+    page.visible_text.add("Restore pages?")
+    page.visible_roles.add(("button", "Cancel"))
+    fake_playwright.chromium.context.pages.append(page)
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url(
+        "https://example.test/one",
+        profile="gaming",
+        dismiss_restore_prompt=True,
+    )
+
+    assert page.clicked == [("role", "button:Cancel")]
+    assert page.urls == ["https://example.test/one"]
+
+
 def test_browser_text_visible_is_read_only(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(

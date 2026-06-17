@@ -134,10 +134,19 @@ def migrate_gaming_mode_sample(path: Path) -> MigrationResult:
     for step in steps:
         if not isinstance(step, dict) or step.get("action") != "browser.open":
             continue
-        if "keep_open" not in step:
-            step["keep_open"] = True
+        desired_options = {
+            "keep_open": True,
+            "clean_start": True,
+            "dismiss_restore_prompt": True,
+            "use_dedicated_profile": True,
+        }
+        for key, value in desired_options.items():
+            if key in step:
+                continue
+            step[key] = value
             changed = True
-            changes.append("added keep_open: true to first browser.open step")
+            rendered = "true" if value is True else str(value)
+            changes.append(f"added {key}: {rendered} to first browser.open step")
         break
 
     if changed:

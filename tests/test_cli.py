@@ -403,7 +403,10 @@ def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
         migration=MigrationResult(
             recipe_path=tmp_path / "recipes" / "gaming_mode.yaml",
             changed=True,
-            changes=["added keep_open: true to first browser.open step"],
+            changes=[
+                "added keep_open: true to first browser.open step",
+                "added clean_start: true to first browser.open step",
+            ],
         ),
     )
     monkeypatch.setattr("ritualist.cli.initialize_app", lambda: report)
@@ -414,6 +417,7 @@ def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
     assert "Created config directory" in result.output
     assert "Copied bundled gaming_mode sample" in result.output
     assert "added keep_open: true to first browser.open step" in result.output
+    assert "added clean_start: true to first browser.open step" in result.output
 
 
 def test_init_prints_noop_report(tmp_path, monkeypatch):

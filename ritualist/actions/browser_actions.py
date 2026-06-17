@@ -31,6 +31,9 @@ class BrowserOpenHandler:
             "profile",
             "new_window",
             "keep_open",
+            "clean_start",
+            "dismiss_restore_prompt",
+            "use_dedicated_profile",
             "name",
             "optional",
             "timeout_seconds",
@@ -49,6 +52,9 @@ class BrowserOpenHandler:
             profile=step.profile,
             new_window=step.new_window,
             keep_open=step.keep_open,
+            clean_start=step.clean_start,
+            dismiss_restore_prompt=step.dismiss_restore_prompt,
+            use_dedicated_profile=step.use_dedicated_profile,
         )
         return f"opened {step.url}"
 

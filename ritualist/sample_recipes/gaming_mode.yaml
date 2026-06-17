@@ -38,6 +38,9 @@ steps:
     browser: chrome
     profile: gaming_mode
     keep_open: true
+    clean_start: true
+    dismiss_restore_prompt: true
+    use_dedicated_profile: true
 
   - name: Loop and play video
     action: browser.media

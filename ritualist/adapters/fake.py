@@ -53,6 +53,9 @@ class FakeBrowserAdapter(RecordingAdapter):
         profile: str = "default",
         new_window: bool = False,
         keep_open: bool = False,
+        clean_start: bool = False,
+        dismiss_restore_prompt: bool = False,
+        use_dedicated_profile: bool = True,
     ) -> None:
         self.record(
             "open_url",
@@ -61,6 +64,9 @@ class FakeBrowserAdapter(RecordingAdapter):
             profile=profile,
             new_window=new_window,
             keep_open=keep_open,
+            clean_start=clean_start,
+            dismiss_restore_prompt=dismiss_restore_prompt,
+            use_dedicated_profile=use_dedicated_profile,
         )
 
     def close(self) -> None:
