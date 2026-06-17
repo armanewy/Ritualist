@@ -539,3 +539,96 @@ Manual gate remains open:
   Chrome/Battle.net, declined Play status, interrupted repair after hard kill,
   Watch Me preview privacy, Canvas/theme pack behavior, and 100/300 component
   performance feel on the real Windows desktop.
+
+## UIA-Assisted Real Desktop Dogfood - 2026-06-17
+
+Status: Partial real-desktop evidence. Packaged Canvas/run/recovery paths passed
+on the real Windows desktop, but this is not a complete tag-ready manual gate
+closeout. Home card-button hand-click validation, dedicated visible
+`ritual.status`/Recent activity checks, subjective 100/300 component feel, and
+live Canvas/theme pack import/export remain caveats unless separately verified.
+
+Workspace state at start:
+
+- `main` and `origin/main` were in sync at `e4d0dd2`
+  (`Record packaged dogfood kickoff evidence`).
+- Working tree was clean before this checklist note was added.
+
+Visible packaged launch checks:
+
+- `dist\Ritualist\Ritualist.exe` opened a visible `Ritualist Home` window.
+- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` opened a visible
+  `Ritualist Canvas` window. `gaming_desktop` rendered real components and was
+  not blank or white.
+- `dist\Ritualist\Ritualist.exe --classic-gui` opened a visible classic
+  `Ritualist` window.
+- Packaged Canvas buttons were exposed through Windows UI Automation and were
+  invoked by accessible name, not by coordinate clicks. Packaged Home exposed
+  only the card container through UI Automation, so Home card buttons still need
+  literal human click validation if that remains a release requirement.
+
+Packaged Canvas action checks:
+
+- `doctor` on the `Diablo Night` card completed in packaged Canvas and updated
+  the card state.
+- `dry_run` on the `Diablo Night` card completed in packaged Canvas. Run
+  `20260617T143914Z_gaming_mode` ended `success`, `dry_run: true`, with all
+  7 steps recorded as dry-run `would ...` actions.
+- `preview_plan` on `diablo_target` completed in packaged Canvas and returned a
+  Diablo IV target plan preview without launching apps, clicking UI, installing
+  software, or writing target-start files. On this desktop the target state was
+  `not_found`, with local-resolution suggestions.
+- Watch Me was started, stopped, drafted, and discarded from packaged Canvas.
+  Session `20260617T143930Z_7a7f9328` produced a disabled/review-only draft,
+  did not install or auto-run behavior, recorded no browser URL, and matched no
+  forbidden markers (`password`, `secret`, `token`, `cookie`, `clipboard`,
+  `screenshot`, `keystroke`, `keylog`, `html`, or `dom`) in draft/session files.
+
+Real `gaming_mode` run checks:
+
+- A real packaged Canvas `Run` opened the managed Chrome ambience profile,
+  launched/surfaced Battle.net, selected Diablo IV, and reached the final Play
+  confirmation.
+- Pause, Resume, and Stop controls worked during the real run. Run
+  `20260617T144157Z_gaming_mode` records state history:
+  `running -> waiting -> paused -> running -> confirming -> stopping -> stopped`.
+- Runtime state updates were visible on the `Diablo Night` card/top Canvas
+  event text during the real run. This did not separately validate the
+  dedicated `ritual.status` component after each transition, and
+  `gaming_desktop` does not include a dedicated `recent.activity` component.
+- The native `Ritualist Confirmation Required` dialog appeared as a separate
+  top-level dialog above Battle.net before the Play click.
+- Declining/stopping the Play confirmation ended as `stopped` with
+  `stopped_reason: stopped_user_declined_confirmation`. `show-run
+  20260617T144157Z_gaming_mode` clearly reports the final step
+  `Ask before clicking Play` as `cancelled` with message
+  `user declined confirmation`; no confirmed risky Play action was performed.
+- Hard-killing packaged Canvas during an active run and then relaunching
+  packaged Home repaired abandoned run `20260617T144316Z_gaming_mode` to
+  `interrupted`. `show-run 20260617T144316Z_gaming_mode --no-repair` reports
+  `final_message: Ritualist exited before finalizing this run. Last recorded
+  step: Ask before clicking Play.`
+
+Performance and pack-safety checks:
+
+- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed in
+  3.852 ms with 0 warnings.
+- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed in
+  10.916 ms with 0 warnings.
+- These are command-path timings only, not a human subjective feel pass for
+  visible 100/300 component desktop interaction.
+- Focused pack-safety and run-log tests passed:
+  `python -m pytest -q tests/test_canvas_packs.py tests/test_watch_me.py
+  tests/test_canvas_runtime.py
+  tests/test_cli.py::test_runs_repairs_and_reports_interrupted_records
+  tests/test_cli.py::test_show_run_prints_runtime_v2_state_metadata
+  tests/test_cli.py::test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive`
+  reported `55 passed`.
+- Canvas/theme pack import/export safety was covered by focused tests in this
+  turn, not by live desktop import/export commands. Treat that checklist item as
+  not revalidated here if the release gate requires an actual command-path or
+  visual desktop pack import/export pass.
+
+Release note:
+
+- No `v0.2.0-alpha.1` tag was created.
