@@ -5,6 +5,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from ritualist.errors import RitualistError
 from ritualist.paths import canvases_dir
 
@@ -21,6 +23,7 @@ from .registry import CanvasComponentRegistry, create_component_registry, valida
 from .storage import CanvasWriteResult, list_canvases, load_canvas, save_canvas
 
 CANVAS_EDIT_MODEL_SCHEMA_VERSION = "ritualist.canvas.edit_model.v1"
+_HIDDEN_EDIT_PALETTE_TYPES = frozenset({"app.launcher", "window.layout_button"})
 
 
 class CanvasEditCommandType(StrEnum):
@@ -206,6 +209,8 @@ class CanvasEditSession:
         binding: CanvasComponentBinding | None = None,
     ) -> CanvasComponent:
         spec = self._component_type(type_id)
+        if binding is not None:
+            _validate_edit_binding_kind(binding.kind)
         resolved_id = self._unique_component_id(component_id or type_id.replace(".", "_").replace("/", "_"))
         component = CanvasComponent(
             id=resolved_id,
@@ -320,15 +325,19 @@ class CanvasEditSession:
         return duplicated
 
     def undo(self) -> None:
+        if not self.history.can_undo:
+            return
         self.document = self.history.undo(self.document)
-        self.dirty = True
+        self.dirty = _document_changed(self.document, self.original)
         if self.selection.component_id and self._find_component(self.selection.component_id) is None:
             self.selection = CanvasSelection()
         self.history.commands.append(CanvasEditCommand(CanvasEditCommandType.UNDO))
 
     def redo(self) -> None:
+        if not self.history.can_redo:
+            return
         self.document = self.history.redo(self.document)
-        self.dirty = True
+        self.dirty = _document_changed(self.document, self.original)
         self.history.commands.append(CanvasEditCommand(CanvasEditCommandType.REDO))
 
     def discard(self) -> None:
@@ -344,6 +353,13 @@ class CanvasEditSession:
         if not result.valid:
             raise RitualistError("canvas cannot be saved until validation errors are fixed: " + "; ".join(result.errors))
         target = destination or self.default_save_path()
+        if (
+            self.source == "bundled"
+            and destination is not None
+            and self.source_path is not None
+            and target.resolve() == self.source_path.resolve()
+        ):
+            raise RitualistError("bundled canvas templates must be saved as a user copy")
         write = save_canvas(self.document, target, overwrite=True)
         self.source_path = write.path
         self.source = "user"
@@ -356,7 +372,11 @@ class CanvasEditSession:
         return canvases_dir() / f"{self.document.id}.yaml"
 
     def palette(self) -> tuple[CanvasComponentPaletteEntry, ...]:
-        return tuple(CanvasComponentPaletteEntry.from_component_type(spec) for spec in self.registry.all())
+        return tuple(
+            CanvasComponentPaletteEntry.from_component_type(spec)
+            for spec in self.registry.all()
+            if _component_type_is_editable(spec)
+        )
 
     def property_schema(self, type_id: str) -> tuple[CanvasPropertyEdit, ...]:
         spec = self._component_type(type_id)
@@ -391,6 +411,7 @@ class CanvasEditSession:
         self.dirty = True
 
     def _replace_component(self, component: CanvasComponent, command: CanvasEditCommand) -> None:
+        self._validate_component(component)
         components = tuple(
             component if existing.id == component.id else existing
             for existing in self.document.components
@@ -413,6 +434,10 @@ class CanvasEditSession:
             raise RitualistError(f"unknown canvas component type: {type_id}") from exc
 
     def _validate_component(self, component: CanvasComponent) -> None:
+        try:
+            component = CanvasComponent.model_validate(component.to_dict())
+        except ValidationError as exc:
+            raise RitualistError(str(exc)) from exc
         spec = self._component_type(component.type)
         _validate_props_for_edit(component, spec)
         existing_ids = {row.id for row in self.document.components}
@@ -469,6 +494,16 @@ def editable_binding_kinds() -> tuple[str, ...]:
 def _validate_edit_binding_kind(kind: CanvasBindingKind) -> None:
     if kind.value not in editable_binding_kinds():
         raise RitualistError(f"binding kind is not editable in Canvas Edit Mode: {kind.value}")
+
+
+def _component_type_is_editable(component_type: CanvasComponentType) -> bool:
+    return component_type.type_id not in _HIDDEN_EDIT_PALETTE_TYPES
+
+
+def _document_changed(document: CanvasDocument, original: CanvasDocument | None) -> bool:
+    if original is None:
+        return True
+    return document.to_dict() != original.to_dict()
 
 
 def _validate_props_for_edit(component: CanvasComponent, spec: CanvasComponentType) -> None:

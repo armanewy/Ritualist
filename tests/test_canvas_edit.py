@@ -62,6 +62,17 @@ def test_edit_session_create_move_resize_delete_component() -> None:
     assert [component.id for component in session.document.components] == ["title"]
 
 
+def test_change_z_validates_component_model() -> None:
+    session = CanvasEditSession(document=_canvas())
+
+    try:
+        session.change_z("title", z=1_000_000)
+    except RitualistError as exc:
+        assert "z must be between" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("invalid z should fail validation")
+
+
 def test_edit_session_prop_validation() -> None:
     session = CanvasEditSession(document=_canvas())
 
@@ -141,6 +152,20 @@ def test_edit_session_binding_validation() -> None:
         raise AssertionError("unsafe binding kind should be rejected")
 
 
+def test_create_component_rejects_non_editable_binding() -> None:
+    session = CanvasEditSession(document=_canvas())
+
+    try:
+        session.create_component(
+            "ritual.card",
+            binding=CanvasComponentBinding(kind=CanvasBindingKind.APP_LAUNCHER, id="launcher"),
+        )
+    except RitualistError as exc:
+        assert "not editable" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("create_component should reject non-editable bindings")
+
+
 def test_edit_session_duplicate_undo_redo() -> None:
     session = CanvasEditSession(document=_canvas())
 
@@ -154,6 +179,26 @@ def test_edit_session_duplicate_undo_redo() -> None:
 
     session.redo()
     assert [component.id for component in session.document.components] == ["title", "title_copy"]
+
+
+def test_undo_redo_dirty_state_tracks_original_document() -> None:
+    session = CanvasEditSession(document=_canvas())
+
+    session.undo()
+    session.redo()
+    assert session.dirty is False
+    assert session.history.commands == []
+
+    session.edit_props("title", {"text": "Changed"})
+    assert session.dirty is True
+
+    session.undo()
+    assert session.dirty is False
+    assert session.document.to_dict() == _canvas().to_dict()
+
+    session.redo()
+    assert session.dirty is True
+    assert session.document.components[0].props_dict()["text"] == "Changed"
 
 
 def test_bundled_template_saves_as_user_copy(tmp_path: Path, monkeypatch) -> None:
@@ -177,6 +222,28 @@ def test_bundled_template_saves_as_user_copy(tmp_path: Path, monkeypatch) -> Non
     assert result.path == output / "editable_canvas.yaml"
     assert result.changed is True
     assert load_canvas(result.path).components[0].props_dict()["text"] == "Edited locally"
+
+
+def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "bundled" / "gaming_desktop.yaml"
+    save_canvas(_canvas(), source)
+    monkeypatch.setattr(
+        "ritualist.canvas.edit.list_canvases",
+        lambda include_bundled=True: [
+            CanvasReference("gaming_desktop", "Gaming Desktop", source, "bundled")
+        ],
+    )
+    session = create_edit_session("gaming_desktop")
+    session.edit_props("title", {"text": "Edited locally"})
+
+    try:
+        session.save(destination=source)
+    except RitualistError as exc:
+        assert "bundled canvas templates" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("bundled source overwrite should be rejected")
+
+    assert load_canvas(source).components[0].props_dict()["text"] == "Hello"
 
 
 def test_invalid_canvas_cannot_save(tmp_path: Path, monkeypatch) -> None:
@@ -214,11 +281,14 @@ def test_palette_exposes_property_editor_schema() -> None:
     session = CanvasEditSession(document=_canvas())
 
     entry = next(item for item in session.palette() if item.type_id == "text.label")
+    palette_ids = {item.type_id for item in session.palette()}
 
     assert entry.category == "Display"
     assert [field.name for field in entry.property_schema] == ["text", "size", "color", "align"]
     assert entry.property_schema[0].label == "Text"
     assert entry.property_schema[0].required is True
+    assert "app.launcher" not in palette_ids
+    assert "window.layout_button" not in palette_ids
 
 
 def test_canvas_edit_model_cli_json() -> None:
