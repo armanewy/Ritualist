@@ -42,6 +42,12 @@ Doctor/Dry Run ceremony by default.
 Rituals are for multi-step intent: readable recipes, validation, dry-run
 support, confirmation gates, pause/resume/stop controls, logs, and recovery.
 
+The shortcut boundary is documented in
+[Shortcut Components](SHORTCUT_COMPONENTS.md). Folder shortcuts hand off to
+File Explorer on Windows; Ritualist must not replace Explorer, build a file
+manager, recursively index folders, provide folder tree or context-menu UI, or
+turn single-step folder/app/URL/file access into recipe execution.
+
 ## Local Learning Direction
 
 Future Ritual Suggestions must be local, opt-in, and review-only. Ritualist may

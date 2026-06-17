@@ -58,11 +58,23 @@ families:
 - `ritual.controller`
 - `target.card`
 - `recent.activity`
+- `shortcut.folder`, `shortcut.app`, and `shortcut.url` when those dedicated
+  shortcut types are implemented
 - dock/category components
 - clock/text/image components when already supported safely
 
 New visual variants must not add new automation capability. Variants should
 change presentation, density, and hierarchy only.
+
+Shortcut components should look like native-access tiles, not ritual cards. A
+shortcut tile can show an icon, label, target hint, focus state, missing-target
+warning, and explicit Open affordance, but it should not show run progress,
+step state, pause/resume/stop controls, Doctor, or Dry Run actions.
+
+Desktop Work-Area Use Mode should default to single click selecting or focusing
+a shortcut component, with double click or explicit Open performing the native
+handoff. Edit Mode single click selects the component for editing. This keeps
+shortcut access distinct from both Canvas editing and ritual execution.
 
 ## Style Schema
 
