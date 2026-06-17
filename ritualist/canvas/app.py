@@ -8,6 +8,7 @@ from threading import Event
 from typing import Any
 
 from ritualist.errors import DependencyMissingError, RitualistError
+from ritualist.config import load_app_config
 from ritualist.home.actions import home_event_from_runtime, home_event_from_step_status
 from ritualist.home.confirmation import InlineConfirmationPresenter
 from ritualist.home.models import HomeCardStatus, HomeRuntimeEvent
@@ -422,12 +423,14 @@ def run_canvas_use(
     )
     document = edit_session.document
     controller = CanvasUseController(document, CanvasEditUiBridge(edit_session), mock=mock)
+    performance = load_app_config().canvas.performance_settings().to_dict()
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("ritualistMockMode", mock)
     engine.rootContext().setContextProperty("ritualistCanvasUseController", controller)
     engine.rootContext().setContextProperty("ritualistCanvasPayload", controller.payload)
     engine.rootContext().setContextProperty("ritualistCanvasEditPayload", controller.editPayload)
+    engine.rootContext().setContextProperty("ritualistCanvasPerformance", performance)
     qml_resource = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
     with as_file(qml_resource) as qml_path:
         engine.load(QUrl.fromLocalFile(str(qml_path)))

@@ -40,6 +40,12 @@ from .models import (
     CanvasUpdateBehavior,
     CanvasValidationResult,
 )
+from .performance import (
+    CANVAS_PERFORMANCE_SCHEMA_VERSION,
+    CanvasPerformanceMode,
+    CanvasPerformanceSettings,
+    performance_settings_for_mode,
+)
 from .runtime import (
     CANVAS_RUNTIME_SCHEMA_VERSION,
     CanvasComponentAction,
@@ -87,6 +93,7 @@ __all__ = [
     "CANVAS_VIEW_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_UI_SCHEMA_VERSION",
+    "CANVAS_PERFORMANCE_SCHEMA_VERSION",
     "CanvasBackground",
     "CanvasBindingKind",
     "CanvasComponentAction",
@@ -112,6 +119,8 @@ __all__ = [
     "CanvasMetadata",
     "CanvasPackMetadata",
     "CanvasPerformanceClass",
+    "CanvasPerformanceMode",
+    "CanvasPerformanceSettings",
     "CanvasPropType",
     "CanvasPropertyEdit",
     "CanvasReference",
@@ -147,6 +156,7 @@ __all__ = [
     "list_canvases",
     "load_canvas",
     "normalize_canvas_bindings",
+    "performance_settings_for_mode",
     "recipe_card_component",
     "save_canvas",
     "validate_canvas",

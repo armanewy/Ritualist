@@ -165,6 +165,23 @@ class CanvasThemeTokens(BaseModel):
     accent: str = "#3dd6a5"
     warning: str = "#f5c45b"
     danger: str = "#ff6b7a"
+    muted: str = "#91a2b8"
+    panel: str = "#101720"
+    panel_alt: str = "#0e151f"
+    border: str = "#203044"
+    focus_ring: str = "#7fb8ff"
+    font_family: str = "Segoe UI"
+    font_size_body: int = Field(default=13, ge=10, le=24)
+    font_size_title: int = Field(default=26, ge=16, le=48)
+    radius_sm: int = Field(default=4, ge=0, le=24)
+    radius_md: int = Field(default=8, ge=0, le=32)
+    radius_lg: int = Field(default=12, ge=0, le=40)
+    spacing_sm: int = Field(default=6, ge=0, le=32)
+    spacing_md: int = Field(default=12, ge=0, le=48)
+    spacing_lg: int = Field(default=18, ge=0, le=64)
+    shadow: str = "simple"
+    motion_fast_ms: int = Field(default=90, ge=0, le=1000)
+    motion_normal_ms: int = Field(default=160, ge=0, le=2000)
 
 
 class CanvasTheme(BaseModel):

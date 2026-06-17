@@ -363,6 +363,31 @@ def test_canvas_risk_taxonomy_aligns_with_primitive_risks() -> None:
     assert CanvasComponentRisk.RISKY.value == "risky"
 
 
+def test_canvas_theme_tokens_include_visual_polish_contract() -> None:
+    canvas = CanvasDocument(id="theme_contract", name="Theme Contract")
+    payload = canvas.to_dict()
+    tokens = payload["theme"]["tokens"]
+
+    for key in (
+        "background",
+        "foreground",
+        "accent",
+        "muted",
+        "panel",
+        "border",
+        "focus_ring",
+        "font_family",
+        "font_size_body",
+        "font_size_title",
+        "radius_md",
+        "spacing_md",
+        "shadow",
+        "motion_fast_ms",
+        "motion_normal_ms",
+    ):
+        assert key in tokens
+
+
 def test_core_components_expose_prop_schemas() -> None:
     registry = create_component_registry()
     expected_names = {

@@ -105,3 +105,14 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     assert "Apply Binding" in qml
     assert "saveCanvas" in qml
     assert "dispatch(componentId, actionId)" in qml
+
+
+def test_canvas_use_qml_contains_low_spec_performance_controls() -> None:
+    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+
+    assert "ritualistCanvasPerformance" in qml
+    assert "showPerformanceOverlay" in qml
+    assert "Canvas performance" in qml
+    assert "Behavior on opacity" in qml
+    assert "FastBlur" not in qml
+    assert "ShaderEffect" not in qml

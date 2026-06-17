@@ -12,8 +12,13 @@ ApplicationWindow {
     property var canvasController: typeof ritualistCanvasUseController === "undefined" ? null : ritualistCanvasUseController
     property var canvasPayload: canvasController ? canvasController.payload : ritualistCanvasPayload
     property var editPayload: canvasController ? canvasController.editPayload : ritualistCanvasEditPayload
+    property var performanceSettings: typeof ritualistCanvasPerformance === "undefined" ? ({}) : ritualistCanvasPerformance
     property bool editMode: canvasController ? canvasController.editMode : false
     property bool mockMode: typeof ritualistMockMode === "undefined" ? false : ritualistMockMode
+    property bool animationsEnabled: performanceSettings.animations === undefined ? true : performanceSettings.animations
+    property bool showPerformanceOverlay: performanceSettings.show_performance_overlay === true
+    property int motionFastMs: performanceSettings.mode === "low" ? 0 : (canvasTheme().tokens.motion_fast_ms || 90)
+    property int motionNormalMs: performanceSettings.mode === "low" ? 0 : (canvasTheme().tokens.motion_normal_ms || 160)
     property bool actionBusy: canvasController ? canvasController.actionBusy : false
     property bool runtimeActive: canvasController ? canvasController.runtimeActive : false
     property bool runtimePaused: canvasController ? canvasController.runtimePaused : false
@@ -33,6 +38,25 @@ ApplicationWindow {
         return canvasPayload.canvas.name || canvasPayload.canvas.id || "Canvas"
     }
 
+    function canvasTheme() {
+        if (!canvasPayload || !canvasPayload.canvas || !canvasPayload.canvas.theme) {
+            return { tokens: {} }
+        }
+        return canvasPayload.canvas.theme
+    }
+
+    function token(name, fallback) {
+        var tokens = canvasTheme().tokens || {}
+        return tokens[name] || fallback
+    }
+
+    function performanceCounters() {
+        if (!canvasPayload || !canvasPayload.runtime || !canvasPayload.runtime.performance_counters) {
+            return {}
+        }
+        return canvasPayload.runtime.performance_counters
+    }
+
     function componentColor(status, typeName) {
         if (status === "failed" || status === "incompatible") {
             return "#28151c"
@@ -49,7 +73,7 @@ ApplicationWindow {
         if (typeName === "shape") {
             return "#182233"
         }
-        return "#101720"
+        return root.token("panel", "#101720")
     }
 
     function borderColor(status) {
@@ -65,7 +89,7 @@ ApplicationWindow {
         if (status === "success" || status === "compatible") {
             return "#3dd6a5"
         }
-        return "#2c3c53"
+        return root.token("border", "#2c3c53")
     }
 
     function dispatch(componentId, actionId) {
@@ -144,7 +168,7 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: "#070c13"
+        color: root.token("background", "#070c13")
     }
 
     ColumnLayout {
@@ -162,15 +186,17 @@ ApplicationWindow {
 
                 Text {
                     text: root.canvasName()
-                    color: "#f4f7fb"
-                    font.pixelSize: 26
+                    color: root.token("foreground", "#f4f7fb")
+                    font.family: root.token("font_family", "Segoe UI")
+                    font.pixelSize: root.token("font_size_title", 26)
                     font.bold: true
                 }
 
                 Text {
                     text: root.footerText
-                    color: "#91a2b8"
-                    font.pixelSize: 13
+                    color: root.token("muted", "#91a2b8")
+                    font.family: root.token("font_family", "Segoe UI")
+                    font.pixelSize: root.token("font_size_body", 13)
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -217,8 +243,8 @@ ApplicationWindow {
                 Rectangle {
                     width: scroll.contentWidth
                     height: scroll.contentHeight
-                    color: "#0b1018"
-                    border.color: root.editMode ? "#3dd6a5" : "#1d2a3a"
+                    color: root.token("panel_alt", "#0b1018")
+                    border.color: root.editMode ? root.token("accent", "#3dd6a5") : root.token("border", "#1d2a3a")
                     border.width: root.editMode ? 2 : 1
 
                     Repeater {
@@ -235,10 +261,16 @@ ApplicationWindow {
                             width: modelData.width
                             height: modelData.height
                             visible: modelData.visible
-                            radius: 8
+                            radius: root.token("radius_md", 8)
                             color: root.componentColor(modelData.status, modelData.type)
-                            border.color: selected ? "#3dd6a5" : root.borderColor(modelData.status)
+                            border.color: selected ? root.token("accent", "#3dd6a5") : root.borderColor(modelData.status)
                             border.width: selected ? 3 : 1
+                            opacity: root.actionBusy && !selected ? 0.92 : 1.0
+
+                            Behavior on opacity {
+                                enabled: root.animationsEnabled
+                                NumberAnimation { duration: root.motionFastMs }
+                            }
 
                             MouseArea {
                                 id: moveArea
@@ -252,12 +284,13 @@ ApplicationWindow {
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 8
+                                anchors.margins: root.token("spacing_md", 12)
+                                spacing: root.token("spacing_sm", 6)
 
                                 Text {
                                     text: modelData.title || modelData.id
-                                    color: "#f4f7fb"
+                                    color: root.token("foreground", "#f4f7fb")
+                                    font.family: root.token("font_family", "Segoe UI")
                                     font.pixelSize: modelData.type === "text.label" ? 18 : 15
                                     font.bold: true
                                     elide: Text.ElideRight
@@ -266,7 +299,8 @@ ApplicationWindow {
 
                                 Text {
                                     text: modelData.subtitle || modelData.message || modelData.type
-                                    color: "#91a2b8"
+                                    color: root.token("muted", "#91a2b8")
+                                    font.family: root.token("font_family", "Segoe UI")
                                     font.pixelSize: 12
                                     wrapMode: Text.WordWrap
                                     maximumLineCount: 3
@@ -287,7 +321,7 @@ ApplicationWindow {
 
                                 Text {
                                     text: root.editMode ? (modelData.id + " | " + modelData.type) : ""
-                                    color: "#3dd6a5"
+                                    color: root.token("accent", "#3dd6a5")
                                     font.pixelSize: 11
                                     visible: root.editMode
                                     elide: Text.ElideRight
@@ -320,7 +354,7 @@ ApplicationWindow {
                                 width: 18
                                 height: 18
                                 radius: 3
-                                color: "#3dd6a5"
+                                color: root.token("accent", "#3dd6a5")
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 anchors.margins: 4
@@ -355,9 +389,9 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 visible: root.editMode
                 color: "#0e151f"
-                border.color: "#203044"
+                border.color: root.token("border", "#203044")
                 border.width: 1
-                radius: 8
+                radius: root.token("radius_md", 8)
 
                 ScrollView {
                     anchors.fill: parent
@@ -369,7 +403,7 @@ ApplicationWindow {
 
                         Text {
                             text: "Edit Mode"
-                            color: "#f4f7fb"
+                            color: root.token("foreground", "#f4f7fb")
                             font.pixelSize: 20
                             font.bold: true
                         }
@@ -503,6 +537,52 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 18
+        width: 260
+        height: 104
+        radius: root.token("radius_md", 8)
+        color: "#151d2b"
+        opacity: 0.96
+        border.color: root.token("border", "#203044")
+        visible: root.showPerformanceOverlay
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 3
+
+            Text {
+                text: "Canvas performance"
+                color: root.token("foreground", "#f4f7fb")
+                font.pixelSize: 12
+                font.bold: true
+            }
+
+            Text {
+                text: "mode " + (root.performanceSettings.mode || "balanced") +
+                      " | components " + (root.performanceCounters().component_count || root.components().length)
+                color: root.token("muted", "#91a2b8")
+                font.pixelSize: 11
+            }
+
+            Text {
+                text: "update " + (root.performanceSettings.live_update_rate_hz || 30) +
+                      "Hz | build " + Math.round(root.performanceCounters().runtime_state_build_ms || 0) + "ms"
+                color: root.token("muted", "#91a2b8")
+                font.pixelSize: 11
+            }
+
+            Text {
+                text: "warnings " + (root.performanceCounters().warnings_count || 0)
+                color: root.token("muted", "#91a2b8")
+                font.pixelSize: 11
             }
         }
     }

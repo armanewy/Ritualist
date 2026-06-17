@@ -97,6 +97,10 @@ def _ensure_config_file() -> bool:
             "categories": list(DEFAULT_HOME_CATEGORIES),
             "min_status_dwell_ms": 1200,
         },
+        "canvas": {
+            "performance_mode": "balanced",
+            "show_performance_overlay": False,
+        },
     }
     path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     return True

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from .paths import config_file_path, default_log_file
+
+if TYPE_CHECKING:
+    from .canvas.performance import CanvasPerformanceSettings
 
 DEFAULT_OVERLAY_DURATION_MS = 700
 DEFAULT_HOME_CATEGORIES = (
@@ -33,12 +36,27 @@ class HomeConfig:
 
 
 @dataclass(frozen=True)
+class CanvasConfig:
+    performance_mode: str = "balanced"
+    show_performance_overlay: bool = False
+
+    def performance_settings(self) -> "CanvasPerformanceSettings":
+        from .canvas.performance import performance_settings_for_mode
+
+        return performance_settings_for_mode(
+            self.performance_mode,
+            show_performance_overlay=self.show_performance_overlay,
+        )
+
+
+@dataclass(frozen=True)
 class AppConfig:
     default_browser: str = "chromium"
     log_level: str = "INFO"
     log_file: Path = field(default_factory=default_log_file)
     ui: UIConfig = field(default_factory=UIConfig)
     home: HomeConfig = field(default_factory=HomeConfig)
+    canvas: CanvasConfig = field(default_factory=CanvasConfig)
 
 
 def load_app_config(path: Path | None = None) -> AppConfig:
@@ -56,6 +74,8 @@ def load_app_config(path: Path | None = None) -> AppConfig:
     ui = _load_ui_config(ui_raw if isinstance(ui_raw, dict) else {})
     home_raw = raw.get("home")
     home = _load_home_config(home_raw if isinstance(home_raw, dict) else {})
+    canvas_raw = raw.get("canvas")
+    canvas = _load_canvas_config(canvas_raw if isinstance(canvas_raw, dict) else {})
     log_file = Path(str(raw["log_file"])) if raw.get("log_file") else default_log_file()
     return AppConfig(
         default_browser=str(raw.get("default_browser") or "chromium"),
@@ -63,6 +83,7 @@ def load_app_config(path: Path | None = None) -> AppConfig:
         log_file=log_file,
         ui=ui,
         home=home,
+        canvas=canvas,
     )
 
 
@@ -88,6 +109,14 @@ def _load_home_config(raw: dict[str, Any]) -> HomeConfig:
     return HomeConfig(
         categories=_load_home_categories(raw.get("categories")),
         min_status_dwell_ms=max(0, dwell_int),
+    )
+
+
+def _load_canvas_config(raw: dict[str, Any]) -> CanvasConfig:
+    return CanvasConfig(
+        performance_mode=str(raw.get("performance_mode") or "balanced").strip().casefold()
+        or "balanced",
+        show_performance_overlay=bool(raw.get("show_performance_overlay", False)),
     )
 
 

@@ -62,6 +62,10 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         ],
         "min_status_dwell_ms": 1200,
     }
+    assert config["canvas"] == {
+        "performance_mode": "balanced",
+        "show_performance_overlay": False,
+    }
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"
     assert rows[0][1].steps[0].keep_open is True
