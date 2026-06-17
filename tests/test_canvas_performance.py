@@ -213,3 +213,29 @@ def test_canvas_use_qml_wires_performance_and_typed_delegates() -> None:
         "\"stroke\"",
     ):
         assert snippet in qml
+
+
+def test_canvas_use_qml_uses_paper_tokens_and_visible_state_roles() -> None:
+    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+
+    for snippet in (
+        "component PaperButton: Button",
+        "QtQuick.Controls.Basic",
+        "focusPolicy: Qt.StrongFocus",
+        "buttonBorder(control.role, control.enabled, control.activeFocus)",
+        "stateIsDanger(status)",
+        'status === "interrupted"',
+        'status === "confirming"',
+        'role: "danger"',
+        'role: "warning"',
+        'role: "primary"',
+        'root.token("background"',
+        'root.token("panel"',
+        'root.token("success_panel"',
+        'root.token("warning_panel"',
+        'root.token("danger_panel"',
+        'root.token("focus_panel"',
+        "root.radiusLg",
+        "root.spaceMd",
+    ):
+        assert snippet in qml

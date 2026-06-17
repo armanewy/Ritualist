@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 ApplicationWindow {
@@ -35,6 +35,12 @@ ApplicationWindow {
     property bool runtimeActive: canvasController ? canvasController.runtimeActive : false
     property bool runtimePaused: canvasController ? canvasController.runtimePaused : false
     property string footerText: canvasController ? canvasController.lastEventLabel : "Canvas ready"
+    property int spaceSm: Number(token("spacing_sm", 6))
+    property int spaceMd: Number(token("spacing_md", 12))
+    property int spaceLg: Number(token("spacing_lg", 18))
+    property int radiusSm: Number(token("radius_sm", 4))
+    property int radiusMd: Number(token("radius_md", 8))
+    property int radiusLg: Number(token("radius_lg", 12))
 
     function components() {
         if (!canvasPayload || !canvasPayload.components) {
@@ -110,17 +116,34 @@ ApplicationWindow {
         return Image.PreserveAspectCrop
     }
 
+    function stateIsDanger(status) {
+        return status === "failed" || status === "incompatible" || status === "interrupted"
+    }
+
+    function stateIsWarning(status) {
+        return status === "warning" || status === "warnings" || status === "stopped"
+    }
+
+    function stateIsActive(status) {
+        return status === "running" || status === "waiting" || status === "paused" ||
+               status === "confirming" || status === "confirmation"
+    }
+
+    function stateIsSuccess(status) {
+        return status === "success" || status === "compatible"
+    }
+
     function componentColor(status, typeName) {
-        if (status === "failed" || status === "incompatible") {
+        if (stateIsDanger(status)) {
             return root.token("danger_panel", "#28151c")
         }
-        if (status === "warning" || status === "warnings" || status === "stopped") {
+        if (stateIsWarning(status)) {
             return root.token("warning_panel", "#252014")
         }
-        if (status === "running" || status === "waiting" || status === "paused") {
+        if (stateIsActive(status)) {
             return root.token("focus_panel", "#132235")
         }
-        if (status === "success" || status === "compatible") {
+        if (stateIsSuccess(status)) {
             return root.token("success_panel", "#12251f")
         }
         if (typeName === "shape") {
@@ -130,19 +153,68 @@ ApplicationWindow {
     }
 
     function borderColor(status) {
-        if (status === "failed" || status === "incompatible") {
+        if (stateIsDanger(status)) {
             return root.token("danger", "#ff6b7a")
         }
-        if (status === "warning" || status === "warnings" || status === "stopped") {
+        if (stateIsWarning(status)) {
             return root.token("warning", "#f5c45b")
         }
-        if (status === "running" || status === "waiting" || status === "paused") {
+        if (stateIsActive(status)) {
             return root.token("focus_ring", "#7fb8ff")
         }
-        if (status === "success" || status === "compatible") {
+        if (stateIsSuccess(status)) {
             return root.token("success", root.token("accent", "#3dd6a5"))
         }
         return root.token("border", "#2c3c53")
+    }
+
+    function actionRole(actionId) {
+        if (actionId === "stop" || actionId === "Cancel Ritual") {
+            return "danger"
+        }
+        if (actionId === "pause") {
+            return "warning"
+        }
+        if (actionId === "run" || actionId === "resume" || actionId === "dry_run" ||
+                actionId === "doctor" || actionId === "preview_plan") {
+            return "primary"
+        }
+        return "neutral"
+    }
+
+    function buttonBackground(role, enabled, hovered, down) {
+        if (!enabled) {
+            return root.token("panel_alt", "#0e151f")
+        }
+        if (role === "danger") {
+            return down || hovered ? root.token("danger_panel", "#28151c") : root.token("panel", "#101720")
+        }
+        if (role === "warning") {
+            return down || hovered ? root.token("warning_panel", "#252014") : root.token("panel", "#101720")
+        }
+        if (role === "primary") {
+            return down || hovered ? root.token("focus_panel", "#132235") : root.token("panel", "#101720")
+        }
+        return down || hovered ? root.token("panel_alt", "#0e151f") : root.token("panel", "#101720")
+    }
+
+    function buttonBorder(role, enabled, focused) {
+        if (focused) {
+            return root.token("focus_ring", "#7fb8ff")
+        }
+        if (!enabled) {
+            return root.token("border", "#203044")
+        }
+        if (role === "danger") {
+            return root.token("danger", "#ff6b7a")
+        }
+        if (role === "warning") {
+            return root.token("warning", "#f5c45b")
+        }
+        if (role === "primary") {
+            return root.token("accent", "#3dd6a5")
+        }
+        return root.token("border", "#203044")
     }
 
     function delegateFor(typeName) {
@@ -243,6 +315,38 @@ ApplicationWindow {
         return selected.supported_bindings || []
     }
 
+    component PaperButton: Button {
+        id: control
+        property string role: "neutral"
+        property bool compact: false
+
+        implicitHeight: compact ? 30 : 36
+        leftPadding: root.spaceMd
+        rightPadding: root.spaceMd
+        topPadding: root.spaceSm
+        bottomPadding: root.spaceSm
+        font.family: root.token("font_family", "Segoe UI")
+        font.pixelSize: root.token("font_size_body", 13)
+        focusPolicy: Qt.StrongFocus
+
+        contentItem: Text {
+            text: control.text
+            color: control.enabled ? root.token("foreground", "#f4f7fb") : root.token("muted", "#91a2b8")
+            font: control.font
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        background: Rectangle {
+            radius: root.radiusMd
+            color: root.buttonBackground(control.role, control.enabled, control.hovered, control.down)
+            border.color: root.buttonBorder(control.role, control.enabled, control.activeFocus)
+            border.width: control.activeFocus ? 2 : 1
+            opacity: control.enabled ? 1.0 : 0.56
+        }
+    }
+
     Connections {
         target: root.canvasController
 
@@ -319,23 +423,23 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 12
+        anchors.margins: root.spaceLg
+        spacing: root.spaceMd
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
+            spacing: root.spaceMd
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: root.spaceSm
 
                 Text {
                     text: root.canvasName()
                     color: root.token("foreground", "#f4f7fb")
                     font.family: root.token("font_family", "Segoe UI")
                     font.pixelSize: root.token("font_size_title", 26)
-                    font.bold: true
+                    font.weight: Font.DemiBold
                 }
 
                 Text {
@@ -348,50 +452,56 @@ ApplicationWindow {
                 }
             }
 
-            Button {
+            PaperButton {
                 text: root.editMode ? "Use Mode" : "Edit Mode"
                 enabled: root.canvasController && !root.runtimeActive
                 onClicked: root.canvasController.setEditMode(!root.editMode)
             }
 
-            Button {
+            PaperButton {
                 text: "Pause"
+                role: "warning"
                 enabled: root.runtimeActive && !root.runtimePaused && root.canvasController
                 onClicked: root.canvasController.pauseCurrentRun()
             }
 
-            Button {
+            PaperButton {
                 text: "Resume"
+                role: "primary"
                 enabled: root.runtimeActive && root.runtimePaused && root.canvasController
                 onClicked: root.canvasController.resumeCurrentRun()
             }
 
-            Button {
+            PaperButton {
                 text: "Stop"
+                role: "danger"
                 enabled: root.runtimeActive && root.canvasController
                 onClicked: root.canvasController.stopCurrentRun()
             }
 
-            Button {
+            PaperButton {
                 text: "Create from what I do"
                 enabled: root.canvasController && !root.mockMode && !root.canvasController.watchMeRecording
                 onClicked: root.canvasController.startWatchMe()
             }
 
-            Button {
+            PaperButton {
                 text: "Stop Watch Me"
+                role: "warning"
                 enabled: root.canvasController && root.canvasController.watchMeRecording
                 onClicked: root.canvasController.stopWatchMe()
             }
 
-            Button {
+            PaperButton {
                 text: "Create Draft"
+                role: "primary"
                 enabled: root.canvasController && root.canvasController.watchMeDraftAvailable
                 onClicked: root.canvasController.createWatchMeDraft()
             }
 
-            Button {
+            PaperButton {
                 text: "Discard"
+                role: "danger"
                 enabled: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
                 onClicked: root.canvasController.discardWatchMe()
             }
@@ -399,8 +509,8 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            height: watchMeStatus.visible ? (watchMePreview.visible ? 126 : 44) : 0
-            radius: root.token("radius_sm", 4)
+            height: watchMeStatus.visible ? (watchMePreview.visible ? 132 : 48) : 0
+            radius: root.radiusLg
             color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning_panel", "#252014") : root.token("panel", "#101720")
             border.color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning", "#f5c45b") : root.token("border", "#203044")
             visible: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
@@ -408,13 +518,13 @@ ApplicationWindow {
             ColumnLayout {
                 id: watchMeStatus
                 anchors.fill: parent
-                anchors.margins: 8
+                anchors.margins: root.spaceMd
                 visible: parent.visible
-                spacing: 6
+                spacing: root.spaceSm
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: root.spaceSm
 
                     Rectangle {
                         width: 10
@@ -427,7 +537,7 @@ ApplicationWindow {
                         text: root.canvasController ? root.canvasController.watchMeStatusLabel : ""
                         color: root.token("foreground", "#f4f7fb")
                         font.pixelSize: 12
-                        font.bold: true
+                        font.weight: Font.DemiBold
                         elide: Text.ElideRight
                         Layout.preferredWidth: 260
                     }
@@ -459,7 +569,7 @@ ApplicationWindow {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 12
+            spacing: root.spaceMd
 
             Flickable {
                 id: scroll
@@ -472,9 +582,10 @@ ApplicationWindow {
                 Rectangle {
                     width: scroll.contentWidth
                     height: scroll.contentHeight
-                    color: root.token("panel_alt", "#0b1018")
+                    color: root.token("background", "#070c13")
                     border.color: root.editMode ? root.token("accent", "#3dd6a5") : root.token("border", "#1d2a3a")
                     border.width: root.editMode ? 2 : 1
+                    radius: root.radiusLg
 
                     Repeater {
                         model: root.components()
@@ -497,9 +608,9 @@ ApplicationWindow {
                                 y: root.shadowMode === "rich" ? 6 : 4
                                 width: parent.width
                                 height: parent.height
-                                radius: root.token("radius_md", 8)
-                                color: "#000000"
-                                opacity: root.shadowMode === "rich" ? 0.32 : 0.16
+                                radius: root.radiusLg
+                                color: root.token("border", "#203044")
+                                opacity: root.shadowMode === "rich" ? 0.22 : 0.12
                                 visible: root.shadowMode !== "none" && index < root.maxAnimatedComponents
                             }
 
@@ -509,7 +620,7 @@ ApplicationWindow {
                             property bool selected: componentShell.selected
 
                             anchors.fill: parent
-                            radius: root.token("radius_md", 8)
+                            radius: root.radiusLg
                             color: root.componentColor(modelData.status, modelData.type)
                             border.color: selected ? root.token("accent", "#3dd6a5") : root.borderColor(modelData.status)
                             border.width: selected ? 3 : 1
@@ -533,7 +644,7 @@ ApplicationWindow {
                             Loader {
                                 id: componentContentLoader
                                 anchors.fill: parent
-                                anchors.margins: root.token("spacing_md", 12)
+                                anchors.margins: root.spaceMd
                                 property var componentData: modelData
                                 sourceComponent: root.delegateFor(modelData.type)
                                 onLoaded: item.componentData = componentData
@@ -542,7 +653,7 @@ ApplicationWindow {
                             Rectangle {
                                 width: 18
                                 height: 18
-                                radius: 3
+                                radius: root.radiusSm
                                 color: root.token("accent", "#3dd6a5")
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
@@ -578,10 +689,10 @@ ApplicationWindow {
                 Layout.preferredWidth: root.editMode ? 360 : 0
                 Layout.fillHeight: true
                 visible: root.editMode
-                color: root.token("panel_alt", "#0e151f")
+                color: root.token("panel", "#0e151f")
                 border.color: root.token("border", "#203044")
                 border.width: 1
-                radius: root.token("radius_md", 8)
+                radius: root.radiusLg
 
                 ScrollView {
                     anchors.fill: parent
@@ -600,14 +711,14 @@ ApplicationWindow {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Button { text: "Save"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.saveCanvas() }
-                            Button { text: "Discard"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.discardEdit() }
+                            PaperButton { text: "Save"; role: "primary"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.saveCanvas() }
+                            PaperButton { text: "Discard"; role: "danger"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.discardEdit() }
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            Button { text: "Undo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_undo; onClicked: root.canvasController.undoEdit() }
-                            Button { text: "Redo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_redo; onClicked: root.canvasController.redoEdit() }
+                            PaperButton { text: "Undo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_undo; onClicked: root.canvasController.undoEdit() }
+                            PaperButton { text: "Redo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_redo; onClicked: root.canvasController.redoEdit() }
                         }
 
                         Text {
@@ -620,7 +731,7 @@ ApplicationWindow {
                         Repeater {
                             model: root.paletteEntries()
 
-                            Button {
+                            PaperButton {
                                 text: modelData.display_name
                                 Layout.fillWidth: true
                                 onClicked: root.canvasController.addComponent(modelData.type_id)
@@ -645,8 +756,8 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             visible: root.selectedComponentId().length > 0
-                            Button { text: "Duplicate"; onClicked: root.canvasController.duplicateSelectedComponent() }
-                            Button { text: "Delete"; onClicked: root.canvasController.deleteSelectedComponent() }
+                            PaperButton { text: "Duplicate"; onClicked: root.canvasController.duplicateSelectedComponent() }
+                            PaperButton { text: "Delete"; role: "danger"; onClicked: root.canvasController.deleteSelectedComponent() }
                         }
 
                         Text {
@@ -711,8 +822,9 @@ ApplicationWindow {
                             text: root.selectedBinding().recipe_id || root.selectedBinding().target || root.selectedBinding().intent_id || root.selectedBinding().id || ""
                         }
 
-                        Button {
+                        PaperButton {
                             text: "Apply Binding"
+                            role: "primary"
                             visible: root.selectedComponentId().length > 0
                             Layout.fillWidth: true
                             onClicked: root.canvasController.editComponentBinding(root.selectedComponentId(), bindingKind.currentText || "static", bindingReference.text)
@@ -743,8 +855,8 @@ ApplicationWindow {
                 text: componentData.title || componentData.id
                 color: root.token("foreground", "#f4f7fb")
                 font.family: root.token("font_family", "Segoe UI")
-                font.pixelSize: 15
-                font.bold: true
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -786,16 +898,18 @@ ApplicationWindow {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: root.spaceSm
                 visible: !root.editMode && componentData.enabled_actions && componentData.enabled_actions.length > 0
 
                 Repeater {
                     model: componentData.enabled_actions || []
 
-                    Button {
+                    PaperButton {
                         text: modelData
+                        role: root.actionRole(modelData)
+                        compact: true
                         enabled: !root.actionBusy && !root.mockMode
-                        Layout.preferredWidth: 96
+                        Layout.preferredWidth: 104
                         onClicked: root.dispatch(componentData.id, modelData)
                     }
                 }
@@ -809,7 +923,7 @@ ApplicationWindow {
         ColumnLayout {
             property var componentData: ({})
 
-            spacing: root.token("spacing_sm", 6)
+            spacing: root.spaceSm
 
             RowLayout {
                 Layout.fillWidth: true
@@ -826,7 +940,7 @@ ApplicationWindow {
                     color: root.token("foreground", "#f4f7fb")
                     font.family: root.token("font_family", "Segoe UI")
                     font.pixelSize: 14
-                    font.bold: true
+                    font.weight: Font.DemiBold
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -834,8 +948,9 @@ ApplicationWindow {
 
             Text {
                 text: componentData.state || componentData.status || "ready"
-                color: root.token("focus_ring", "#7fb8ff")
-                font.pixelSize: 12
+                color: root.borderColor(componentData.status)
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -866,16 +981,18 @@ ApplicationWindow {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: root.spaceSm
                 visible: !root.editMode && componentData.enabled_actions && componentData.enabled_actions.length > 0
 
                 Repeater {
                     model: componentData.enabled_actions || []
 
-                    Button {
+                    PaperButton {
                         text: modelData
+                        role: root.actionRole(modelData)
+                        compact: true
                         enabled: !root.actionBusy && !root.mockMode
-                        Layout.preferredWidth: 92
+                        Layout.preferredWidth: 104
                         onClicked: root.dispatch(componentData.id, modelData)
                     }
                 }
@@ -889,13 +1006,13 @@ ApplicationWindow {
         ColumnLayout {
             property var componentData: ({})
 
-            spacing: root.token("spacing_sm", 6)
+            spacing: root.spaceSm
 
             Text {
                 text: componentData.title || "Recent Activity"
                 color: root.token("foreground", "#f4f7fb")
                 font.pixelSize: 15
-                font.bold: true
+                font.weight: Font.DemiBold
                 Layout.fillWidth: true
             }
 
@@ -904,7 +1021,7 @@ ApplicationWindow {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: root.spaceSm
 
                     Rectangle {
                         width: 8
@@ -935,13 +1052,13 @@ ApplicationWindow {
         ColumnLayout {
             property var componentData: ({})
 
-            spacing: root.token("spacing_sm", 6)
+            spacing: root.spaceSm
 
             Text {
                 text: componentData.title || "Categories"
                 color: root.token("foreground", "#f4f7fb")
                 font.pixelSize: 15
-                font.bold: true
+                font.weight: Font.DemiBold
                 Layout.fillWidth: true
             }
 
@@ -951,7 +1068,7 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 28
-                    radius: root.token("radius_sm", 4)
+                    radius: root.radiusMd
                     color: modelData === (componentData.data.selected || "") ? root.token("focus_panel", "#132235") : "transparent"
                     border.color: root.token("border", "#203044")
                     border.width: 1
@@ -1041,7 +1158,8 @@ ApplicationWindow {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: titleText.visible ? 34 : 0
-                color: "#99000000"
+                color: root.token("panel", "#101720")
+                opacity: 0.88
                 visible: titleText.visible
 
                 Text {
@@ -1050,9 +1168,9 @@ ApplicationWindow {
                     anchors.margins: 8
                     text: componentData.title || ""
                     visible: text.length > 0
-                    color: "#ffffff"
+                    color: root.token("foreground", "#f4f7fb")
                     font.pixelSize: 13
-                    font.bold: true
+                    font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
             }
@@ -1066,7 +1184,7 @@ ApplicationWindow {
             property var componentData: ({})
 
             color: root.componentDataValue(componentData, "fill", root.componentDataValue(componentData, "color", root.token("panel_alt", "#182233")))
-            radius: Number(root.componentDataValue(componentData, "radius", root.token("radius_md", 8)))
+            radius: Number(root.componentDataValue(componentData, "radius", root.radiusLg))
             border.color: root.componentDataValue(componentData, "stroke", root.componentDataValue(componentData, "border_color", root.token("border", "#203044")))
             border.width: Number(root.componentDataValue(componentData, "border_width", 0))
         }
@@ -1078,7 +1196,7 @@ ApplicationWindow {
         anchors.margins: 18
         width: 260
         height: 124
-        radius: root.token("radius_md", 8)
+        radius: root.radiusLg
         color: root.token("panel", "#151d2b")
         opacity: 0.96
         border.color: root.token("border", "#203044")

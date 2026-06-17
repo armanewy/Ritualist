@@ -29,6 +29,7 @@ $SummaryJson = Join-Path $AcceptanceRoot "acceptance-summary.json"
 $SummaryMd = Join-Path $AcceptanceRoot "acceptance-summary.md"
 $AcceptanceSpec = Join-Path $RepoRoot "tests\acceptance\release_v0_2_alpha_1.yaml"
 $script:E2EParseErrors = @()
+$script:VisualArtifacts = @()
 
 $resolvedRepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
 $resolvedAcceptanceRoot = [System.IO.Path]::GetFullPath($AcceptanceRoot)
@@ -732,6 +733,51 @@ function Assert-LaunchWindow {
     }
 }
 
+function Add-VisualArtifact {
+    param(
+        [string]$Id,
+        [string]$CanvasId,
+        [string]$State,
+        [bool]$NonBlank,
+        [hashtable]$Evidence
+    )
+    $script:VisualArtifacts += [ordered]@{
+        id = $Id
+        canvas_id = $CanvasId
+        state = $State
+        non_blank = $NonBlank
+        evidence = $Evidence
+    }
+}
+
+function Capture-CanvasVisualArtifact {
+    param(
+        [string]$CanvasId,
+        [string]$ArtifactId,
+        [string]$State = "ready"
+    )
+    $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", $CanvasId)
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $screenshot = Save-Screenshot "ui-refresh-$ArtifactId"
+        $frames = Capture-ScreenFrames "ui-refresh-$ArtifactId" 2
+        $processTree = Save-ProcessTree "ui-refresh-$ArtifactId" $process.Id
+        $windowTree = Save-WindowTree "ui-refresh-$ArtifactId" $window
+        $zOrder = Save-ZOrderSnapshot "ui-refresh-$ArtifactId"
+        Add-VisualArtifact -Id $ArtifactId -CanvasId $CanvasId -State $State -NonBlank (Test-ScreenshotNonBlank $screenshot) -Evidence @{
+            screenshot = $screenshot
+            frames = $frames
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrder
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $process
+    }
+}
+
 function Invoke-CanvasStaticActions {
     $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "gaming_desktop")
     try {
@@ -893,8 +939,10 @@ function Invoke-CanvasRunControls {
         [void](Invoke-NamedButton $window "run" 10)
         [void](Get-WindowByName $FakeBattleNetTitle 20)
         Start-Sleep -Seconds 1
+        $runningShot = Save-Screenshot "ui-refresh-running-state"
         $pause = Invoke-NamedButton $window "Pause" 15
         Start-Sleep -Seconds 1
+        $pausedShot = Save-Screenshot "ui-refresh-paused-state"
         $resume = Invoke-NamedButton $window "Resume" 15
         Start-Sleep -Seconds 1
         $stop = Invoke-NamedButton $window "Stop" 15
@@ -909,6 +957,14 @@ function Invoke-CanvasRunControls {
             @()
         }
         if ($pause -and $resume -and $stop -and $statusHistory -contains "paused" -and $statusHistory -contains "stopped") {
+            Add-VisualArtifact -Id "running-state" -CanvasId "gaming_desktop" -State "running" -NonBlank (Test-ScreenshotNonBlank $runningShot) -Evidence @{
+                screenshot = $runningShot
+                run_id = $run.Name
+            }
+            Add-VisualArtifact -Id "paused-state" -CanvasId "gaming_desktop" -State "paused" -NonBlank (Test-ScreenshotNonBlank $pausedShot) -Evidence @{
+                screenshot = $pausedShot
+                run_id = $run.Name
+            }
             Set-Check "ritual_controller_pause_resume_stop" "PASS" "Pause/Resume/Stop path was recorded during a real run." @{
                 run_id = $run.Name
                 run_log = $runEvidence
@@ -943,6 +999,11 @@ function Invoke-CanvasRunDecline {
         $confirmationShot = Save-Screenshot "confirmation-z-order"
         $confirmationTree = Save-WindowTree "confirmation" $confirmation
         $zOrder = Save-ZOrderSnapshot "confirmation"
+        Add-VisualArtifact -Id "confirmation-state" -CanvasId "gaming_desktop" -State "confirmation" -NonBlank (Test-ScreenshotNonBlank $confirmationShot) -Evidence @{
+            screenshot = $confirmationShot
+            window_tree = $confirmationTree
+            z_order = $zOrder
+        }
         $cancel = if ($confirmation) { Invoke-NamedButton $confirmation "Cancel Ritual" 5 } else { $false }
         Start-Sleep -Seconds 6
         $fakeWindow = Get-WindowByName $FakeBattleNetTitle 5
@@ -1250,6 +1311,7 @@ function Write-Summaries {
         evidence_root = $EvidenceRoot
         e2e_events = $eventsPath
         theme_evidence = $themeEvidence
+        visual_artifacts = @($script:VisualArtifacts)
         e2e_parse_errors = [ordered]@{
             count = $script:E2EParseErrors.Count
             path = $parseErrorsPath
@@ -1272,6 +1334,14 @@ function Write-Summaries {
     $lines += "- Tag created: **false**"
     if ($themeEvidence.selected_theme_ids.Count -gt 0) {
         $lines += "- Canvas theme evidence: ``$($themeEvidence.selected_theme_ids -join ", ")``"
+    }
+    if ($script:VisualArtifacts.Count -gt 0) {
+        $lines += ""
+        $lines += "## Visual Artifacts"
+        foreach ($artifact in $script:VisualArtifacts) {
+            $shot = $artifact.evidence.screenshot
+            $lines += "- ``$($artifact.id)`` ($($artifact.canvas_id), $($artifact.state)): ``$shot``"
+        }
     }
     $lines += ""
     $lines += "| Check | Status | Message |"
@@ -1301,6 +1371,9 @@ try {
     Assert-LaunchWindow -Id "packaged_home_visible" -Title "Ritualist Home" -LaunchArguments @() -ScreenshotName "packaged-home"
     Assert-LaunchWindow -Id "packaged_canvas_visible" -Title "Ritualist Canvas" -LaunchArguments @("--canvas", "gaming_desktop") -ScreenshotName "packaged-canvas"
     Assert-LaunchWindow -Id "packaged_classic_gui_visible" -Title "Ritualist" -LaunchArguments @("--classic-gui") -ScreenshotName "packaged-classic-gui"
+    Capture-CanvasVisualArtifact -CanvasId "minimal_desktop" -ArtifactId "minimal-room"
+    Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
+    Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "helpdesk-room"
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls
     Invoke-CanvasRunDecline

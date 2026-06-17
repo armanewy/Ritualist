@@ -26,6 +26,8 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "ritualist.sample_canvases" in script
     assert "ritualist.home.qml" in script
     assert "ritualist.sample_recipes" in script
+    assert "--add-data" in script
+    assert "themes;themes" in script
     assert "dist\\Ritualist\\Ritualist.exe" in script
 
 
@@ -42,6 +44,7 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
         for child in files("ritualist.sample_canvases").iterdir()
         if child.name.endswith(".yaml")
     }
+    paper_theme = Path("themes/ritualist-paper/theme.yaml")
 
     assert qml.is_file()
     assert "ritualistHomeController" in qml.read_text(encoding="utf-8")
@@ -64,6 +67,8 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
         "minimal_desktop.yaml",
         "project_room.yaml",
     }.issubset(canvas_names)
+    assert paper_theme.is_file()
+    assert "ritualist.paper" in paper_theme.read_text(encoding="utf-8")
 
 
 def test_ci_optional_deps_cover_home_and_perf_smokes():
