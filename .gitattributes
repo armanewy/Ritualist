@@ -2,6 +2,7 @@
 # Windows-oriented scripts keep CRLF; ordinary source/docs use LF.
 * text=auto
 
+.gitattributes text eol=lf
 *.py text eol=lf
 *.qml text eol=lf
 *.yaml text eol=lf

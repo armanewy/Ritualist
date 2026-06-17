@@ -27,6 +27,9 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -e ".[dev]"
 
+      - name: Check source line endings and Git blobs
+        run: python scripts/check_line_endings.py --check-git-head --check-git-index
+
       - name: Run tests
         run: python -m pytest -q
 
