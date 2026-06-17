@@ -11,6 +11,8 @@ ApplicationWindow {
 
     property var canvasController: typeof ritualistCanvasUseController === "undefined" ? null : ritualistCanvasUseController
     property var canvasPayload: canvasController ? canvasController.payload : ritualistCanvasPayload
+    property var editPayload: canvasController ? canvasController.editPayload : ritualistCanvasEditPayload
+    property bool editMode: canvasController ? canvasController.editMode : false
     property bool mockMode: typeof ritualistMockMode === "undefined" ? false : ritualistMockMode
     property bool actionBusy: canvasController ? canvasController.actionBusy : false
     property bool runtimeActive: canvasController ? canvasController.runtimeActive : false
@@ -67,10 +69,51 @@ ApplicationWindow {
     }
 
     function dispatch(componentId, actionId) {
-        if (!canvasController || actionBusy || mockMode) {
+        if (!canvasController || actionBusy || mockMode || editMode) {
             return
         }
         canvasController.dispatchAction(componentId, actionId)
+    }
+
+    function selectedComponentId() {
+        if (!editPayload || !editPayload.selection) {
+            return ""
+        }
+        return editPayload.selection.component_id || ""
+    }
+
+    function selectedComponent() {
+        if (!editPayload || !editPayload.selected_component) {
+            return {}
+        }
+        return editPayload.selected_component
+    }
+
+    function selectedProps() {
+        var selected = selectedComponent()
+        return selected.props || {}
+    }
+
+    function selectedBinding() {
+        var selected = selectedComponent()
+        return selected.binding || {}
+    }
+
+    function paletteEntries() {
+        if (!editPayload || !editPayload.palette) {
+            return []
+        }
+        return editPayload.palette
+    }
+
+    function selectedPropertySchema() {
+        var selected = selectedComponent()
+        return selected.property_schema || []
+    }
+
+    function selectedSupportedBindings() {
+        var selected = selectedComponent()
+        return selected.supported_bindings || []
     }
 
     Connections {
@@ -78,6 +121,14 @@ ApplicationWindow {
 
         function onPayloadChanged() {
             root.canvasPayload = root.canvasController.payload
+        }
+
+        function onEditPayloadChanged() {
+            root.editPayload = root.canvasController.editPayload
+        }
+
+        function onEditModeChanged() {
+            root.editMode = root.canvasController.editMode
         }
 
         function onMetricsChanged() {
@@ -126,6 +177,12 @@ ApplicationWindow {
             }
 
             Button {
+                text: root.editMode ? "Use Mode" : "Edit Mode"
+                enabled: root.canvasController && !root.runtimeActive
+                onClicked: root.canvasController.setEditMode(!root.editMode)
+            }
+
+            Button {
                 text: "Pause"
                 enabled: root.runtimeActive && !root.runtimePaused && root.canvasController
                 onClicked: root.canvasController.pauseCurrentRun()
@@ -144,94 +201,305 @@ ApplicationWindow {
             }
         }
 
-        Flickable {
-            id: scroll
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            contentWidth: Math.max(width, 1280)
-            contentHeight: Math.max(height, 760)
+            spacing: 12
 
-            Rectangle {
-                width: scroll.contentWidth
-                height: scroll.contentHeight
-                color: "#0b1018"
-                border.color: "#1d2a3a"
-                border.width: 1
+            Flickable {
+                id: scroll
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: Math.max(width, 1280)
+                contentHeight: Math.max(height, 760)
 
-                Repeater {
-                    model: root.components()
+                Rectangle {
+                    width: scroll.contentWidth
+                    height: scroll.contentHeight
+                    color: "#0b1018"
+                    border.color: root.editMode ? "#3dd6a5" : "#1d2a3a"
+                    border.width: root.editMode ? 2 : 1
 
-                    Rectangle {
-                        id: componentFrame
-                        property string componentId: modelData.id
+                    Repeater {
+                        model: root.components()
 
-                        x: modelData.x
-                        y: modelData.y
-                        z: modelData.z
-                        width: modelData.width
-                        height: modelData.height
-                        visible: modelData.visible
-                        radius: 8
-                        color: root.componentColor(modelData.status, modelData.type)
-                        border.color: root.borderColor(modelData.status)
-                        border.width: 1
+                        Rectangle {
+                            id: componentFrame
+                            property string componentId: modelData.id
+                            property bool selected: root.editMode && root.selectedComponentId() === componentId
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 8
+                            x: modelData.x
+                            y: modelData.y
+                            z: modelData.z
+                            width: modelData.width
+                            height: modelData.height
+                            visible: modelData.visible
+                            radius: 8
+                            color: root.componentColor(modelData.status, modelData.type)
+                            border.color: selected ? "#3dd6a5" : root.borderColor(modelData.status)
+                            border.width: selected ? 3 : 1
 
-                            Text {
-                                text: modelData.title || modelData.id
-                                color: "#f4f7fb"
-                                font.pixelSize: modelData.type === "text.label" ? 18 : 15
-                                font.bold: true
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
+                            MouseArea {
+                                id: moveArea
+                                anchors.fill: parent
+                                enabled: root.editMode
+                                drag.target: componentFrame
+                                drag.axis: Drag.XAndYAxis
+                                onClicked: root.canvasController.selectComponent(componentFrame.componentId)
+                                onReleased: root.canvasController.moveComponent(componentFrame.componentId, componentFrame.x, componentFrame.y)
                             }
 
-                            Text {
-                                text: modelData.subtitle || modelData.message || modelData.type
-                                color: "#91a2b8"
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                                maximumLineCount: 3
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 8
 
-                            Text {
-                                text: modelData.warnings && modelData.warnings.length ? modelData.warnings.join("; ") : ""
-                                color: "#f5c45b"
-                                font.pixelSize: 11
-                                wrapMode: Text.WordWrap
-                                maximumLineCount: 3
-                                elide: Text.ElideRight
-                                visible: text.length > 0
-                                Layout.fillWidth: true
-                            }
+                                Text {
+                                    text: modelData.title || modelData.id
+                                    color: "#f4f7fb"
+                                    font.pixelSize: modelData.type === "text.label" ? 18 : 15
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
 
-                            Item {
-                                Layout.fillHeight: true
-                            }
+                                Text {
+                                    text: modelData.subtitle || modelData.message || modelData.type
+                                    color: "#91a2b8"
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                visible: modelData.enabled_actions && modelData.enabled_actions.length > 0
+                                Text {
+                                    text: modelData.warnings && modelData.warnings.length ? modelData.warnings.join("; ") : ""
+                                    color: "#f5c45b"
+                                    font.pixelSize: 11
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
+                                    visible: text.length > 0
+                                    Layout.fillWidth: true
+                                }
 
-                                Repeater {
-                                    model: modelData.enabled_actions || []
+                                Text {
+                                    text: root.editMode ? (modelData.id + " | " + modelData.type) : ""
+                                    color: "#3dd6a5"
+                                    font.pixelSize: 11
+                                    visible: root.editMode
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
 
-                                    Button {
-                                        text: modelData
-                                        enabled: !root.actionBusy && !root.mockMode
-                                        Layout.preferredWidth: 96
-                                        onClicked: root.dispatch(componentFrame.componentId, modelData)
+                                Item {
+                                    Layout.fillHeight: true
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    visible: !root.editMode && modelData.enabled_actions && modelData.enabled_actions.length > 0
+
+                                    Repeater {
+                                        model: modelData.enabled_actions || []
+
+                                        Button {
+                                            text: modelData
+                                            enabled: !root.actionBusy && !root.mockMode
+                                            Layout.preferredWidth: 96
+                                            onClicked: root.dispatch(componentFrame.componentId, modelData)
+                                        }
                                     }
                                 }
                             }
+
+                            Rectangle {
+                                width: 18
+                                height: 18
+                                radius: 3
+                                color: "#3dd6a5"
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 4
+                                visible: componentFrame.selected
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    property real startX: 0
+                                    property real startY: 0
+                                    property real startWidth: 0
+                                    property real startHeight: 0
+                                    onPressed: {
+                                        startX = mouse.x
+                                        startY = mouse.y
+                                        startWidth = componentFrame.width
+                                        startHeight = componentFrame.height
+                                    }
+                                    onPositionChanged: {
+                                        componentFrame.width = Math.max(32, startWidth + mouse.x - startX)
+                                        componentFrame.height = Math.max(24, startHeight + mouse.y - startY)
+                                    }
+                                    onReleased: root.canvasController.resizeComponent(componentFrame.componentId, componentFrame.width, componentFrame.height)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: root.editMode ? 360 : 0
+                Layout.fillHeight: true
+                visible: root.editMode
+                color: "#0e151f"
+                border.color: "#203044"
+                border.width: 1
+                radius: 8
+
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 12
+
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: 10
+
+                        Text {
+                            text: "Edit Mode"
+                            color: "#f4f7fb"
+                            font.pixelSize: 20
+                            font.bold: true
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Button { text: "Save"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.saveCanvas() }
+                            Button { text: "Discard"; enabled: root.canvasController && root.editPayload && root.editPayload.dirty; onClicked: root.canvasController.discardEdit() }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Button { text: "Undo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_undo; onClicked: root.canvasController.undoEdit() }
+                            Button { text: "Redo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_redo; onClicked: root.canvasController.redoEdit() }
+                        }
+
+                        Text {
+                            text: "Palette"
+                            color: "#91a2b8"
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+
+                        Repeater {
+                            model: root.paletteEntries()
+
+                            Button {
+                                text: modelData.display_name
+                                Layout.fillWidth: true
+                                onClicked: root.canvasController.addComponent(modelData.type_id)
+                            }
+                        }
+
+                        Rectangle {
+                            height: 1
+                            color: "#203044"
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: root.selectedComponentId() ? (root.selectedComponent().id + " | " + root.selectedComponent().type) : "Select a component"
+                            color: "#f4f7fb"
+                            font.pixelSize: 15
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: root.selectedComponentId().length > 0
+                            Button { text: "Duplicate"; onClicked: root.canvasController.duplicateSelectedComponent() }
+                            Button { text: "Delete"; onClicked: root.canvasController.deleteSelectedComponent() }
+                        }
+
+                        Text {
+                            text: "Properties"
+                            color: "#91a2b8"
+                            font.pixelSize: 13
+                            font.bold: true
+                            visible: root.selectedComponentId().length > 0
+                        }
+
+                        Repeater {
+                            model: root.selectedPropertySchema()
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Text {
+                                    text: modelData.label
+                                    color: "#91a2b8"
+                                    font.pixelSize: 11
+                                }
+
+                                ComboBox {
+                                    Layout.fillWidth: true
+                                    visible: modelData.allowed_values && modelData.allowed_values.length > 0
+                                    model: modelData.allowed_values || []
+                                    currentIndex: Math.max(0, (modelData.allowed_values || []).indexOf(String(root.selectedProps()[modelData.name] || modelData.default || "")))
+                                    onActivated: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, currentText)
+                                }
+
+                                TextField {
+                                    Layout.fillWidth: true
+                                    visible: !(modelData.allowed_values && modelData.allowed_values.length > 0)
+                                    text: String(root.selectedProps()[modelData.name] === undefined || root.selectedProps()[modelData.name] === null ? (modelData.default || "") : root.selectedProps()[modelData.name])
+                                    onEditingFinished: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, text)
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Binding"
+                            color: "#91a2b8"
+                            font.pixelSize: 13
+                            font.bold: true
+                            visible: root.selectedComponentId().length > 0
+                        }
+
+                        ComboBox {
+                            id: bindingKind
+                            Layout.fillWidth: true
+                            visible: root.selectedComponentId().length > 0
+                            model: root.selectedSupportedBindings()
+                            currentIndex: Math.max(0, root.selectedSupportedBindings().indexOf(root.selectedBinding().kind || "static"))
+                        }
+
+                        TextField {
+                            id: bindingReference
+                            Layout.fillWidth: true
+                            visible: root.selectedComponentId().length > 0
+                            placeholderText: "Binding reference"
+                            text: root.selectedBinding().recipe_id || root.selectedBinding().target || root.selectedBinding().intent_id || root.selectedBinding().id || ""
+                        }
+
+                        Button {
+                            text: "Apply Binding"
+                            visible: root.selectedComponentId().length > 0
+                            Layout.fillWidth: true
+                            onClicked: root.canvasController.editComponentBinding(root.selectedComponentId(), bindingKind.currentText || "static", bindingReference.text)
+                        }
+
+                        Text {
+                            text: root.editPayload && root.editPayload.validation && root.editPayload.validation.errors.length ? root.editPayload.validation.errors.join("; ") : ""
+                            color: "#ff6b7a"
+                            visible: text.length > 0
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
                         }
                     }
                 }

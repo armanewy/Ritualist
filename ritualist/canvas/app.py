@@ -14,9 +14,11 @@ from ritualist.home.models import HomeCardStatus, HomeRuntimeEvent
 from ritualist.runtime_control import RuntimeControl
 
 from .controller import CanvasRuntimeController
+from .edit import CanvasEditSession, create_edit_session
+from .edit_ui import CanvasEditUiBridge
 from .models import CanvasDocument
 from .runtime import CanvasRuntimeContext
-from .storage import create_mock_canvas, load_canvas
+from .storage import create_mock_canvas
 from .view_model import build_canvas_view_model
 
 
@@ -37,6 +39,8 @@ def run_canvas_use(
 
     class CanvasUseController(QObject):
         payloadChanged = Signal()
+        editPayloadChanged = Signal()
+        editModeChanged = Signal()
         metricsChanged = Signal()
         actionStateChanged = Signal()
         actionCompleted = Signal(str, object)
@@ -46,10 +50,12 @@ def run_canvas_use(
         confirmationRequested = Signal(str, object)
         confirmationDecision = Signal(bool)
 
-        def __init__(self, document: CanvasDocument, *, mock: bool) -> None:
+        def __init__(self, document: CanvasDocument, edit_bridge: CanvasEditUiBridge, *, mock: bool) -> None:
             super().__init__()
             self._document = document
+            self._edit_bridge = edit_bridge
             self._mock = mock
+            self._edit_mode = False
             self._runtime_state: dict[str, dict[str, Any]] = {}
             self._last_event_label = "Canvas ready"
             self._action_busy = False
@@ -72,6 +78,14 @@ def run_canvas_use(
         def payload(self) -> dict[str, object]:
             return self._payload()
 
+        @Property("QVariantMap", notify=editPayloadChanged)
+        def editPayload(self) -> dict[str, object]:
+            return self._edit_bridge.model()
+
+        @Property(bool, notify=editModeChanged)
+        def editMode(self) -> bool:
+            return self._edit_mode
+
         @Property(str, notify=metricsChanged)
         def lastEventLabel(self) -> str:
             return self._last_event_label
@@ -90,6 +104,10 @@ def run_canvas_use(
 
         @Slot(str, str)
         def dispatchAction(self, component_id: str, action_id: str) -> None:
+            if self._edit_mode:
+                self._last_event_label = "Switch to Use Mode before running Canvas actions"
+                self.metricsChanged.emit()
+                return
             if self._mock:
                 self._last_event_label = f"{action_id} is disabled in mock mode"
                 self.metricsChanged.emit()
@@ -118,6 +136,105 @@ def run_canvas_use(
             self._action_future = future
             future.add_done_callback(lambda completed: self._complete_future(component_id, completed))
             self.actionStateChanged.emit()
+
+        @Slot(bool)
+        def setEditMode(self, enabled: bool) -> None:
+            enabled = bool(enabled)
+            if self._edit_mode == enabled:
+                return
+            self._edit_mode = enabled
+            self._last_event_label = "Edit Mode" if enabled else "Use Mode"
+            self.editModeChanged.emit()
+            self.metricsChanged.emit()
+            self.editPayloadChanged.emit()
+            self.payloadChanged.emit()
+
+        @Slot(str)
+        def selectComponent(self, component_id: str) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.select(component_id))
+
+        @Slot(str)
+        def addComponent(self, type_id: str) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.create_component(type_id))
+
+        @Slot(str, float, float)
+        def moveComponent(self, component_id: str, x: float, y: float) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.move_component(component_id, x, y))
+
+        @Slot(str, float, float)
+        def resizeComponent(self, component_id: str, width: float, height: float) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.resize_component(component_id, width, height))
+
+        @Slot(str, str, "QVariant")
+        def editComponentProperty(self, component_id: str, name: str, value: object) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.edit_property(component_id, name, value))
+
+        @Slot(str, str, str)
+        def editComponentBinding(self, component_id: str, kind: str, reference: str) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(lambda: self._edit_bridge.edit_binding(component_id, kind, reference))
+
+        @Slot()
+        def duplicateSelectedComponent(self) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(self._edit_bridge.duplicate_selected)
+
+        @Slot()
+        def deleteSelectedComponent(self) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(self._edit_bridge.delete_selected)
+
+        @Slot()
+        def undoEdit(self) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(self._edit_bridge.undo)
+
+        @Slot()
+        def redoEdit(self) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(self._edit_bridge.redo)
+
+        @Slot()
+        def discardEdit(self) -> None:
+            if not self._edit_mode:
+                return
+            self._apply_edit(self._edit_bridge.discard)
+
+        @Slot()
+        def saveCanvas(self) -> None:
+            if not self._edit_mode:
+                return
+            if self._mock:
+                self._last_event_label = "Mock Canvas edits are not saved"
+                self.metricsChanged.emit()
+                return
+            try:
+                result = self._edit_bridge.save()
+            except Exception as exc:  # noqa: BLE001 - surface validation errors in the UI.
+                self._last_event_label = f"Save failed: {exc}"
+                self.metricsChanged.emit()
+                self.editPayloadChanged.emit()
+                return
+            self._document = self._edit_bridge.document
+            self._last_event_label = result.message
+            self.metricsChanged.emit()
+            self.editPayloadChanged.emit()
+            self.payloadChanged.emit()
 
         @Slot()
         def pauseCurrentRun(self) -> None:
@@ -175,6 +292,20 @@ def run_canvas_use(
                 ),
             )
             return model.to_dict()
+
+        def _apply_edit(self, operation) -> None:
+            try:
+                operation()
+            except Exception as exc:  # noqa: BLE001 - edit validation belongs in the UI footer.
+                self._last_event_label = f"Edit failed: {exc}"
+                self.metricsChanged.emit()
+                self.editPayloadChanged.emit()
+                return
+            self._document = self._edit_bridge.document
+            self._last_event_label = "Canvas edit applied"
+            self.metricsChanged.emit()
+            self.editPayloadChanged.emit()
+            self.payloadChanged.emit()
 
         def _ensure_executor(self) -> ThreadPoolExecutor:
             if self._executor is None:
@@ -284,13 +415,19 @@ def run_canvas_use(
             self._confirmation_event.set()
 
     app = QApplication.instance() or QApplication(sys.argv)
-    document = create_mock_canvas(mock_components) if mock else load_canvas(canvas)
-    controller = CanvasUseController(document, mock=mock)
+    edit_session = (
+        CanvasEditSession(document=create_mock_canvas(mock_components), source="memory")
+        if mock
+        else create_edit_session(canvas)
+    )
+    document = edit_session.document
+    controller = CanvasUseController(document, CanvasEditUiBridge(edit_session), mock=mock)
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("ritualistMockMode", mock)
     engine.rootContext().setContextProperty("ritualistCanvasUseController", controller)
     engine.rootContext().setContextProperty("ritualistCanvasPayload", controller.payload)
+    engine.rootContext().setContextProperty("ritualistCanvasEditPayload", controller.editPayload)
     qml_resource = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
     with as_file(qml_resource) as qml_path:
         engine.load(QUrl.fromLocalFile(str(qml_path)))

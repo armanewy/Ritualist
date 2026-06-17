@@ -13,6 +13,7 @@ from .edit import (
     create_edit_session,
     editable_binding_kinds,
 )
+from .edit_ui import CANVAS_EDIT_UI_SCHEMA_VERSION, CanvasEditUiBridge
 from .home_adapter import canvas_to_home_model, recipe_card_component
 from .models import (
     CANVAS_SCHEMA_VERSION,
@@ -85,6 +86,7 @@ __all__ = [
     "CANVAS_RUNTIME_SCHEMA_VERSION",
     "CANVAS_VIEW_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
+    "CANVAS_EDIT_UI_SCHEMA_VERSION",
     "CanvasBackground",
     "CanvasBindingKind",
     "CanvasComponentAction",
@@ -103,6 +105,7 @@ __all__ = [
     "CanvasEditCommandType",
     "CanvasEditHistory",
     "CanvasEditSession",
+    "CanvasEditUiBridge",
     "CanvasGrid",
     "CanvasImportedPolicy",
     "CanvasLayoutMode",
