@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -64,8 +67,45 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "RITUALIST_E2E_APP_DATA_DIR",
         "release_v0_2_alpha_1.yaml",
         "NEEDS_HUMAN_REVIEW",
+        "EvidenceDir",
     ):
         assert expected in script
+
+
+def test_release_acceptance_harness_rejects_repo_root_evidence_dir() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "artifactsRootWithSeparator" in script
+    assert "repository artifacts directory" in script
+    assert "$resolvedAcceptanceRoot -ne $resolvedRepoRoot" not in script
+
+
+def test_release_acceptance_harness_rejects_non_artifact_repo_subdirs() -> None:
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell is None:
+        pytest.skip("PowerShell is not available")
+
+    result = subprocess.run(
+        [
+            shell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(SCRIPT_PATH),
+            "-EvidenceDir",
+            "tests",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "repository artifacts directory" in f"{result.stdout}\n{result.stderr}"
+    assert (REPO_ROOT / "tests").is_dir()
 
 
 def test_release_acceptance_harness_avoids_forbidden_input_primitives() -> None:

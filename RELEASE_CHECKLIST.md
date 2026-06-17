@@ -655,12 +655,15 @@ Command evidence:
 - `git pull --ff-only`: already up to date.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 35 managed files.
-- `python -m pytest -q`: `721 passed, 1 skipped`.
+- `python -m pytest -q`: `723 passed, 1 skipped`.
 - `python -m compileall -q ritualist tests`: passed.
 - `.\scripts\build_windows_app.ps1`: passed and built
   `dist\Ritualist\Ritualist.exe`.
 - `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen`: passed
   with no machine `FAIL` checks.
+- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
+  passed with no machine `FAIL` checks after adding explicit `-EvidenceDir`
+  support to the harness.
 - Command scope: the packaged executable is used for Home, Canvas Use Mode,
   classic GUI, and runtime scenarios. Source-tree `python -m ritualist` is used
   for supplemental CLI-only safety, perf, run-log, and visual-pack command
@@ -676,6 +679,8 @@ Acceptance artifacts:
   `artifacts\release-acceptance\evidence`
 - Screen-frame manifests were written under
   `artifacts\release-acceptance\evidence\screen-frames`.
+- The harness records screen-frame sequences in this environment; no encoded
+  video segment writer is currently available.
 - E2E runtime JSONL events were written under
   `artifacts\release-acceptance\evidence\e2e-events`.
 - E2E event merge reported `0` JSONL parse errors.

@@ -2,6 +2,7 @@ param(
     [switch]$Packaged,
     [switch]$RecordScreen,
     [switch]$Build,
+    [string]$EvidenceDir = "artifacts\release-acceptance",
     [string]$ExecutablePath = "",
     [int]$ScenarioDwellSeconds = 5
 )
@@ -10,7 +11,12 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
-$AcceptanceRoot = Join-Path $RepoRoot "artifacts\release-acceptance"
+if ([System.IO.Path]::IsPathRooted($EvidenceDir)) {
+    $AcceptanceRoot = [System.IO.Path]::GetFullPath($EvidenceDir)
+}
+else {
+    $AcceptanceRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $EvidenceDir))
+}
 $EvidenceRoot = Join-Path $AcceptanceRoot "evidence"
 $ScreenshotRoot = Join-Path $EvidenceRoot "screenshots"
 $FrameRoot = Join-Path $EvidenceRoot "screen-frames"
@@ -26,8 +32,10 @@ $script:E2EParseErrors = @()
 
 $resolvedRepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
 $resolvedAcceptanceRoot = [System.IO.Path]::GetFullPath($AcceptanceRoot)
-if (-not $resolvedAcceptanceRoot.StartsWith($resolvedRepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Acceptance artifact root is outside the repository: $resolvedAcceptanceRoot"
+$resolvedArtifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "artifacts"))
+$artifactsRootWithSeparator = $resolvedArtifactsRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+if (-not $resolvedAcceptanceRoot.StartsWith($artifactsRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Acceptance artifact root must be inside the repository artifacts directory: $resolvedAcceptanceRoot"
 }
 if (Test-Path $AcceptanceRoot) {
     Remove-Item -LiteralPath $AcceptanceRoot -Recurse -Force
