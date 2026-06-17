@@ -20,6 +20,7 @@ from .models import (
     CanvasUpdateBehavior,
     CanvasValidationResult,
 )
+from .theme_bridge import validate_canvas_theme_selection
 
 _SUSPICIOUS_ASSET_SUFFIXES = {
     ".bat",
@@ -90,6 +91,9 @@ def validate_canvas_document(
     warnings: list[str] = []
     recipe_ids = _installed_recipe_ids() if check_bindings else set()
     target_ids = _target_ids() if check_bindings else set()
+    theme = validate_canvas_theme_selection(document)
+    errors.extend(f"theme: {error}" for error in theme.errors)
+    warnings.extend(f"theme: {warning}" for warning in theme.warnings)
 
     for component in document.components:
         try:

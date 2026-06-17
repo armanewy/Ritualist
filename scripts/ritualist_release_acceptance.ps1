@@ -517,6 +517,28 @@ function Test-E2EEvent {
     return [bool](Get-E2EEvents | Where-Object { $_.event -eq $EventName } | Select-Object -First 1)
 }
 
+function Get-CanvasThemeEvidence {
+    param($Events)
+    $ready = @(
+        $Events |
+            Where-Object { $_.event -eq "canvas.ready" } |
+            ForEach-Object {
+                [pscustomobject]@{
+                    canvas = $_.payload.canvas
+                    mock = $_.payload.mock
+                    theme_id = $_.payload.theme_id
+                    theme_valid = $_.payload.theme_valid
+                    theme_source = $_.payload.theme_source
+                }
+            }
+    )
+    return [ordered]@{
+        canvas_ready = $ready
+        selected_theme_ids = @($ready | ForEach-Object { $_.theme_id } | Where-Object { $_ } | Select-Object -Unique)
+        invalid_theme_events = @($ready | Where-Object { $_.theme_valid -eq $false })
+    }
+}
+
 function Get-CanvasStatusEvents {
     param([string]$ComponentId = "")
     $events = Get-E2EEvents | Where-Object { $_.event -eq "canvas.status" }
@@ -712,6 +734,7 @@ function Invoke-CanvasStaticActions {
         $window = Get-WindowByName "Ritualist Canvas" 15
         $initial = Save-Screenshot "canvas-initial"
         $tree = Save-WindowTree "canvas-initial" $window
+        $themeEvidence = Get-CanvasThemeEvidence (Get-E2EEvents)
         $buttons = @("run", "dry_run", "doctor", "preview_plan") | Where-Object {
             $window -and (Find-Button $window $_)
         }
@@ -720,11 +743,13 @@ function Invoke-CanvasStaticActions {
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
+                theme = $themeEvidence
             }
             Set-Check "expected_canvas_components_appear" "PASS" "Expected Canvas action controls were visible to UIA." @{
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
+                theme = $themeEvidence
             }
         }
         else {
@@ -732,11 +757,13 @@ function Invoke-CanvasStaticActions {
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
+                theme = $themeEvidence
             }
             Set-Check "expected_canvas_components_appear" "FAIL" "Expected Canvas controls were not available." @{
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
+                theme = $themeEvidence
             }
         }
 
@@ -1194,6 +1221,7 @@ function Write-Summaries {
     $eventsPath = Join-Path $SnapshotRoot "e2e-events-merged.json"
     $parseErrorsPath = Join-Path $SnapshotRoot "e2e-parse-errors.json"
     $events = Get-E2EEvents
+    $themeEvidence = Get-CanvasThemeEvidence $events
     Write-JsonFile $eventsPath $events 10 | Out-Null
     if ($script:E2EParseErrors.Count -gt 0) {
         Write-JsonFile $parseErrorsPath $script:E2EParseErrors 8 | Out-Null
@@ -1216,6 +1244,7 @@ function Write-Summaries {
         artifact_root = $AcceptanceRoot
         evidence_root = $EvidenceRoot
         e2e_events = $eventsPath
+        theme_evidence = $themeEvidence
         e2e_parse_errors = [ordered]@{
             count = $script:E2EParseErrors.Count
             path = $parseErrorsPath
@@ -1236,6 +1265,9 @@ function Write-Summaries {
     $lines += "- Artifact root: ``$AcceptanceRoot``"
     $lines += "- Taggable: **$taggable**"
     $lines += "- Tag created: **false**"
+    if ($themeEvidence.selected_theme_ids.Count -gt 0) {
+        $lines += "- Canvas theme evidence: ``$($themeEvidence.selected_theme_ids -join ", ")``"
+    }
     $lines += ""
     $lines += "| Check | Status | Message |"
     $lines += "|---|---:|---|"

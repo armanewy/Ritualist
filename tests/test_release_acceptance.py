@@ -69,6 +69,9 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "release_v0_2_alpha_1.yaml",
         "NEEDS_HUMAN_REVIEW",
         "EvidenceDir",
+        "theme_evidence",
+        "theme_id",
+        "theme_valid",
     ):
         assert expected in script
 

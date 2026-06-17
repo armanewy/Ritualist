@@ -73,7 +73,7 @@ class CanvasViewModel:
                 "resolution_policy": self.canvas.resolution_policy.value,
                 "background": self.canvas.background.model_dump(mode="json"),
                 "grid": self.canvas.grid.model_dump(mode="json"),
-                "theme": self.canvas.theme.model_dump(mode="json"),
+                "theme": self.runtime.theme,
             },
             "components": [component.to_dict() for component in self.components],
             "runtime": self.runtime.to_dict(),

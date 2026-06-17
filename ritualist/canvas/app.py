@@ -609,7 +609,19 @@ def run_canvas_use(
         engine.load(QUrl.fromLocalFile(str(qml_path)))
         if not engine.rootObjects():
             raise RitualistError(f"Canvas Use UI failed to load: {qml_path}")
-    record_event("canvas.ready", canvas=str(canvas), mock=mock)
+    ready_payload = controller.payload
+    ready_theme = {}
+    if isinstance(ready_payload.get("canvas"), dict):
+        ready_theme = dict(ready_payload["canvas"].get("theme") or {})
+    ready_validation = dict(ready_theme.get("validation") or {})
+    record_event(
+        "canvas.ready",
+        canvas=str(canvas),
+        mock=mock,
+        theme_id=str(ready_theme.get("id") or ""),
+        theme_valid=bool(ready_validation.get("valid")),
+        theme_source=str(ready_theme.get("source") or ""),
+    )
     app.aboutToQuit.connect(controller.shutdown)
     try:
         return app.exec()

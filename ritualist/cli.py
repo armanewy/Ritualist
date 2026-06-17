@@ -1763,6 +1763,8 @@ def perf_canvas_use(
             "canvas_id": model.canvas.id,
             "component_count": len(model.components),
             "warnings_count": len(model.runtime.unresolved_binding_warnings),
+            "theme_id": model.runtime.theme.get("id", ""),
+            "theme_validation": model.runtime.theme.get("validation", {}),
         },
         side_effects="none",
     )

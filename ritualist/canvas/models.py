@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -9,6 +10,7 @@ from ritualist.models import SAFE_ID_PATTERN
 
 CANVAS_SCHEMA_VERSION = "ritualist.canvas.v1"
 CANVAS_VALIDATION_SCHEMA_VERSION = "ritualist.canvas.validation.v1"
+CANVAS_THEME_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 
 
 class CanvasLayoutMode(StrEnum):
@@ -199,9 +201,10 @@ class CanvasTheme(BaseModel):
     @field_validator("id")
     @classmethod
     def validate_id(cls, value: str) -> str:
-        if not SAFE_ID_PATTERN.fullmatch(value):
-            raise ValueError("canvas theme id must be a safe filename-like identifier")
-        return value
+        text = value.strip()
+        if not CANVAS_THEME_ID_PATTERN.fullmatch(text):
+            raise ValueError("canvas theme id must be a safe dotted identifier")
+        return text
 
 
 class CanvasComponentProps(BaseModel):

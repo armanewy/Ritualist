@@ -59,7 +59,10 @@ ApplicationWindow {
 
     function token(name, fallback) {
         var tokens = canvasTheme().tokens || {}
-        return tokens[name] || fallback
+        if (tokens[name] !== undefined && tokens[name] !== null) {
+            return tokens[name]
+        }
+        return fallback
     }
 
     function performanceCounters() {
@@ -575,7 +578,7 @@ ApplicationWindow {
                 Layout.preferredWidth: root.editMode ? 360 : 0
                 Layout.fillHeight: true
                 visible: root.editMode
-                color: "#0e151f"
+                color: root.token("panel_alt", "#0e151f")
                 border.color: root.token("border", "#203044")
                 border.width: 1
                 radius: root.token("radius_md", 8)
@@ -609,7 +612,7 @@ ApplicationWindow {
 
                         Text {
                             text: "Palette"
-                            color: "#91a2b8"
+                            color: root.token("muted", "#91a2b8")
                             font.pixelSize: 13
                             font.bold: true
                         }
@@ -626,13 +629,13 @@ ApplicationWindow {
 
                         Rectangle {
                             height: 1
-                            color: "#203044"
+                            color: root.token("border", "#203044")
                             Layout.fillWidth: true
                         }
 
                         Text {
                             text: root.selectedComponentId() ? (root.selectedComponent().id + " | " + root.selectedComponent().type) : "Select a component"
-                            color: "#f4f7fb"
+                            color: root.token("foreground", "#f4f7fb")
                             font.pixelSize: 15
                             font.bold: true
                             wrapMode: Text.WordWrap
@@ -648,7 +651,7 @@ ApplicationWindow {
 
                         Text {
                             text: "Properties"
-                            color: "#91a2b8"
+                            color: root.token("muted", "#91a2b8")
                             font.pixelSize: 13
                             font.bold: true
                             visible: root.selectedComponentId().length > 0
@@ -663,7 +666,7 @@ ApplicationWindow {
 
                                 Text {
                                     text: modelData.label
-                                    color: "#91a2b8"
+                                    color: root.token("muted", "#91a2b8")
                                     font.pixelSize: 11
                                 }
 
@@ -686,7 +689,7 @@ ApplicationWindow {
 
                         Text {
                             text: "Binding"
-                            color: "#91a2b8"
+                            color: root.token("muted", "#91a2b8")
                             font.pixelSize: 13
                             font.bold: true
                             visible: root.selectedComponentId().length > 0
@@ -717,7 +720,7 @@ ApplicationWindow {
 
                         Text {
                             text: root.editPayload && root.editPayload.validation && root.editPayload.validation.errors.length ? root.editPayload.validation.errors.join("; ") : ""
-                            color: "#ff6b7a"
+                            color: root.token("danger", "#ff6b7a")
                             visible: text.length > 0
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
@@ -1076,7 +1079,7 @@ ApplicationWindow {
         width: 260
         height: 124
         radius: root.token("radius_md", 8)
-        color: "#151d2b"
+        color: root.token("panel", "#151d2b")
         opacity: 0.96
         border.color: root.token("border", "#203044")
         visible: root.showPerformanceOverlay

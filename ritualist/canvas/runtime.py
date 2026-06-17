@@ -21,6 +21,7 @@ from ritualist.target_resolution import (
 
 from .models import CanvasBindingKind, CanvasComponent, CanvasComponentBinding, CanvasDocument
 from .registry import create_component_registry, normalize_canvas_bindings, validate_canvas_structure
+from .theme_bridge import resolve_canvas_theme
 
 CANVAS_RUNTIME_SCHEMA_VERSION = "ritualist.canvas.runtime.v1"
 
@@ -132,6 +133,7 @@ class CanvasRuntimeModel:
     target_plan_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
     unresolved_binding_warnings: tuple[str, ...] = ()
     performance_counters: dict[str, float | int] = field(default_factory=dict)
+    theme: dict[str, Any] = field(default_factory=dict)
     schema_version: str = CANVAS_RUNTIME_SCHEMA_VERSION
 
     def component_state(self, component_id: str) -> CanvasComponentRuntimeState:
@@ -152,6 +154,7 @@ class CanvasRuntimeModel:
             "target_plan_summaries": self.target_plan_summaries,
             "unresolved_binding_warnings": list(self.unresolved_binding_warnings),
             "performance_counters": self.performance_counters,
+            "theme": self.theme,
         }
 
 
@@ -179,6 +182,7 @@ def build_canvas_runtime_model(
     started = perf_counter()
     resolved_context = context or CanvasRuntimeContext()
     normalized = normalize_canvas_bindings(document)
+    theme = resolve_canvas_theme(normalized)
     structural_validation = validate_canvas_structure(normalized)
     registry = create_component_registry()
     recipe_ids = _recipe_ids(resolved_context)
@@ -218,6 +222,7 @@ def build_canvas_runtime_model(
             "warnings_count": len(dict.fromkeys(warnings)),
             "recent_activity_count": len(recent_activity),
         },
+        theme=theme.to_dict(),
     )
 
 

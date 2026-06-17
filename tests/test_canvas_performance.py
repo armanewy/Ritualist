@@ -40,6 +40,8 @@ def test_perf_canvas_use_command_still_works() -> None:
     assert payload["operation"] == "perf.canvas-use"
     assert payload["counts"]["components"] == 12
     assert payload["view_summary"]["component_count"] == 12
+    assert payload["view_summary"]["theme_id"] == "ritualist_default"
+    assert payload["view_summary"]["theme_validation"]["valid"] is True
 
 
 def test_canvas_use_payload_does_not_discover_recipes_or_targets(monkeypatch) -> None:
@@ -135,6 +137,7 @@ def test_canvas_use_qml_wires_performance_and_typed_delegates() -> None:
         "clockDelegate",
         "textDelegate",
         "shapeDelegate",
+        "tokens[name] !== undefined",
         "\"size\"",
         "\"align\"",
         "\"fit\"",
