@@ -4,12 +4,14 @@ Canvas is the product abstraction that lets Ritualist become a customizable PC
 command surface without becoming a true Windows shell replacement. Home remains
 the current renderer/surface. Canvas Foundation v1 adds the data model,
 component registry, validation, storage, default templates, and performance
-smoke that future UI work can render and edit.
+smoke. Canvas Runtime Components v1 adds model/controller bindings from those
+typed components to existing Ritualist recipe, Doctor, target, runtime, and
+run-history services.
 
 The current pipeline is:
 
 ```text
-Canvas document -> component registry -> validated component instances -> bindings -> renderer/runtime events
+Canvas document -> component registry -> validated component instances -> runtime model -> renderer/runtime events
 ```
 
 Canvas loading and structural validation are side-effect free. They do not run
@@ -117,6 +119,71 @@ Canvas component risk uses the same vocabulary as primitive risk metadata:
 Canvas Foundation v1 does not add mutating Canvas components. The
 `modifies_files` value exists so future component metadata can align with the
 primitive policy layer without inventing a separate taxonomy.
+
+## Canvas Runtime Components
+
+Canvas Runtime Components v1 builds a `CanvasRuntimeModel` from a Canvas
+document. The model includes component state, enabled/disabled actions, active
+run summaries, recent activity, Doctor summaries, target plan summaries,
+unresolved binding warnings, and advisory performance counters.
+
+The runtime model supports these component families:
+
+- `ritual.card`: explicit `run`, `dry_run`, `doctor`, `edit_recipe`, and
+  `open_logs` actions through existing recipe/Home action services.
+- `ritual.status`: current or last recipe state such as `idle`, `running`,
+  `waiting`, `paused`, `confirming`, `stopped`, `failed`, `interrupted`, or
+  `success`.
+- `ritual.controller`: explicit `pause`, `resume`, `stop`, and `open_run_log`
+  actions when a matching runtime control exists.
+- `target.card`: read-only target discover/plan preview. Target execution is
+  not added here; the action remains `preview_plan`.
+- `target.status`: last known target state and summary data.
+- `doctor.badge`: cached or explicit Doctor status. Doctor remains
+  side-effect free.
+- `recent.activity`: bounded run-history summaries including stopped, failed,
+  and interrupted runs.
+- `category.dock`: model-level category grouping/filter state.
+- `text.label`, `image`, `shape`, and `clock`: display-only runtime state.
+
+Canvas components never call low-level adapters directly. Runtime actions route
+through existing controllers/services:
+
+- recipe runner
+- Doctor
+- target resolver / intent planner
+- runtime controls
+- run history
+
+Canvas load, structural validation, preview, and runtime model construction do
+not execute recipes, launch apps, click UI, type, or open browsers.
+
+## Dispatch Safety
+
+Canvas action dispatch is explicit:
+
+```python
+dispatch_canvas_action(canvas_id, component_id, action_id, params)
+```
+
+Dispatch rules:
+
+- the component id must exist
+- the action id must be listed by the component type metadata
+- required bindings must exist and be resolvable when a known binding set is
+  supplied
+- arbitrary action strings are rejected
+- display-only components expose no runtime actions
+- policy and confirmation behavior stays inside the existing runtime services
+- `--dry-run` validates dispatch and does not execute the component action
+
+Developer diagnostics:
+
+```powershell
+python -m ritualist canvas runtime gaming_desktop --json
+python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run
+python -m ritualist perf canvas-runtime --mock-components 100 --json
+```
 
 ## Bindings
 
@@ -235,12 +302,15 @@ Canvas model generation and validation must stay cheap:
 - no Doctor runs
 - no image decoding during model validation
 - no action execution
+- runtime model updates should be coalesced before renderer delivery
 
 Use:
 
 ```powershell
 python -m ritualist perf canvas-model --mock-components 100 --json
 python -m ritualist perf canvas-model --mock-components 300 --json
+python -m ritualist perf canvas-runtime --mock-components 100 --json
+python -m ritualist perf canvas-runtime --mock-components 300 --json
 ```
 
 These commands report durations and advisory warnings without enforcing hard

@@ -284,7 +284,7 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             can_trigger=True,
             display_only=False,
             requires_policy=True,
-            actions=("run", "dry_run", "doctor"),
+            actions=("run", "dry_run", "doctor", "edit_recipe", "open_logs"),
             untrusted=False,
         ),
         _component(
@@ -312,7 +312,7 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             can_trigger=True,
             display_only=False,
             requires_policy=True,
-            actions=("pause", "resume", "stop"),
+            actions=("pause", "resume", "stop", "open_run_log"),
             untrusted=False,
         ),
         _component(
@@ -429,6 +429,11 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             minimum=(260, 100),
             behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
             performance=CanvasPerformanceClass.MODERATE,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("open_logs",),
+            untrusted=False,
         ),
         _component(
             "clock",

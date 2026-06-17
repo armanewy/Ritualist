@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .controller import CanvasRuntimeController, dispatch_canvas_action
 from .home_adapter import canvas_to_home_model, recipe_card_component
 from .models import (
     CANVAS_SCHEMA_VERSION,
@@ -26,6 +27,18 @@ from .models import (
     CanvasUpdateBehavior,
     CanvasValidationResult,
 )
+from .runtime import (
+    CANVAS_RUNTIME_SCHEMA_VERSION,
+    CanvasComponentAction,
+    CanvasComponentActionResult,
+    CanvasComponentRuntimeState,
+    CanvasRuntimeCommand,
+    CanvasRuntimeContext,
+    CanvasRuntimeEvent,
+    CanvasRuntimeModel,
+    build_canvas_runtime_model,
+)
+from .view_model import CanvasViewModel, build_canvas_view_model
 from .registry import (
     CanvasComponentRegistry,
     create_component_registry,
@@ -52,14 +65,18 @@ from .storage import (
 
 __all__ = [
     "CANVAS_SCHEMA_VERSION",
+    "CANVAS_RUNTIME_SCHEMA_VERSION",
     "CanvasBackground",
     "CanvasBindingKind",
+    "CanvasComponentAction",
+    "CanvasComponentActionResult",
     "CanvasComponent",
     "CanvasComponentBinding",
     "CanvasComponentPropSchema",
     "CanvasComponentProps",
     "CanvasComponentRisk",
     "CanvasComponentRegistry",
+    "CanvasComponentRuntimeState",
     "CanvasComponentType",
     "CanvasDocument",
     "CanvasGrid",
@@ -71,12 +88,20 @@ __all__ = [
     "CanvasPropType",
     "CanvasReference",
     "CanvasResponsivePolicy",
+    "CanvasRuntimeCommand",
+    "CanvasRuntimeContext",
+    "CanvasRuntimeController",
+    "CanvasRuntimeEvent",
+    "CanvasRuntimeModel",
     "CanvasTemplate",
     "CanvasTheme",
     "CanvasThemeTokens",
     "CanvasUpdateBehavior",
     "CanvasValidationResult",
+    "CanvasViewModel",
     "CanvasWriteResult",
+    "build_canvas_runtime_model",
+    "build_canvas_view_model",
     "bundled_canvas_ids",
     "canvas_to_home_model",
     "canvas_show_payload",
@@ -85,6 +110,7 @@ __all__ = [
     "create_default_canvas_from_targets",
     "create_default_canvases",
     "create_mock_canvas",
+    "dispatch_canvas_action",
     "default_canvas_document",
     "list_canvases",
     "load_canvas",

@@ -17,10 +17,14 @@ from .adapters.fake import FakeAdapters
 from .adapters import create_default_adapters
 from .app_setup import initialize_app
 from .canvas import (
+    CanvasRuntimeController,
+    CanvasRuntimeContext,
+    build_canvas_runtime_model,
     canvas_show_payload,
     create_default_canvases,
     create_mock_canvas,
     default_canvas_document,
+    dispatch_canvas_action,
     list_canvases,
     load_canvas,
     save_canvas,
@@ -481,6 +485,29 @@ def _print_canvas_validation(validation: object) -> None:
         console.print(f"[yellow]warning[/] {escape(str(message))}")
 
 
+def _print_canvas_runtime_model(model: dict[str, object]) -> None:
+    table = Table(title=f"Canvas Runtime: {escape(str(model.get('canvas_id', '')))}")
+    table.add_column("Component")
+    table.add_column("Type")
+    table.add_column("State")
+    table.add_column("Actions")
+    table.add_column("Message")
+    for component in model.get("components", []):
+        if not isinstance(component, dict):
+            continue
+        table.add_row(
+            escape(str(component.get("component_id", ""))),
+            escape(str(component.get("component_type", ""))),
+            escape(str(component.get("state", ""))),
+            escape(", ".join(str(item) for item in component.get("enabled_actions", []))),
+            escape(str(component.get("message", ""))),
+        )
+    console.print(table)
+    warnings = model.get("unresolved_binding_warnings", [])
+    for warning in warnings if isinstance(warnings, list) else []:
+        console.print(f"[yellow]warning[/] {escape(str(warning))}")
+
+
 def _canvas_binding_label(binding: object | None) -> str:
     if binding is None:
         return ""
@@ -677,6 +704,64 @@ def canvas_preview(
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
     _print_canvas_document(document)
+
+
+@canvas_app.command("runtime")
+def canvas_runtime(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Canvas runtime model."),
+    ] = False,
+) -> None:
+    """Build a Canvas runtime model without executing component actions."""
+    try:
+        document = load_canvas(canvas)
+        model = build_canvas_runtime_model(
+            document,
+            context=CanvasRuntimeContext(resolve_targets=True),
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=model.to_dict())
+        return
+    _print_canvas_runtime_model(model.to_dict())
+
+
+@canvas_app.command("action")
+def canvas_action(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    component_id: Annotated[str, typer.Argument(help="Canvas component id.")],
+    action_id: Annotated[str, typer.Argument(help="Supported Canvas action id.")],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Validate dispatch without executing the action."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable action result."),
+    ] = False,
+) -> None:
+    """Dispatch an explicit Canvas component action through existing safe services."""
+    try:
+        result = dispatch_canvas_action(
+            canvas,
+            component_id,
+            action_id,
+            dry_run=dry_run,
+            controller=CanvasRuntimeController(),
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=result.to_dict())
+        return
+    console.print(f"{escape(result.component_id)}:{escape(result.action_id)} {escape(result.status)}")
+    if result.message:
+        console.print(escape(result.message))
 
 
 @diagnostics_app.command("collect")
@@ -1196,6 +1281,75 @@ def perf_canvas_model(
     _print_performance_report(report)
     console.print(f"advisory_budget_ms: {budget_ms:.3f}")
     console.print(f"validation_duration_ms: {validation_duration_ms:.3f}")
+    console.print("side_effects: none")
+
+
+@perf_app.command("canvas-runtime")
+def perf_canvas_runtime(
+    mock_components: Annotated[
+        int,
+        typer.Option("--mock-components", min=1, help="Number of generated Canvas components to model."),
+    ] = 120,
+    budget_ms: Annotated[
+        float,
+        typer.Option("--budget-ms", help="Advisory duration budget in milliseconds."),
+    ] = 250.0,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure Canvas runtime model generation with no adapter side effects."""
+    runtime_duration_ms = 0.0
+    with measure_operation("perf.canvas-runtime") as report:
+        document = create_mock_canvas(mock_components)
+        runtime_started = time.perf_counter()
+        model = build_canvas_runtime_model(
+            document,
+            context=CanvasRuntimeContext(
+                recipe_ids={"gaming_mode"},
+                target_ids={"diablo_iv"},
+                recent_runs=(),
+                resolve_targets=False,
+            ),
+        )
+        runtime_duration_ms = max(0.0, (time.perf_counter() - runtime_started) * 1000)
+        report.counts.update(
+            {
+                "components": len(model.component_states),
+                "warnings": len(model.unresolved_binding_warnings),
+                "recent_activity": len(model.recent_activity),
+            }
+        )
+
+    if budget_ms > 0 and report.duration_ms > budget_ms:
+        report.warnings.append(
+            f"Canvas runtime generation exceeded advisory budget: "
+            f"{report.duration_ms:.3f} ms > {budget_ms:.3f} ms"
+        )
+
+    payload = _performance_payload(
+        report,
+        advisory_budget_ms=budget_ms,
+        runtime_state_build_duration_ms=runtime_duration_ms,
+        canvas_id=document.id,
+        runtime_summary={
+            "schema_version": model.schema_version,
+            "canvas_id": model.canvas_id,
+            "component_count": len(model.component_states),
+            "warnings_count": len(model.unresolved_binding_warnings),
+            "recent_activity_count": len(model.recent_activity),
+            "performance_counters": model.performance_counters,
+        },
+        side_effects="none",
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(f"advisory_budget_ms: {budget_ms:.3f}")
+    console.print(f"runtime_state_build_duration_ms: {runtime_duration_ms:.3f}")
     console.print("side_effects: none")
 
 

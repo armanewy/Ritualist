@@ -14,6 +14,17 @@ artifact, and test contracts are clear.
   execution.
 - Preserve imported-pack quarantine, disclosure, and policy checks.
 
+## Canvas Sequence
+
+- Canvas Foundation: complete.
+- Canvas Runtime Components: current. Components now have typed runtime state
+  and explicit action dispatch through existing safe services.
+- Canvas Use Mode: next. Render the Canvas runtime model in the Home/QML
+  surface before building a visual editor.
+- Canvas Edit Mode: later. Editing should configure typed native components,
+  never arbitrary user-supplied QML, JavaScript, HTML, or Python.
+- Visual polish: after Use Mode and runtime dogfood.
+
 ## Near-Term Primitive Direction
 
 - Continue adding read-only primitives that improve Doctor, planning, and

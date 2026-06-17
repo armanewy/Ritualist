@@ -11,16 +11,21 @@ from ritualist.home.models import (
 )
 
 from .models import CanvasBindingKind, CanvasComponent, CanvasComponentBinding, CanvasDocument
+from .runtime import CanvasRuntimeModel
 
 
 def canvas_to_home_model(
     canvas: CanvasDocument,
     *,
     runtime_state: Mapping[str, Mapping[str, object]] | None = None,
+    runtime_model: CanvasRuntimeModel | None = None,
 ) -> HomeModel:
     cards: list[HomeCard] = []
+    resolved_runtime_state = dict(runtime_state or {})
+    if runtime_model is not None:
+        resolved_runtime_state.update(_home_runtime_state_from_canvas(runtime_model))
     for component in canvas.components:
-        card = _component_to_home_card(component, runtime_state or {})
+        card = _component_to_home_card(component, resolved_runtime_state)
         if card is not None:
             cards.append(card)
     return HomeModel(cards=cards)
@@ -116,3 +121,43 @@ def _last_run_status(value: object) -> HomeLastRunStatus:
         return HomeLastRunStatus(str(value))
     except ValueError:
         return HomeLastRunStatus.NONE
+
+
+def _home_runtime_state_from_canvas(
+    runtime_model: CanvasRuntimeModel,
+) -> dict[str, dict[str, object]]:
+    rows: dict[str, dict[str, object]] = {}
+    for state in runtime_model.component_states:
+        reference = state.binding_reference or state.component_id
+        if not reference:
+            continue
+        if reference in rows:
+            continue
+        rows[reference] = {
+            "status": _home_status_label(state.status),
+            "last_run_status": _last_run_status_label(state.state),
+            "last_run_message": state.message,
+            "subtitle": state.subtitle or state.message,
+            "description": state.message,
+        }
+    return rows
+
+
+def _home_status_label(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized in {"running", "waiting", "paused", "confirming"}:
+        return HomeCardStatus.RUNNING.value
+    if normalized == "success":
+        return HomeCardStatus.SUCCESS.value
+    if normalized == "failed":
+        return HomeCardStatus.FAILED.value
+    if normalized in {"warning", "stopped", "interrupted"}:
+        return HomeCardStatus.WARNING.value
+    return HomeCardStatus.READY.value
+
+
+def _last_run_status_label(state: str) -> str:
+    normalized = state.strip().lower()
+    if normalized in {"success", "failed", "stopped", "interrupted", "running"}:
+        return normalized
+    return HomeLastRunStatus.NONE.value
