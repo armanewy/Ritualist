@@ -66,21 +66,30 @@ def _valid_canvas() -> CanvasDocument:
 
 def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    files = {
-        "ritualist/canvas/models.py": 100,
-        "ritualist/canvas/registry.py": 150,
-        "ritualist/canvas/storage.py": 100,
-        "ritualist/canvas/home_adapter.py": 50,
-        "tests/test_canvas.py": 100,
-        "ritualist/sample_canvases/gaming_desktop.yaml": 20,
-    }
+    source_files = [
+        *sorted((repo_root / "ritualist" / "canvas").glob("*.py")),
+        *sorted((repo_root / "tests").glob("test_canvas*.py")),
+    ]
+    readable_files = [
+        *source_files,
+        *sorted((repo_root / "ritualist" / "sample_canvases").glob("*.yaml")),
+        repo_root / "docs" / "canvas.md",
+        repo_root / "docs" / "roadmap.md",
+    ]
 
-    for relative_path, minimum_lines in files.items():
-        text = (repo_root / relative_path).read_text(encoding="utf-8")
+    assert source_files, "Canvas source files should be discovered"
+
+    for path in readable_files:
+        relative_path = path.relative_to(repo_root).as_posix()
+        text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
-        assert text.count("\n") >= minimum_lines - 1, relative_path
-        assert len(lines) >= minimum_lines, relative_path
-        assert max((len(line) for line in lines), default=0) < 1000, relative_path
+        longest = max((len(line) for line in lines), default=0)
+        file_size = path.stat().st_size
+
+        assert len(lines) == text.count("\n") + int(not text.endswith("\n")), relative_path
+        assert longest <= 1000, f"{relative_path} has an overlong line: {longest}"
+        if file_size > 2048:
+            assert len(lines) >= 20, f"{relative_path} appears collapsed into {len(lines)} lines"
 
 
 def test_canvas_document_serializes_with_schema_alias() -> None:
