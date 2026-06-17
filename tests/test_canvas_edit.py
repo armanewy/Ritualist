@@ -253,11 +253,29 @@ def test_bundled_template_saves_as_user_copy(tmp_path: Path, monkeypatch) -> Non
 
 def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "bundled" / "gaming_desktop.yaml"
+    other_source = tmp_path / "bundled" / "media_desktop.yaml"
     save_canvas(_canvas(), source)
+    save_canvas(
+        CanvasDocument(
+            id="media_canvas",
+            name="Media Canvas",
+            components=(
+                CanvasComponent(
+                    id="media",
+                    type="text.label",
+                    width=200,
+                    height=64,
+                    props={"text": "Media"},
+                ),
+            ),
+        ),
+        other_source,
+    )
     monkeypatch.setattr(
         "ritualist.canvas.edit.list_canvases",
         lambda include_bundled=True: [
-            CanvasReference("gaming_desktop", "Gaming Desktop", source, "bundled")
+            CanvasReference("gaming_desktop", "Gaming Desktop", source, "bundled"),
+            CanvasReference("media_desktop", "Media Desktop", other_source, "bundled"),
         ],
     )
     session = create_edit_session("gaming_desktop")
@@ -271,6 +289,15 @@ def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypat
         raise AssertionError("bundled source overwrite should be rejected")
 
     assert load_canvas(source).components[0].props_dict()["text"] == "Hello"
+
+    try:
+        session.save(destination=other_source)
+    except RitualistError as exc:
+        assert "bundled canvas templates" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("other bundled template overwrite should be rejected")
+
+    assert load_canvas(other_source).components[0].props_dict()["text"] == "Media"
 
 
 def test_invalid_canvas_cannot_save(tmp_path: Path, monkeypatch) -> None:

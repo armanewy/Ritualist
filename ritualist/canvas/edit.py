@@ -354,12 +354,7 @@ class CanvasEditSession:
         if not result.valid:
             raise RitualistError("canvas cannot be saved until validation errors are fixed: " + "; ".join(result.errors))
         target = destination or self.default_save_path()
-        if (
-            self.source == "bundled"
-            and destination is not None
-            and self.source_path is not None
-            and target.resolve() == self.source_path.resolve()
-        ):
+        if destination is not None and _is_bundled_canvas_path(target):
             raise RitualistError("bundled canvas templates must be saved as a user copy")
         write = save_canvas(self.document, target, overwrite=True)
         self.source_path = write.path
@@ -554,6 +549,23 @@ def _find_canvas_reference(path_or_id: str):
         if path_or_id in {reference.canvas_id, str(reference.path)}:
             return reference
     return None
+
+
+def _is_bundled_canvas_path(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path
+    for reference in list_canvases(include_bundled=True):
+        if reference.source != "bundled":
+            continue
+        try:
+            candidate = reference.path.resolve()
+        except OSError:
+            candidate = reference.path
+        if resolved == candidate:
+            return True
+    return False
 
 
 def _default_props(spec: CanvasComponentType, overrides: dict[str, Any]) -> CanvasComponentProps:
