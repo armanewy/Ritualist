@@ -643,6 +643,10 @@ def _expected_host_payload(
         "component_input": "clickable",
         "edit_mode_input": "captures_canvas_for_layout_editing",
         "click_through_implemented": False,
+        "blank_area_click_through_status": (
+            "NEEDS_HUMAN_REVIEW" if mode == "desktop_work_area" else "NOT_APPLICABLE"
+        ),
+        "blank_area_click_through_machine_verified": False,
     }
 
 
@@ -811,6 +815,8 @@ def test_apply_desktop_work_area_host_uses_available_geometry() -> None:
     assert payload["input_policy"] == "capture_all"
     assert payload["blank_area_input"] == "captured_by_canvas_window"
     assert payload["click_through_implemented"] is False
+    assert payload["blank_area_click_through_status"] == "NEEDS_HUMAN_REVIEW"
+    assert payload["blank_area_click_through_machine_verified"] is False
     assert payload["background_passthrough"] is True
     assert payload["background_mode"] == "system_wallpaper"
     assert payload["bounds_match_work_area"] is True

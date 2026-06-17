@@ -332,6 +332,26 @@ blank-area click-through until the acceptance harness proves it. If the host is
 still using `capture_all`, that limitation must be documented in release
 evidence and the click-through check remains `NEEDS_HUMAN_REVIEW`.
 
+Implemented status:
+
+- Desktop Work-Area Use Mode currently reports `input_policy: capture_all`.
+- `click_through_implemented` is `false`.
+- `blank_area_click_through_status` is `NEEDS_HUMAN_REVIEW`.
+- `blank_area_click_through_machine_verified` is `false`.
+- The acceptance harness must not synthesize coordinate clicks to simulate
+  passthrough.
+
+Future implementation requirements:
+
+- Prefer native hit-test handling, such as returning a transparent hit-test
+  result for points outside known component bounds.
+- Keep Edit Mode in capture mode for selection, drag, resize, and property
+  editing.
+- If single-window native hit-testing is unreliable, use component-island
+  windows as a future fallback.
+- Do not forward mouse events, replay coordinates, or add coordinate-click
+  automation to fake pass-through behavior.
+
 ## Recovery Policy
 
 Every non-windowed host must provide at least two recovery paths:

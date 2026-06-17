@@ -57,6 +57,12 @@ class CanvasHostConfig:
     def background_passthrough(self) -> bool:
         return self.mode is CanvasHostMode.DESKTOP_WORK_AREA
 
+    @property
+    def blank_area_click_through_status(self) -> str:
+        if self.mode is CanvasHostMode.DESKTOP_WORK_AREA:
+            return "NEEDS_HUMAN_REVIEW"
+        return "NOT_APPLICABLE"
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": CANVAS_HOST_SCHEMA_VERSION,
@@ -78,6 +84,8 @@ class CanvasHostConfig:
             "component_input": "clickable",
             "edit_mode_input": "captures_canvas_for_layout_editing",
             "click_through_implemented": False,
+            "blank_area_click_through_status": self.blank_area_click_through_status,
+            "blank_area_click_through_machine_verified": False,
         }
 
 

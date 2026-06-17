@@ -110,6 +110,13 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "forced_windowed",
         "input_policy",
         "click_through_implemented",
+        "blank_area_click_through_status",
+        "blank_area_click_through_machine_verified",
+        "blank_area_click_through_review",
+        "component_click_evidence",
+        "interactive_wallpaper_fixture_input",
+        "edit_mode_input_capture",
+        "no_coordinate_click_automation",
         "background_passthrough",
         "background_mode",
         "Ritualist Wallpaper Fixture",
@@ -179,3 +186,13 @@ def test_release_acceptance_harness_avoids_forbidden_input_primitives() -> None:
         "wallpaper_engine.profile",
     ):
         assert forbidden not in script
+
+
+def test_release_acceptance_harness_keeps_click_through_unverified() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert '"NEEDS_HUMAN_REVIEW"' in script
+    assert "blank_area_click_through_machine_verified" in script
+    assert "native per-component hit testing is not implemented" in script
+    assert "does not synthesize blank-area mouse input" in script
+    assert 'status = if ($exitInvoked) { "PASS" } else { "NEEDS_HUMAN_REVIEW" }' in script

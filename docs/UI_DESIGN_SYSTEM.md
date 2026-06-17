@@ -43,6 +43,9 @@ Design requirements:
 - Edit Mode may add a temporary translucent grid, guides, or scrim.
 - Use Mode blank space should pass through when the host can prove it safely;
   until then, release evidence must not claim click-through support.
+- Current Desktop Work-Area Use Mode still captures blank areas and reports
+  click-through as `NEEDS_HUMAN_REVIEW`; do not design workflows that depend on
+  blank-area pass-through until native hit-test evidence exists.
 - Do not add video, live, web, app, or executable wallpaper modes.
 
 ## Component Families

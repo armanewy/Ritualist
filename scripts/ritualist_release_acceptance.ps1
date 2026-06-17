@@ -1088,6 +1088,30 @@ function Capture-DesktopWorkAreaCanvasArtifact {
             background_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_mode } else { $null }
             input_policy = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.input_policy } else { $null }
             click_through_implemented = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.click_through_implemented } else { $null }
+            blank_area_click_through_status = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_status } else { "NEEDS_HUMAN_REVIEW" }
+            blank_area_click_through_machine_verified = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_machine_verified } else { $false }
+            blank_area_click_through_review = [ordered]@{
+                status = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_status } else { "NEEDS_HUMAN_REVIEW" }
+                machine_verified = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_machine_verified } else { $false }
+                reason = "Desktop Work-Area Use Mode still captures blank areas; native per-component hit testing is not implemented."
+                no_coordinate_click_automation = $true
+            }
+            component_click_evidence = [ordered]@{
+                status = if ($exitInvoked) { "PASS" } else { "NEEDS_HUMAN_REVIEW" }
+                basis = "Visible exit control was invoked; ritual cards and Canvas controls are covered by packaged action checks."
+                exit_control_invoked = $exitInvoked
+            }
+            interactive_wallpaper_fixture_input = [ordered]@{
+                status = "NEEDS_HUMAN_REVIEW"
+                machine_tested = $false
+                fixture_visible = [bool]$fakeWallpaperWindow
+                reason = "The harness records fixture visibility but does not synthesize blank-area mouse input because coordinate-click automation is out of scope."
+            }
+            edit_mode_input_capture = [ordered]@{
+                status = "NEEDS_HUMAN_REVIEW"
+                machine_tested = $false
+                basis = "Edit Mode visual/control evidence is captured separately; blank-area edit input was not synthesized."
+            }
             monitor = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.monitor } else { $null }
             dpi = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.dpi } else { $null }
             recovery = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.recovery } else { $null }
