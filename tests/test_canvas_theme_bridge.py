@@ -161,6 +161,43 @@ assets:
     assert any("asset file is missing" in warning for warning in theme["warnings"])
 
 
+def test_canvas_validation_surfaces_theme_accessibility_warnings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_theme(
+        tmp_path,
+        "low.contrast",
+        """
+schema: ritualist.theme.v1
+id: low.contrast
+name: Low Contrast
+tokens:
+  color.surface: "#ffffff"
+  color.text: "#fefefe"
+  color.text_muted: "#fdfdfd"
+  color.accent: "#ffffff"
+  color.on_accent: "#fefefe"
+""",
+    )
+    monkeypatch.setattr("ritualist.themes.themes_path", lambda: tmp_path / "themes")
+    canvas = CanvasDocument(
+        id="low_contrast_canvas",
+        name="Low Contrast Canvas",
+        theme=CanvasTheme(id="low.contrast", name="Low Contrast"),
+    )
+
+    validation = validate_canvas_document(canvas, check_bindings=False)
+    payload = build_canvas_view_model(
+        canvas,
+        context=CanvasRuntimeContext(recipe_ids=set(), target_ids=set(), recent_runs=()),
+    ).to_dict()
+
+    assert validation.valid is True
+    assert any("theme: accessibility:" in warning for warning in validation.warnings)
+    assert payload["canvas"]["theme"]["validation"]["accessibility"]["warning_count"] >= 1
+
+
 def test_existing_sample_canvases_still_validate_with_theme_bridge() -> None:
     for canvas_id in bundled_canvas_ids():
         result = validate_canvas_document(load_canvas(canvas_id), check_bindings=False)

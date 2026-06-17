@@ -72,6 +72,8 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "theme_evidence",
         "theme_id",
         "theme_valid",
+        "theme_accessibility_warning_count",
+        "accessibility_warning_count",
     ):
         assert expected in script
 

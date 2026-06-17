@@ -72,9 +72,13 @@ APP_DEFAULT_TOKENS: dict[str, str | int | float] = {
     "color.text_muted": "#91a2b8",
     "color.border": "#203044",
     "color.accent": "#3dd6a5",
+    "color.on_accent": "#08120f",
     "color.success": "#3dd6a5",
+    "color.on_success": "#08120f",
     "color.warning": "#f5c45b",
+    "color.on_warning": "#1f1606",
     "color.danger": "#ff6b7a",
+    "color.on_danger": "#1f0a0d",
     "font.family": "Segoe UI",
     "font.size_body": 13,
     "font.size_title": 26,
@@ -90,6 +94,19 @@ APP_DEFAULT_TOKENS: dict[str, str | int | float] = {
     "opacity.disabled": 0.55,
     "material.surface": "solid",
 }
+
+THEME_ACCESSIBILITY_SCHEMA_VERSION = "ritualist.theme.accessibility.v1"
+CONTRAST_NORMAL_TEXT_TARGET = 4.5
+CONTRAST_LARGE_TEXT_TARGET = 3.0
+
+_CONTRAST_CHECKS = (
+    ("text_on_surface", "color.text", "color.surface", CONTRAST_NORMAL_TEXT_TARGET),
+    ("muted_text_on_surface", "color.text_muted", "color.surface", CONTRAST_NORMAL_TEXT_TARGET),
+    ("text_on_accent", "color.on_accent", "color.accent", CONTRAST_NORMAL_TEXT_TARGET),
+    ("success_badge_text", "color.on_success", "color.success", CONTRAST_LARGE_TEXT_TARGET),
+    ("warning_badge_text", "color.on_warning", "color.warning", CONTRAST_LARGE_TEXT_TARGET),
+    ("danger_badge_text", "color.on_danger", "color.danger", CONTRAST_LARGE_TEXT_TARGET),
+)
 
 
 class ThemeDocument(BaseModel):
@@ -137,6 +154,7 @@ class ThemeValidationResult(BaseModel):
     valid: bool
     errors: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    accessibility: dict[str, Any] = Field(default_factory=dict)
     token_count: int = 0
     asset_count: int = 0
     schema_version: str = THEME_VALIDATION_SCHEMA_VERSION
@@ -233,11 +251,14 @@ def validate_theme_document(
     resolution = resolve_theme_tokens(theme)
     errors.extend(resolution.errors)
     warnings.extend(resolution.warnings)
+    accessibility = theme_accessibility_report(resolution.tokens)
+    warnings.extend(str(warning) for warning in accessibility.get("warnings", ()))
     return ThemeValidationResult(
         theme_id=theme.id,
         valid=not errors,
         errors=tuple(dict.fromkeys(errors)),
         warnings=tuple(dict.fromkeys(warnings)),
+        accessibility=accessibility,
         token_count=len(theme.tokens),
         asset_count=len(theme.assets),
     )
@@ -274,6 +295,55 @@ def resolve_theme_tokens(
         if name in resolved:
             _validate_token_value(name, resolved[name], errors, allow_reference=False)
     return ThemeResolution(tokens=resolved, errors=tuple(dict.fromkeys(errors)), warnings=tuple(warnings))
+
+
+def theme_accessibility_report(tokens: Mapping[str, Any]) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for check_id, foreground_token, background_token, target in _CONTRAST_CHECKS:
+        foreground = tokens.get(foreground_token)
+        background = tokens.get(background_token)
+        if not _is_hex_color(foreground) or not _is_hex_color(background):
+            checks.append(
+                {
+                    "id": check_id,
+                    "foreground_token": foreground_token,
+                    "background_token": background_token,
+                    "ratio": None,
+                    "target": target,
+                    "passed": False,
+                    "skipped": True,
+                    "reason": "missing or invalid color token",
+                }
+            )
+            continue
+        ratio = _contrast_ratio(str(foreground), str(background))
+        passed = ratio >= target
+        rounded = round(ratio, 2)
+        checks.append(
+            {
+                "id": check_id,
+                "foreground_token": foreground_token,
+                "background_token": background_token,
+                "foreground": str(foreground),
+                "background": str(background),
+                "ratio": rounded,
+                "target": target,
+                "passed": passed,
+                "skipped": False,
+            }
+        )
+        if not passed:
+            warnings.append(
+                f"accessibility: {check_id} contrast {rounded:.2f}:1 is below "
+                f"{target:g}:1 ({foreground_token} on {background_token})"
+            )
+    return {
+        "schema_version": THEME_ACCESSIBILITY_SCHEMA_VERSION,
+        "checks": checks,
+        "warnings": warnings,
+        "warning_count": len(warnings),
+    }
 
 
 def _resolve_token(
@@ -340,6 +410,39 @@ def _validate_token_value(name: str, value: Any, errors: list[str], *, allow_ref
             errors.append(f"{name}: font tokens must be strings or numbers")
     elif namespace in {"shadow", "material"} and not isinstance(value, str):
         errors.append(f"{name}: {namespace} tokens must be strings")
+
+
+def _contrast_ratio(foreground: str, background: str) -> float:
+    first = _relative_luminance(foreground)
+    second = _relative_luminance(background)
+    lighter = max(first, second)
+    darker = min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _relative_luminance(color: str) -> float:
+    normalized = _normalize_hex_color(color)
+    red = _linear_channel(int(normalized[0:2], 16) / 255)
+    green = _linear_channel(int(normalized[2:4], 16) / 255)
+    blue = _linear_channel(int(normalized[4:6], 16) / 255)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _linear_channel(value: float) -> float:
+    if value <= 0.03928:
+        return value / 12.92
+    return ((value + 0.055) / 1.055) ** 2.4
+
+
+def _is_hex_color(value: Any) -> bool:
+    return isinstance(value, str) and HEX_COLOR_PATTERN.fullmatch(value.strip()) is not None
+
+
+def _normalize_hex_color(value: str) -> str:
+    text = value.strip().lstrip("#")
+    if len(text) == 3:
+        text = "".join(character * 2 for character in text)
+    return text
 
 
 def _validate_number(value: Any, errors: list[str], *, path: str, minimum: float, maximum: float) -> None:

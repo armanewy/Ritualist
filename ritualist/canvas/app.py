@@ -614,6 +614,7 @@ def run_canvas_use(
     if isinstance(ready_payload.get("canvas"), dict):
         ready_theme = dict(ready_payload["canvas"].get("theme") or {})
     ready_validation = dict(ready_theme.get("validation") or {})
+    ready_accessibility = dict(ready_validation.get("accessibility") or {})
     record_event(
         "canvas.ready",
         canvas=str(canvas),
@@ -621,6 +622,9 @@ def run_canvas_use(
         theme_id=str(ready_theme.get("id") or ""),
         theme_valid=bool(ready_validation.get("valid")),
         theme_source=str(ready_theme.get("source") or ""),
+        theme_warning_count=len(ready_validation.get("warnings") or []),
+        theme_accessibility_warning_count=int(ready_accessibility.get("warning_count") or 0),
+        theme_accessibility_warnings=list(ready_accessibility.get("warnings") or []),
     )
     app.aboutToQuit.connect(controller.shutdown)
     try:

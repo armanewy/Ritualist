@@ -23,6 +23,8 @@ def test_bundled_ritualist_paper_theme_validates() -> None:
     assert result.valid is True
     assert result.theme_id == "ritualist.paper"
     assert result.errors == ()
+    assert not [warning for warning in result.warnings if warning.startswith("accessibility:")]
+    assert result.accessibility["warning_count"] == 0
 
 
 def test_invalid_theme_color_fails(tmp_path: Path) -> None:
@@ -155,6 +157,47 @@ assets:
     assert any("asset file is missing" in warning for warning in result.warnings)
 
 
+def test_low_contrast_theme_emits_accessibility_warning(tmp_path: Path) -> None:
+    path = _theme_path(
+        tmp_path,
+        """
+schema: ritualist.theme.v1
+id: low.contrast
+name: Low Contrast
+tokens:
+  color.surface: "#ffffff"
+  color.text: "#fefefe"
+  color.text_muted: "#fdfdfd"
+  color.accent: "#ffffff"
+  color.on_accent: "#fefefe"
+""",
+    )
+
+    result = validate_theme(path)
+
+    assert result.valid is True
+    assert any("accessibility:" in warning for warning in result.warnings)
+    assert result.accessibility["warning_count"] >= 1
+
+
+def test_missing_accessibility_colors_fall_back_before_contrast_check(tmp_path: Path) -> None:
+    path = _theme_path(
+        tmp_path,
+        """
+schema: ritualist.theme.v1
+id: fallback.contrast
+name: Fallback Contrast
+tokens: {}
+""",
+    )
+
+    result = validate_theme(path)
+
+    assert result.valid is True
+    assert not [warning for warning in result.warnings if warning.startswith("accessibility:")]
+    assert result.accessibility["warning_count"] == 0
+
+
 def test_theme_pack_cannot_bind_behavior(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
@@ -211,7 +254,9 @@ def test_theme_cli_show_and_validate_json() -> None:
     assert validate.exit_code == 0
     assert list_result.exit_code == 0
     assert json.loads(show.output)["theme"]["id"] == "ritualist.paper"
-    assert json.loads(validate.output)["valid"] is True
+    validation = json.loads(validate.output)
+    assert validation["valid"] is True
+    assert validation["accessibility"]["warning_count"] == 0
     assert any(row["id"] == "ritualist.paper" for row in json.loads(list_result.output))
 
 

@@ -10,9 +10,13 @@ tokens:
   color.text_muted: "#675f53"
   color.border: "#d8d0c3"
   color.accent: "#3b7668"
+  color.on_accent: "#ffffff"
   color.success: "#2f7d57"
+  color.on_success: "#ffffff"
   color.warning: "#9a6a1f"
+  color.on_warning: "#ffffff"
   color.danger: "#a23a3a"
+  color.on_danger: "#ffffff"
   font.family: "Segoe UI"
   font.size_body: 13
   font.size_title: 28

@@ -149,19 +149,23 @@ def _embedded_canvas_theme(
     warnings: tuple[str, ...] = (),
 ) -> CanvasThemeSelection:
     qml_tokens = dict(document.theme.tokens.model_dump(mode="json"))
+    resolved_tokens = _dotted_from_qml_tokens(qml_tokens)
+    accessibility = themes.theme_accessibility_report(resolved_tokens)
+    combined_warnings = tuple(dict.fromkeys([*warnings, *accessibility.get("warnings", ())]))
     return CanvasThemeSelection(
         theme_id=document.theme.id,
         name=document.theme.name,
         source=source,
         valid=True,
         tokens=qml_tokens,
-        resolved_tokens=_dotted_from_qml_tokens(qml_tokens),
-        warnings=warnings,
+        resolved_tokens=resolved_tokens,
+        warnings=combined_warnings,
         validation={
             "theme_id": document.theme.id,
             "valid": True,
             "errors": [],
-            "warnings": list(warnings),
+            "warnings": list(combined_warnings),
+            "accessibility": accessibility,
             "token_count": len(qml_tokens),
             "asset_count": 0,
         },

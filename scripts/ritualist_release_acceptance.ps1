@@ -529,6 +529,9 @@ function Get-CanvasThemeEvidence {
                     theme_id = $_.payload.theme_id
                     theme_valid = $_.payload.theme_valid
                     theme_source = $_.payload.theme_source
+                    theme_warning_count = $_.payload.theme_warning_count
+                    accessibility_warning_count = $_.payload.theme_accessibility_warning_count
+                    accessibility_warnings = $_.payload.theme_accessibility_warnings
                 }
             }
     )
@@ -536,6 +539,8 @@ function Get-CanvasThemeEvidence {
         canvas_ready = $ready
         selected_theme_ids = @($ready | ForEach-Object { $_.theme_id } | Where-Object { $_ } | Select-Object -Unique)
         invalid_theme_events = @($ready | Where-Object { $_.theme_valid -eq $false })
+        accessibility_warning_count = @($ready | Measure-Object -Property accessibility_warning_count -Sum).Sum
+        accessibility_warnings = @($ready | ForEach-Object { $_.accessibility_warnings } | Where-Object { $_ })
     }
 }
 
