@@ -8,7 +8,6 @@ from pathlib import Path
 from threading import Event
 from typing import Any
 
-from ritualist.adapters import create_default_adapters
 from ritualist.e2e import enabled as e2e_enabled
 from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError, RitualistError
@@ -19,7 +18,6 @@ from ritualist.home.models import HomeCardStatus, HomeRuntimeEvent
 from ritualist.recipe_loader import discover_recipes
 from ritualist.runtime_control import RuntimeControl
 from ritualist.target_resolution import builtin_target_catalog
-from ritualist.watch_me import WatchMeService
 
 from .controller import CanvasRuntimeController
 from .edit import CanvasEditSession, create_edit_session
@@ -93,7 +91,6 @@ def run_canvas_use(
         statusEventReceived = Signal(str, object)
         confirmationRequested = Signal(str, object)
         confirmationDecision = Signal(bool)
-        watchMeChanged = Signal()
 
         def __init__(
             self,
@@ -123,13 +120,6 @@ def run_canvas_use(
             self._confirmation_presenter = _create_confirmation_presenter()
             self._runtime_controller = CanvasRuntimeController()
             self._heartbeat_start = time.perf_counter()
-            self._watch_me_service = WatchMeService(adapters=create_default_adapters())
-            self._watch_me_session_id: str | None = None
-            self._watch_me_recording = False
-            self._watch_me_draft_available = False
-            self._watch_me_status_label = "Watch Me ready"
-            self._watch_me_draft_summary = ""
-            self._watch_me_draft_preview = ""
             self.actionCompleted.connect(self._complete_action)
             self.actionFailed.connect(self._mark_action_failed)
             self.runtimeEventReceived.connect(self._apply_runtime_event)
@@ -164,26 +154,6 @@ def run_canvas_use(
         @Property(bool, notify=actionStateChanged)
         def runtimePaused(self) -> bool:
             return self._runtime_paused
-
-        @Property(bool, notify=watchMeChanged)
-        def watchMeRecording(self) -> bool:
-            return self._watch_me_recording
-
-        @Property(bool, notify=watchMeChanged)
-        def watchMeDraftAvailable(self) -> bool:
-            return self._watch_me_draft_available
-
-        @Property(str, notify=watchMeChanged)
-        def watchMeStatusLabel(self) -> str:
-            return self._watch_me_status_label
-
-        @Property(str, notify=watchMeChanged)
-        def watchMeDraftSummary(self) -> str:
-            return self._watch_me_draft_summary
-
-        @Property(str, notify=watchMeChanged)
-        def watchMeDraftPreview(self) -> str:
-            return self._watch_me_draft_preview
 
         @Slot(str, str)
         def dispatchAction(self, component_id: str, action_id: str) -> None:
@@ -395,86 +365,6 @@ def run_canvas_use(
             self.metricsChanged.emit()
 
         @Slot()
-        def startWatchMe(self) -> None:
-            record_event("canvas.watch_me.requested", action="start")
-            if self._mock:
-                self._set_watch_me_status("Watch Me is disabled in mock mode")
-                return
-            if self._watch_me_recording:
-                self._set_watch_me_status("Watch Me is already recording")
-                return
-            try:
-                session = self._watch_me_service.start()
-            except Exception as exc:  # noqa: BLE001 - Watch Me errors are surfaced in Canvas.
-                self._set_watch_me_status(f"Watch Me failed: {exc}")
-                return
-            self._watch_me_session_id = session.session_id
-            self._watch_me_recording = True
-            self._watch_me_draft_available = False
-            self._watch_me_draft_summary = ""
-            self._watch_me_draft_preview = ""
-            self._set_watch_me_status(f"Recording Watch Me session {session.session_id}")
-
-        @Slot()
-        def stopWatchMe(self) -> None:
-            record_event("canvas.watch_me.requested", action="stop")
-            if not self._watch_me_session_id:
-                self._set_watch_me_status("No Watch Me session is active")
-                return
-            if not self._watch_me_recording:
-                self._set_watch_me_status("Watch Me is not recording")
-                return
-            try:
-                session = self._watch_me_service.stop(self._watch_me_session_id)
-            except Exception as exc:  # noqa: BLE001
-                self._set_watch_me_status(f"Watch Me failed: {exc}")
-                return
-            self._watch_me_recording = False
-            self._watch_me_draft_available = True
-            self._watch_me_draft_summary = f"{len(session.events)} safe event(s) captured"
-            self._set_watch_me_status("Watch Me stopped; draft can be created")
-
-        @Slot()
-        def createWatchMeDraft(self) -> None:
-            record_event("canvas.watch_me.requested", action="create_draft")
-            if not self._watch_me_session_id:
-                self._set_watch_me_status("No Watch Me session is available")
-                return
-            try:
-                draft = self._watch_me_service.create_draft(self._watch_me_session_id)
-                session = self._watch_me_service.load(self._watch_me_session_id)
-            except Exception as exc:  # noqa: BLE001
-                self._set_watch_me_status(f"Watch Me draft failed: {exc}")
-                return
-            self._watch_me_draft_available = False
-            self._watch_me_draft_summary = (
-                f"Draft {draft.recipe.get('id')} disabled for review; "
-                f"{len(draft.recipe.get('steps', []))} suggested step(s)."
-            )
-            self._watch_me_draft_preview = "\n".join(draft.preview[:10])
-            if session.draft_path:
-                self._watch_me_draft_summary += f" Saved to {session.draft_path}"
-            self._set_watch_me_status("Watch Me draft created")
-
-        @Slot()
-        def discardWatchMe(self) -> None:
-            record_event("canvas.watch_me.requested", action="discard")
-            if not self._watch_me_session_id:
-                self._set_watch_me_status("No Watch Me session is available")
-                return
-            try:
-                session = self._watch_me_service.discard(self._watch_me_session_id)
-            except Exception as exc:  # noqa: BLE001
-                self._set_watch_me_status(f"Watch Me discard failed: {exc}")
-                return
-            self._watch_me_session_id = None
-            self._watch_me_recording = False
-            self._watch_me_draft_available = False
-            self._watch_me_draft_summary = ""
-            self._watch_me_draft_preview = ""
-            self._set_watch_me_status(f"Watch Me discarded: {session.session_id}")
-
-        @Slot()
         def shutdown(self) -> None:
             if self._runtime_control is not None:
                 self._runtime_control.stop()
@@ -552,13 +442,6 @@ def run_canvas_use(
                 return
             self._action_busy = busy
             self.actionStateChanged.emit()
-
-        def _set_watch_me_status(self, message: str) -> None:
-            record_event("canvas.watch_me.status", message=message)
-            self._watch_me_status_label = message
-            self._last_event_label = message
-            self.watchMeChanged.emit()
-            self.metricsChanged.emit()
 
         def _publish_status(
             self,

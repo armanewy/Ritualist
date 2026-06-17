@@ -20,7 +20,6 @@ from .paths import (
     recipes_path,
     runs_path,
     themes_path,
-    watch_me_path,
 )
 
 
@@ -74,7 +73,6 @@ def _planned_paths() -> dict[str, Path]:
         "imported_theme_packs": imported_theme_packs_path(),
         "logs": logs_path(),
         "runs": runs_path(),
-        "watch_me": watch_me_path(),
         "browser_profiles": browser_profiles_path(),
     }
 

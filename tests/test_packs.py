@@ -167,6 +167,20 @@ def test_validate_pack_rejects_coordinate_click_actions(tmp_path):
         validate_pack(path)
 
 
+def test_validate_pack_rejects_record_replay_actions(tmp_path):
+    manifest = _manifest(required_actions=["record.start"])
+    recipe = {
+        "version": "0.1",
+        "id": "demo_recipe",
+        "name": "Demo",
+        "steps": [{"action": "record.start"}],
+    }
+    path = _write_pack(tmp_path, manifest=manifest, recipe=recipe)
+
+    with pytest.raises(PackValidationError, match="record/replay actions"):
+        validate_pack(path)
+
+
 def test_validate_pack_accepts_actions_disabled_by_default_for_import_review(tmp_path):
     manifest = _manifest(
         required_actions=["app.launch"],

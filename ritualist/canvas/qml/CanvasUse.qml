@@ -639,32 +639,6 @@ ApplicationWindow {
                 onClicked: root.canvasController.stopCurrentRun()
             }
 
-            PaperButton {
-                text: "Create from what I do"
-                enabled: root.canvasController && !root.mockMode && !root.canvasController.watchMeRecording
-                onClicked: root.canvasController.startWatchMe()
-            }
-
-            PaperButton {
-                text: "Stop Watch Me"
-                role: "warning"
-                enabled: root.canvasController && root.canvasController.watchMeRecording
-                onClicked: root.canvasController.stopWatchMe()
-            }
-
-            PaperButton {
-                text: "Create Draft"
-                role: "primary"
-                enabled: root.canvasController && root.canvasController.watchMeDraftAvailable
-                onClicked: root.canvasController.createWatchMeDraft()
-            }
-
-            PaperButton {
-                text: "Discard"
-                role: "danger"
-                enabled: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
-                onClicked: root.canvasController.discardWatchMe()
-            }
         }
 
         Rectangle {
@@ -698,65 +672,6 @@ ApplicationWindow {
                 PaperButton {
                     text: "Keep Editing"
                     onClicked: root.pendingEditDecision = ""
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            height: watchMeStatus.visible ? (watchMePreview.visible ? 132 : 48) : 0
-            radius: root.radiusLg
-            color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning_panel", "#252014") : root.token("panel", "#101720")
-            border.color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning", "#f5c45b") : root.token("border", "#203044")
-            visible: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
-
-            ColumnLayout {
-                id: watchMeStatus
-                anchors.fill: parent
-                anchors.margins: root.spaceMd
-                visible: parent.visible
-                spacing: root.spaceSm
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: root.spaceSm
-
-                    Rectangle {
-                        width: 10
-                        height: 10
-                        radius: 5
-                        color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning", "#f5c45b") : root.token("accent", "#3dd6a5")
-                    }
-
-                    Text {
-                        text: root.canvasController ? root.canvasController.watchMeStatusLabel : ""
-                        color: root.token("foreground", "#f4f7fb")
-                        font.pixelSize: 12
-                        font.weight: Font.DemiBold
-                        elide: Text.ElideRight
-                        Layout.preferredWidth: 260
-                    }
-
-                    Text {
-                        text: root.canvasController ? root.canvasController.watchMeDraftSummary : ""
-                        color: root.token("muted", "#91a2b8")
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                }
-
-                Text {
-                    id: watchMePreview
-                    text: root.canvasController ? root.canvasController.watchMeDraftPreview : ""
-                    color: root.token("muted", "#91a2b8")
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                    maximumLineCount: 4
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: text.length > 0
                 }
             }
         }
