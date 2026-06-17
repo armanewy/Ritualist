@@ -1,0 +1,158 @@
+schema: ritualist.release_acceptance.v1
+release: v0.2.0-alpha.1
+semantics:
+  PASS: "Machine evidence satisfies the check without adding product scope."
+  FAIL: "Machine evidence contradicts the release requirement or a command failed."
+  NEEDS_HUMAN_REVIEW: "Evidence is partial, subjective, unavailable on this host, or requires human visual judgment."
+artifact_contract:
+  summary_json: artifacts/release-acceptance/acceptance-summary.json
+  summary_md: artifacts/release-acceptance/acceptance-summary.md
+  evidence_root: artifacts/release-acceptance/evidence
+checks:
+  - id: packaged_home_visible
+    blocker: "Packaged Home opens visibly."
+    expected_evidence:
+      - screenshot
+      - process_tree
+      - window_tree
+      - e2e_event: home.ready
+    pass_when: "Ritualist Home window is visible and process stays alive for the scenario dwell."
+  - id: packaged_canvas_visible
+    blocker: "Packaged Canvas Use Mode opens visibly."
+    expected_evidence:
+      - screenshot
+      - process_tree
+      - window_tree
+      - e2e_event: canvas.ready
+    pass_when: "Ritualist Canvas window is visible and process stays alive for the scenario dwell."
+  - id: packaged_classic_gui_visible
+    blocker: "Packaged classic GUI opens."
+    expected_evidence:
+      - screenshot
+      - process_tree
+      - window_tree
+      - e2e_event: classic_gui.ready
+    pass_when: "Classic Ritualist window is visible and process stays alive for the scenario dwell."
+  - id: gaming_desktop_renders
+    blocker: "`gaming_desktop` renders correctly, not blank/white."
+    expected_evidence:
+      - screenshot
+      - canvas_component_names
+    pass_when: "Screenshot is nonblank and expected Canvas component controls are present."
+  - id: expected_canvas_components_appear
+    blocker: "Expected Canvas components appear."
+    expected_evidence:
+      - ui_automation_controls
+      - canvas_component_names
+    pass_when: "category dock, Diablo Night, run status/controller, target card, and clock component evidence is present."
+  - id: ritual_card_doctor
+    blocker: "Ritual card Doctor works."
+    expected_evidence:
+      - e2e_event: canvas.action.requested
+      - e2e_event: canvas.status
+      - screenshot
+    pass_when: "Doctor action completes with success status."
+  - id: ritual_card_dry_run
+    blocker: "Ritual card Dry Run works."
+    expected_evidence:
+      - run_log
+      - steps_jsonl
+      - e2e_event: runtime.event
+    pass_when: "Dry run creates a successful run log with no real side effects and all planned steps recorded."
+  - id: safe_ritual_card_run
+    blocker: "Ritual card Run works safely."
+    expected_evidence:
+      - fixture_recipe
+      - run_log
+      - steps_jsonl
+      - fake_external_app_window
+      - fake_external_app_status
+    pass_when: "Fixture run reaches the explicit Play confirmation without game login or gameplay automation, and fake Play remains uninvoked after decline."
+  - id: ritual_status_updates
+    blocker: "`ritual.status` updates."
+    expected_evidence:
+      - e2e_event: canvas.status
+      - runtime_events_jsonl
+      - screenshot
+    pass_when: "Runtime state transitions include waiting, confirming, and stopped in runtime events plus packaged Canvas status evidence."
+  - id: ritual_controller_pause_resume_stop
+    blocker: "Pause / Resume / Stop work during a real wait/run."
+    expected_evidence:
+      - e2e_event: canvas.runtime_control.requested
+      - run_log
+      - screenshot
+    pass_when: "Run state history records paused, resumed/running, stopping, and stopped."
+  - id: target_card_preview
+    blocker: "`target.card` previews Diablo IV target plan."
+    expected_evidence:
+      - command_output_json
+      - e2e_event: canvas.action.requested
+    pass_when: "Preview returns a target plan and does not launch apps or click UI."
+  - id: recent_activity_updates
+    blocker: "Recent activity updates."
+    expected_evidence:
+      - home_recent_activity
+      - run_history
+      - screenshot
+    pass_when: "Recent activity evidence shows the latest stopped/interrupted run, or NEEDS_HUMAN_REVIEW if not exposed to UIA."
+  - id: native_confirmation_z_order
+    blocker: "Native confirmation stays above Chrome/Battle.net."
+    expected_evidence:
+      - screenshot
+      - foreground_window
+      - z_order_snapshot
+      - confirmation_window_tree
+    pass_when: "Ritualist Confirmation Required is a top-level dialog above the fake Battle.net window."
+  - id: declining_play_stopped
+    blocker: "Declining Play ends as `stopped`."
+    expected_evidence:
+      - run_log
+      - steps_jsonl
+      - e2e_event: confirmation.resolved
+    pass_when: "Final run state is stopped and final Play step is cancelled after declined confirmation."
+  - id: show_run_declined_confirmation
+    blocker: "`show-run` clearly records declined confirmation."
+    expected_evidence:
+      - command_output_text
+    pass_when: "show-run output includes stopped status, declined confirmation, and cancelled Play step."
+  - id: hard_kill_repairs_interrupted
+    blocker: "Hard-kill during active run repairs abandoned run to `interrupted`."
+    expected_evidence:
+      - killed_process
+      - relaunch_home_evidence
+      - run_log
+      - show_run_output
+    pass_when: "Relaunch repairs the abandoned run to interrupted with a clear final message."
+  - id: watch_me_preview_privacy
+    blocker: "Watch Me preview does not capture forbidden data."
+    expected_evidence:
+      - watch_me_session
+      - watch_me_draft
+      - forbidden_marker_scan
+    pass_when: "Watch Me draft is disabled/review-only and contains no forbidden markers."
+  - id: canvas_theme_pack_import_export_no_autorun
+    blocker: "Canvas/theme pack import/export does not auto-run behavior."
+    expected_evidence:
+      - canvas_pack_export_json
+      - canvas_pack_import_json
+      - theme_pack_export_json
+      - theme_pack_import_json
+    pass_when: "Source CLI visual packs import into quarantine/disabled storage and contain no recipes/actions/steps."
+  - id: arbitrary_component_code_rejected
+    blocker: "Arbitrary component code is not accepted."
+    expected_evidence:
+      - rejected_pack_output
+    pass_when: "Source CLI script-like component content is rejected by pack validation."
+  - id: component_perf_100_300_recorded
+    blocker: "100/300 component performance feel is acceptable."
+    expected_evidence:
+      - perf_100_json
+      - perf_300_json
+      - screen_recording_frames
+    pass_when: "Source CLI perf commands stay within budget; subjective feel can still be NEEDS_HUMAN_REVIEW when not visually judged."
+  - id: ui_heartbeat_no_obvious_freeze
+    blocker: "UI heartbeat/render timing has no obvious freeze."
+    expected_evidence:
+      - frame_timing
+      - e2e_event_timing
+    pass_when: "Frame/e2e timing shows no long acceptance-harness stall; subjective smoothness can still be NEEDS_HUMAN_REVIEW."

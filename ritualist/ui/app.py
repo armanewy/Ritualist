@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 
+from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError
 
 
@@ -17,4 +18,5 @@ def run_gui() -> None:
     window = MainWindow()
     window.resize(900, 600)
     window.show()
+    record_event("classic_gui.ready", window_title=window.windowTitle())
     app.exec()

@@ -22,6 +22,7 @@ from .actions.base import (
 from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
 from .errors import ExecutionStoppedError, UserCancelledError
+from .e2e import record_event
 from .models import (
     BrowserClickRoleStep,
     BrowserClickTestIdStep,
@@ -823,6 +824,7 @@ class WorkflowExecutor:
         return {"run_id": self._run_id, "sequence": sequence}
 
     def _emit_runtime_event(self, event: RuntimeEvent) -> None:
+        record_event("runtime.event", runtime_event=event)
         if self.runtime_event_callback is not None:
             self.runtime_event_callback(event)
 

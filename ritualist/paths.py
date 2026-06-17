@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from platformdirs import user_data_dir, user_log_dir
@@ -15,6 +16,9 @@ def app_data_dir() -> Path:
 
 
 def app_data_path() -> Path:
+    e2e_path = _e2e_app_data_path()
+    if e2e_path is not None:
+        return e2e_path
     return Path(user_data_dir(APP_NAME, APP_AUTHOR))
 
 
@@ -166,3 +170,12 @@ def ensure_app_dirs() -> dict[str, Path]:
         "watch_me": watch_me_dir(),
     }
     return paths
+
+
+def _e2e_app_data_path() -> Path | None:
+    if os.environ.get("RITUALIST_E2E") != "1":
+        return None
+    text = os.environ.get("RITUALIST_E2E_APP_DATA_DIR", "").strip()
+    if not text:
+        return None
+    return Path(text)

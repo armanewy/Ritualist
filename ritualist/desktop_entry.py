@@ -6,12 +6,14 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from ritualist.errors import RitualistError
+from ritualist.e2e import record_event
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Launch the desktop entry point used by Windows app bundles."""
     try:
         launch_mode, launch_value = _launch_mode(sys.argv[1:] if argv is None else argv)
+        record_event("desktop_entry.launch", mode=launch_mode, value=launch_value)
         if launch_mode == "classic-gui":
             _run_gui()
         elif launch_mode == "canvas":
@@ -63,6 +65,7 @@ def _launch_mode(argv: Sequence[str]) -> tuple[str, str | None]:
 
 
 def _report_startup_error(message: str, details: str | None = None) -> None:
+    record_event("desktop_entry.startup_error", message=message)
     print(message, file=sys.stderr)
     _write_startup_error_log(message, details)
     _show_error_dialog(message)

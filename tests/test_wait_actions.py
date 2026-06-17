@@ -52,6 +52,45 @@ def test_wait_seconds_paused_and_resumed_does_not_spend_timeout() -> None:
     assert summary.results[0].status == "success"
 
 
+def test_wait_seconds_records_pause_and_resume_runtime_state(tmp_path: Path) -> None:
+    control = RuntimeControl()
+    recipe = _recipe({"action": "wait.seconds", "seconds": 0.2, "timeout_seconds": 0.5})
+    events: list[object] = []
+    writer = RunLogWriter(base_dir=tmp_path)
+    result: dict[str, object] = {}
+
+    thread = threading.Thread(
+        target=lambda: result.setdefault(
+            "summary",
+            WorkflowExecutor(
+                adapters=FakeAdapters().bundle(),
+                runtime_control=control,
+                runtime_event_callback=events.append,
+                run_logger=writer,
+            ).run(recipe),
+        )
+    )
+    thread.start()
+
+    time.sleep(0.06)
+    control.pause()
+    time.sleep(0.12)
+    control.resume()
+    thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    summary = result["summary"]
+    assert summary.success
+    event_types = [getattr(event, "type", "") for event in events]
+    assert "step.paused" in event_types
+    assert "step.resumed" in event_types
+
+    run_json = json.loads((writer.run_dir / "run.json").read_text(encoding="utf-8"))
+    states = [entry["state"] for entry in run_json["run_state_history"]]
+    assert "paused" in states
+    assert states[-1] == "success"
+
+
 def test_wait_for_file_succeeds_when_file_appears(tmp_path) -> None:
     target = tmp_path / "ready.txt"
 

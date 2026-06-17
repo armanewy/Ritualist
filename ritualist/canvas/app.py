@@ -8,6 +8,7 @@ from threading import Event
 from typing import Any
 
 from ritualist.adapters import create_default_adapters
+from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError, RitualistError
 from ritualist.config import load_app_config
 from ritualist.home.actions import home_event_from_runtime, home_event_from_step_status
@@ -168,6 +169,11 @@ def run_canvas_use(
 
         @Slot(str, str)
         def dispatchAction(self, component_id: str, action_id: str) -> None:
+            record_event(
+                "canvas.action.requested",
+                component_id=component_id,
+                action_id=action_id,
+            )
             if self._edit_mode:
                 self._last_event_label = "Switch to Use Mode before running Canvas actions"
                 self.metricsChanged.emit()
@@ -302,6 +308,7 @@ def run_canvas_use(
 
         @Slot()
         def pauseCurrentRun(self) -> None:
+            record_event("canvas.runtime_control.requested", action="pause")
             if self._runtime_control is None:
                 self._last_event_label = "No Canvas run is active"
                 self.metricsChanged.emit()
@@ -314,6 +321,7 @@ def run_canvas_use(
 
         @Slot()
         def resumeCurrentRun(self) -> None:
+            record_event("canvas.runtime_control.requested", action="resume")
             if self._runtime_control is None:
                 self._last_event_label = "No Canvas run is active"
                 self.metricsChanged.emit()
@@ -326,6 +334,7 @@ def run_canvas_use(
 
         @Slot()
         def stopCurrentRun(self) -> None:
+            record_event("canvas.runtime_control.requested", action="stop")
             if self._runtime_control is None:
                 self._last_event_label = "No Canvas run is active"
                 self.metricsChanged.emit()
@@ -339,6 +348,7 @@ def run_canvas_use(
 
         @Slot()
         def startWatchMe(self) -> None:
+            record_event("canvas.watch_me.requested", action="start")
             if self._mock:
                 self._set_watch_me_status("Watch Me is disabled in mock mode")
                 return
@@ -359,6 +369,7 @@ def run_canvas_use(
 
         @Slot()
         def stopWatchMe(self) -> None:
+            record_event("canvas.watch_me.requested", action="stop")
             if not self._watch_me_session_id:
                 self._set_watch_me_status("No Watch Me session is active")
                 return
@@ -377,6 +388,7 @@ def run_canvas_use(
 
         @Slot()
         def createWatchMeDraft(self) -> None:
+            record_event("canvas.watch_me.requested", action="create_draft")
             if not self._watch_me_session_id:
                 self._set_watch_me_status("No Watch Me session is available")
                 return
@@ -398,6 +410,7 @@ def run_canvas_use(
 
         @Slot()
         def discardWatchMe(self) -> None:
+            record_event("canvas.watch_me.requested", action="discard")
             if not self._watch_me_session_id:
                 self._set_watch_me_status("No Watch Me session is available")
                 return
@@ -492,6 +505,7 @@ def run_canvas_use(
             self.actionStateChanged.emit()
 
         def _set_watch_me_status(self, message: str) -> None:
+            record_event("canvas.watch_me.status", message=message)
             self._watch_me_status_label = message
             self._last_event_label = message
             self.watchMeChanged.emit()
@@ -505,6 +519,13 @@ def run_canvas_use(
             *,
             state: str | None = None,
         ) -> None:
+            record_event(
+                "canvas.status",
+                component_id=component_id,
+                status=status,
+                state=state,
+                message=message,
+            )
             reference = _component_reference(self._document, component_id)
             self._runtime_state[reference] = {
                 "status": state or status,
@@ -547,6 +568,7 @@ def run_canvas_use(
             self._publish_status(component_id, status, message)
 
         def _request_confirmation(self, component_id: str, prompt: object) -> None:
+            record_event("canvas.confirmation.requested", component_id=component_id, prompt=prompt)
             self._publish_status(component_id, HomeCardStatus.WARNING.value, "Confirmation required")
             self._confirmation_presenter.request_confirmation(
                 prompt,
@@ -554,6 +576,7 @@ def run_canvas_use(
             )
 
         def _answer_confirmation(self, accepted: bool) -> None:
+            record_event("canvas.confirmation.answered", accepted=accepted)
             self._confirmation_result = accepted
             self._confirmation_event.set()
 
@@ -586,6 +609,7 @@ def run_canvas_use(
         engine.load(QUrl.fromLocalFile(str(qml_path)))
         if not engine.rootObjects():
             raise RitualistError(f"Canvas Use UI failed to load: {qml_path}")
+    record_event("canvas.ready", canvas=str(canvas), mock=mock)
     app.aboutToQuit.connect(controller.shutdown)
     try:
         return app.exec()

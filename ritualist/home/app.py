@@ -9,6 +9,7 @@ from threading import Event
 from typing import Any
 
 from ritualist.config import load_app_config
+from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError, RitualistError
 from ritualist.home.actions import (
     HomeActionDispatcher,
@@ -180,14 +181,17 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot(str)
         def runCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="run")
             self._start_runtime_action(card_id, HomeCardAction.RUN)
 
         @Slot(str)
         def dryRunCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="dry_run")
             self._start_runtime_action(card_id, HomeCardAction.DRY_RUN)
 
         @Slot(str)
         def doctorCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="doctor")
             self._start_action(card_id, HomeCardAction.DOCTOR)
 
         @Slot(str)
@@ -226,6 +230,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot()
         def stopCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="stop")
             if self._runtime_control is None:
                 self._last_event_label = "No runtime run is active"
                 self.metricsChanged.emit()
@@ -239,6 +244,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot()
         def pauseCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="pause")
             if self._runtime_control is None:
                 self._last_event_label = "No runtime run is active"
                 self.metricsChanged.emit()
@@ -251,6 +257,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot()
         def resumeCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="resume")
             if self._runtime_control is None:
                 self._last_event_label = "No runtime run is active"
                 self.metricsChanged.emit()
@@ -263,6 +270,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot(bool)
         def answerConfirmation(self, accepted: bool) -> None:
+            record_event("home.confirmation.answered", accepted=accepted)
             self._confirmation_result = accepted
             self._confirmation_pending = False
             self._confirmation_prompt = ""
@@ -395,6 +403,7 @@ def run_home(*, mock: bool = False) -> int:
             return False
 
         def _publish_event(self, event: HomeRuntimeEvent) -> None:
+            record_event("home.runtime_event", home_event=event)
             if self._activity.record(event) is not None:
                 self.recentActivityChanged.emit()
             self._bridge.queue_runtime_event(event)
@@ -489,6 +498,7 @@ def run_home(*, mock: bool = False) -> int:
 
         @Slot(str, object)
         def _request_confirmation(self, card_id: str, prompt: object) -> None:
+            record_event("home.confirmation.requested", card_id=card_id, prompt=prompt)
             self._show_confirmation_status(card_id, prompt)
             self._confirmation_presenter.request_confirmation(
                 prompt,
@@ -543,6 +553,7 @@ def run_home(*, mock: bool = False) -> int:
         engine.load(QUrl.fromLocalFile(str(qml_path)))
         if not engine.rootObjects():
             raise RitualistError(f"Home UI failed to load: {qml_path}")
+    record_event("home.ready", mock=mock)
 
     drain_timer.start()
     if emitter is not None:

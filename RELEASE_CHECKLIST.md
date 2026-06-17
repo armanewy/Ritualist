@@ -632,3 +632,88 @@ Performance and pack-safety checks:
 Release note:
 
 - No `v0.2.0-alpha.1` tag was created.
+
+## Packaged Release Acceptance Harness - 2026-06-17
+
+Status: Machine-verifiable packaged GUI/runtime acceptance plus source CLI
+supplemental command evidence passed all objective checks the harness can
+assert. Two release gates remain `NEEDS_HUMAN_REVIEW`; do not tag
+`v0.2.0-alpha.1` yet.
+
+Harness/spec added:
+
+- `tests/acceptance/release_v0_2_alpha_1.yaml`
+- `scripts/ritualist_release_acceptance.ps1`
+- E2E instrumentation is opt-in through `RITUALIST_E2E=1`,
+  `RITUALIST_E2E_ARTIFACT_DIR`, and `RITUALIST_E2E_APP_DATA_DIR`.
+- Fixture mode uses an isolated app-data root plus a fake `Battle.net Fixture`
+  window. It does not depend on real game login and does not run gameplay
+  automation.
+
+Command evidence:
+
+- `git pull --ff-only`: already up to date.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 35 managed files.
+- `python -m pytest -q`: `721 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen`: passed
+  with no machine `FAIL` checks.
+- Command scope: the packaged executable is used for Home, Canvas Use Mode,
+  classic GUI, and runtime scenarios. Source-tree `python -m ritualist` is used
+  for supplemental CLI-only safety, perf, run-log, and visual-pack command
+  evidence because the Windows app bundle is a GUI entry point.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance\evidence`
+- Screen-frame manifests were written under
+  `artifacts\release-acceptance\evidence\screen-frames`.
+- E2E runtime JSONL events were written under
+  `artifacts\release-acceptance\evidence\e2e-events`.
+- E2E event merge reported `0` JSONL parse errors.
+- Run logs were copied under
+  `artifacts\release-acceptance\evidence\run-logs`.
+
+Acceptance summary:
+
+- `PASS`: 19
+- `FAIL`: 0
+- `NEEDS_HUMAN_REVIEW`: 2
+- `taggable`: `false`
+- `tag_created`: `false`
+
+Objective checks that passed:
+
+- Packaged Home, Canvas Use Mode, and classic GUI opened and stayed alive.
+- Packaged `gaming_desktop` rendered with expected Canvas controls.
+- Packaged Canvas produced machine evidence for Doctor, Dry Run, safe Run,
+  `ritual.status` transitions, Pause/Resume/Stop, target preview status, native
+  confirmation z-order over the fake Battle.net fixture, declined Play stop
+  handling, hard-kill repair to `interrupted`, and Watch Me preview privacy.
+- Source CLI supplemental checks produced machine evidence for structured target
+  plan JSON, `show-run` declined-confirmation output, Canvas/theme pack
+  import/export quarantine behavior, arbitrary component-code rejection, and
+  100/300 component perf command outputs.
+
+Release blockers still open:
+
+- `ui_heartbeat_no_obvious_freeze`: `NEEDS_HUMAN_REVIEW`. The harness captured
+  frame/e2e timing evidence, but subjective smoothness still needs a human
+  visual pass.
+- `recent_activity_updates`: `NEEDS_HUMAN_REVIEW`. Run history was captured, but
+  packaged Home Recent activity was not exposed through UI Automation for a
+  machine assertion.
+
+Release note:
+
+- No `v0.2.0-alpha.1` tag was created. The release is not taggable until the two
+  `NEEDS_HUMAN_REVIEW` items above are resolved or explicitly accepted by a
+  human release owner.

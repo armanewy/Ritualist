@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SPEC_PATH = REPO_ROOT / "tests" / "acceptance" / "release_v0_2_alpha_1.yaml"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "ritualist_release_acceptance.ps1"
+
+EXPECTED_CHECK_IDS = {
+    "packaged_home_visible",
+    "packaged_canvas_visible",
+    "packaged_classic_gui_visible",
+    "gaming_desktop_renders",
+    "expected_canvas_components_appear",
+    "ritual_card_doctor",
+    "ritual_card_dry_run",
+    "safe_ritual_card_run",
+    "ritual_status_updates",
+    "ritual_controller_pause_resume_stop",
+    "target_card_preview",
+    "recent_activity_updates",
+    "native_confirmation_z_order",
+    "declining_play_stopped",
+    "show_run_declined_confirmation",
+    "hard_kill_repairs_interrupted",
+    "watch_me_preview_privacy",
+    "canvas_theme_pack_import_export_no_autorun",
+    "arbitrary_component_code_rejected",
+    "component_perf_100_300_recorded",
+    "ui_heartbeat_no_obvious_freeze",
+}
+
+
+def test_release_acceptance_spec_lists_current_manual_blockers() -> None:
+    spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
+
+    assert spec["schema"] == "ritualist.release_acceptance.v1"
+    assert spec["release"] == "v0.2.0-alpha.1"
+    assert set(spec["semantics"]) == {"PASS", "FAIL", "NEEDS_HUMAN_REVIEW"}
+    assert spec["artifact_contract"]["summary_json"] == (
+        "artifacts/release-acceptance/acceptance-summary.json"
+    )
+
+    checks = spec["checks"]
+    assert {check["id"] for check in checks} == EXPECTED_CHECK_IDS
+    assert len(checks) == len(EXPECTED_CHECK_IDS)
+    for check in checks:
+        assert check["blocker"]
+        assert check["expected_evidence"]
+        assert check["pass_when"]
+
+
+def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    for expected in (
+        "acceptance-summary.json",
+        "acceptance-summary.md",
+        "RITUALIST_E2E",
+        "RITUALIST_E2E_ARTIFACT_DIR",
+        "RITUALIST_E2E_APP_DATA_DIR",
+        "release_v0_2_alpha_1.yaml",
+        "NEEDS_HUMAN_REVIEW",
+    ):
+        assert expected in script
+
+
+def test_release_acceptance_harness_avoids_forbidden_input_primitives() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8").casefold()
+
+    for forbidden in (
+        "setcursorpos",
+        "mouse_event",
+        "sendkeys",
+        "action: app.launch",
+        "taskbar hiding",
+        "kiosk mode",
+    ):
+        assert forbidden not in script
