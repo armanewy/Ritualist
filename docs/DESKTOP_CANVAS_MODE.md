@@ -14,11 +14,14 @@ The product goal is:
 - Explorer remains the Windows shell.
 - Home and windowed Canvas remain available as compatibility and recovery
   surfaces.
+- Windows and the user's wallpaper app own the wallpaper. Ritualist owns a
+  transparent component layer above it.
 
-This document defines the host model before implementation. It does not add
-shell replacement, taskbar hiding, kiosk mode, arbitrary QML/HTML/JS/Python,
-coordinate clicks, cloud sync, remote execution, marketplace behavior, gameplay
-automation, password automation, or risky/mutating primitives.
+This document defines the host model and follow-up requirements for desktop
+integration. It does not add shell replacement, taskbar hiding, kiosk mode,
+arbitrary QML/HTML/JS/Python, coordinate clicks, cloud sync, remote execution,
+marketplace behavior, gameplay automation, password automation, or
+risky/mutating primitives.
 
 ## Terms
 
@@ -28,9 +31,67 @@ automation, password automation, or risky/mutating primitives.
 - **Host mode** controls how the same Canvas renderer is placed on the desktop.
 - **Desktop Work-Area Canvas** is the first desktop-canvas host: borderless or
   seamless, sized to the Windows work area, and leaving the taskbar visible.
+- **Wallpaper passthrough** is the default desktop-work-area background model:
+  Ritualist does not paint an opaque canvas background, so Windows static
+  wallpaper or a third-party live wallpaper app remains visible underneath.
 - **Use Mode** is the interactive Room surface.
 - **Edit Mode / Room Builder** edits typed components through validation and
   explicit save/cancel flows.
+
+## Wallpaper Compatibility
+
+Desktop Work-Area Canvas must become a transparent desktop component layer, not
+a wallpaper renderer. Wallpaper belongs to Windows and user-selected wallpaper
+apps such as Wallpaper Engine or Lively Wallpaper. Ritualist must not import,
+decode, render, manage, pause, stop, or replace live wallpapers.
+
+The layer model is:
+
+1. Windows wallpaper or third-party live wallpaper.
+2. Optional Windows desktop icons.
+3. Ritualist Room components, docks, status, and edit chrome.
+4. Normal app windows.
+5. Native Ritualist confirmations and safety dialogs.
+
+Compatibility requirements:
+
+- `desktop_work_area` defaults to transparent or `system_wallpaper`
+  passthrough.
+- Ritualist does not render video, web, app, animated, or live wallpapers.
+- Ritualist does not control Wallpaper Engine, Lively Wallpaper, or similar
+  apps.
+- Ritualist avoids fullscreen defaults so wallpaper apps do not misclassify it
+  as a game or fullscreen workload.
+- The taskbar, Explorer, Alt+Tab, Win key, and normal Windows shortcuts remain
+  normal.
+
+Compatibility risks to test:
+
+- an opaque background covering the user's chosen wallpaper
+- wallpaper apps pausing because Ritualist appears fullscreen
+- a transparent overlay blocking interactive wallpaper or desktop clicks
+- high GPU cost from transparent compositing
+- user confusion if an exit path or Windows recovery surface is not visible
+
+## Background Modes
+
+Allowed background modes:
+
+- `system_wallpaper` / `transparent`: default for `desktop_work_area`; the
+  Canvas background is not painted and the system wallpaper shows through.
+- `ritualist_background`: existing opaque Ritualist background; allowed for
+  `windowed` mode and for a future explicit user choice in desktop host modes.
+- `dim_system_wallpaper`: future optional translucent scrim or dim treatment;
+  this is a visual treatment over passthrough, not a wallpaper renderer.
+
+Disallowed background modes:
+
+- video wallpaper
+- live wallpaper
+- web wallpaper
+- app wallpaper
+- arbitrary user-supplied QML, HTML, JavaScript, Python, shell, or executable
+  wallpaper surfaces
 
 ## Host Modes
 
@@ -59,6 +120,9 @@ Requirements:
 - Explorer remains the shell.
 - Taskbar remains visible and usable.
 - Window bounds match monitor work area, not full monitor.
+- Background defaults to transparent / `system_wallpaper` passthrough.
+- Only Ritualist components, panels, docks, status, and edit chrome are drawn
+  by default.
 - A safe exit affordance is always visible.
 - Escape or a documented safe shortcut exits Desktop Work-Area Canvas.
 - Windowed fallback is always available.
@@ -256,11 +320,15 @@ Use Mode options:
 Edit Mode must capture input inside the Canvas because drag, resize, selection,
 grid, and property editing need predictable behavior.
 
-The first Desktop Work-Area Canvas MVP uses `capture_all` for Use Mode. Blank
-canvas areas are captured by the Canvas window rather than passed through to the
-desktop. This is an explicit limitation, not a claim of click-through support.
-Components remain clickable, Edit Mode captures input for layout editing, and
-the visible exit control plus keyboard safe exit remain mandatory.
+The target Use Mode policy is `component_only`: Ritualist components receive
+input, while blank transparent Canvas areas pass through to Windows or an
+interactive wallpaper when the host can prove it safely. Edit Mode always
+captures Canvas input for editing.
+
+The current Desktop Work-Area Canvas MVP does not claim machine-verified
+blank-area click-through until the acceptance harness proves it. If the host is
+still using `capture_all`, that limitation must be documented in release
+evidence and the click-through check remains `NEEDS_HUMAN_REVIEW`.
 
 ## Recovery Policy
 
@@ -301,6 +369,14 @@ For `desktop_work_area`:
 - Desktop Work-Area Canvas opens visibly from source and packaged entry points
 - window bounds match selected monitor work area, not full monitor
 - taskbar remains visible and usable
+- background passthrough is enabled by default
+- screenshot/frame evidence shows a non-opaque background, using a fake
+  animated or changing-color wallpaper fixture when a live wallpaper app is not
+  present
+- Wallpaper Engine or similar wallpaper processes, if present, remain running
+  and are not controlled by Ritualist
+- blank-area click-through is marked PASS only with machine evidence; otherwise
+  it remains NEEDS_HUMAN_REVIEW
 - Explorer process remains running
 - shell registry keys are not changed
 - no startup entries are added

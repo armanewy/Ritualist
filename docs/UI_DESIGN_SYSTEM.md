@@ -12,6 +12,37 @@ performance budgets before visual polish expands.
 - Room Builder is the product-facing name for Canvas Edit Mode.
 - Use Mode is the live Room surface.
 - Run Mode is the active ritual state with status, controls, and logs.
+- Desktop Work-Area Use Mode must become a transparent component layer over the
+  user's existing Windows wallpaper or wallpaper app, not a wallpaper renderer.
+
+## Desktop Layering
+
+Windowed Canvas may keep the existing opaque Ritualist background. Desktop
+Work-Area Canvas must default to transparent / `system_wallpaper` passthrough
+so the user's static wallpaper or live wallpaper app remains visible.
+
+The design system should treat wallpaper as environmental context outside
+Ritualist. Ritualist surfaces still own their own tokens, contrast, borders,
+shadows, focus rings, and state treatments, but the full Canvas should not
+paint an opaque background in desktop-work-area mode unless a future explicit
+user choice enables that treatment.
+
+Layer order:
+
+1. Windows wallpaper or third-party wallpaper app.
+2. Optional Windows desktop icons.
+3. Ritualist components, docks, status, and edit chrome.
+4. Normal application windows.
+5. Native Ritualist confirmation dialogs.
+
+Design requirements:
+
+- Components and panels remain readable over variable wallpapers.
+- Confirmation and risky-action surfaces do not depend on wallpaper contrast.
+- Edit Mode may add a temporary translucent grid, guides, or scrim.
+- Use Mode blank space should pass through when the host can prove it safely;
+  until then, release evidence must not claim click-through support.
+- Do not add video, live, web, app, or executable wallpaper modes.
 
 ## Component Families
 
@@ -103,5 +134,5 @@ until there is a reliable machine oracle.
 
 The design system must not introduce arbitrary user-supplied QML/HTML/JS/Python,
 remote execution, marketplace behavior, shell replacement, taskbar hiding,
-kiosk mode, password automation, coordinate clicks in product runtime, or
-gameplay automation.
+kiosk mode, password automation, coordinate clicks in product runtime,
+Wallpaper Engine control/management, or gameplay automation.

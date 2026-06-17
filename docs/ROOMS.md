@@ -18,6 +18,7 @@ A Room is:
 - safe behavior bindings
 - local assets
 - policy and validation results
+- a desktop component layer that can sit over the user's existing wallpaper
 
 A Room is not:
 
@@ -27,12 +28,20 @@ A Room is not:
 - a Windows shell replacement
 - a remote execution surface
 - a marketplace object
+- a wallpaper engine
+- a live/video/web wallpaper renderer
 - a place for arbitrary user-supplied QML, HTML, JavaScript, or Python
 
 ## Modes
 
 **Use Mode** is where a user lives in the Room. It shows Room identity, runnable
 rituals, target previews, status, controls, and recent activity.
+
+In Desktop Work-Area Use Mode, a Room layers Ritualist components over Windows
+and the user's wallpaper app. The wallpaper remains owned by Windows or the
+wallpaper app; Ritualist does not render, manage, pause, stop, or replace it.
+Blank desktop-area click-through is a target interaction policy, but it must be
+reported as unverified until machine evidence proves it.
 
 **Edit Mode** or **Room Builder** is where a user safely changes a Room. It must
 operate through typed component schemas, validation, and explicit save/cancel
@@ -89,7 +98,9 @@ These are out of scope for the Room Builder foundation:
 
 - true Windows shell replacement
 - taskbar hiding or kiosk mode
+- wallpaper app replacement
 - video backgrounds
+- live/web/app wallpaper rendering
 - arbitrary custom components
 - arbitrary QML, HTML, JavaScript, or Python
 - marketplace behavior
