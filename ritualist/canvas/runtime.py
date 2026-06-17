@@ -503,7 +503,7 @@ def _display_data(component: CanvasComponent, context: CanvasRuntimeContext) -> 
 def _unresolved_recipe_warnings(component_id: str, reference: str, recipe_ids: set[str]) -> tuple[str, ...]:
     if not reference:
         return (f"{component_id}: recipe binding is missing",)
-    if recipe_ids and reference not in recipe_ids:
+    if reference not in recipe_ids:
         return (f"{component_id}: recipe binding '{reference}' is unresolved",)
     return ()
 
@@ -511,7 +511,7 @@ def _unresolved_recipe_warnings(component_id: str, reference: str, recipe_ids: s
 def _unresolved_target_warnings(component_id: str, reference: str, target_ids: set[str]) -> tuple[str, ...]:
     if not reference:
         return (f"{component_id}: target binding is missing",)
-    if target_ids and reference not in target_ids:
+    if reference not in target_ids:
         return (f"{component_id}: target binding '{reference}' is unresolved",)
     return ()
 

@@ -12,15 +12,38 @@ from ritualist.config import load_app_config
 from ritualist.home.actions import home_event_from_runtime, home_event_from_step_status
 from ritualist.home.confirmation import InlineConfirmationPresenter
 from ritualist.home.models import HomeCardStatus, HomeRuntimeEvent
+from ritualist.recipe_loader import discover_recipes
 from ritualist.runtime_control import RuntimeControl
+from ritualist.target_resolution import builtin_target_catalog
 
 from .controller import CanvasRuntimeController
 from .edit import CanvasEditSession, create_edit_session
 from .edit_ui import CanvasEditUiBridge
-from .models import CanvasDocument
+from .models import CanvasBindingKind, CanvasDocument
 from .runtime import CanvasRuntimeContext
 from .storage import create_mock_canvas
 from .view_model import build_canvas_view_model
+
+
+def build_canvas_use_payload(
+    document: CanvasDocument,
+    *,
+    runtime_state: dict[str, dict[str, Any]] | None = None,
+    recipe_ids: set[str] | None = None,
+    target_ids: set[str] | None = None,
+) -> dict[str, object]:
+    """Build a Canvas Use payload from explicit, side-effect-free context."""
+    model = build_canvas_view_model(
+        document,
+        context=CanvasRuntimeContext(
+            recipe_ids=set(recipe_ids or ()),
+            target_ids=set(target_ids or ()),
+            runtime_state=runtime_state or {},
+            recent_runs=(),
+            resolve_targets=False,
+        ),
+    )
+    return model.to_dict()
 
 
 def run_canvas_use(
@@ -51,11 +74,21 @@ def run_canvas_use(
         confirmationRequested = Signal(str, object)
         confirmationDecision = Signal(bool)
 
-        def __init__(self, document: CanvasDocument, edit_bridge: CanvasEditUiBridge, *, mock: bool) -> None:
+        def __init__(
+            self,
+            document: CanvasDocument,
+            edit_bridge: CanvasEditUiBridge,
+            *,
+            mock: bool,
+            recipe_ids: set[str],
+            target_ids: set[str],
+        ) -> None:
             super().__init__()
             self._document = document
             self._edit_bridge = edit_bridge
             self._mock = mock
+            self._recipe_ids = recipe_ids
+            self._target_ids = target_ids
             self._edit_mode = False
             self._runtime_state: dict[str, dict[str, Any]] = {}
             self._last_event_label = "Canvas ready"
@@ -284,15 +317,12 @@ def run_canvas_use(
                 self._executor = None
 
         def _payload(self) -> dict[str, object]:
-            model = build_canvas_view_model(
+            return build_canvas_use_payload(
                 self._document,
-                context=CanvasRuntimeContext(
-                    runtime_state=self._runtime_state,
-                    recent_runs=(),
-                    resolve_targets=False,
-                ),
+                runtime_state=self._runtime_state,
+                recipe_ids=self._recipe_ids,
+                target_ids=self._target_ids,
             )
-            return model.to_dict()
 
         def _apply_edit(self, operation) -> None:
             try:
@@ -422,7 +452,15 @@ def run_canvas_use(
         else create_edit_session(canvas)
     )
     document = edit_session.document
-    controller = CanvasUseController(document, CanvasEditUiBridge(edit_session), mock=mock)
+    recipe_ids = _canvas_recipe_ids(document) if mock else _discover_canvas_recipe_ids()
+    target_ids = _canvas_target_ids(document) if mock else _discover_canvas_target_ids()
+    controller = CanvasUseController(
+        document,
+        CanvasEditUiBridge(edit_session),
+        mock=mock,
+        recipe_ids=recipe_ids,
+        target_ids=target_ids,
+    )
     performance = load_app_config().canvas.performance_settings().to_dict()
 
     engine = QQmlApplicationEngine()
@@ -457,6 +495,44 @@ def _component_reference(document: CanvasDocument, component_id: str) -> str:
             or component.id
         )
     return component_id
+
+
+def _canvas_recipe_ids(document: CanvasDocument) -> set[str]:
+    ids: set[str] = set()
+    for component in document.components:
+        if component.binding is not None and component.binding.kind is CanvasBindingKind.RECIPE:
+            _add_nonblank(ids, component.binding.reference)
+        props = component.props_dict()
+        _add_nonblank(ids, props.get("recipe_id"))
+    return ids
+
+
+def _discover_canvas_recipe_ids() -> set[str]:
+    ids: set[str] = set()
+    for path, recipe, _error in discover_recipes():
+        _add_nonblank(ids, recipe.id if recipe is not None else path.stem)
+    return ids
+
+
+def _canvas_target_ids(document: CanvasDocument) -> set[str]:
+    ids: set[str] = set()
+    for component in document.components:
+        if component.binding is not None and component.binding.kind is CanvasBindingKind.TARGET_START:
+            _add_nonblank(ids, component.binding.reference)
+        props = component.props_dict()
+        _add_nonblank(ids, props.get("target"))
+        _add_nonblank(ids, props.get("target_id"))
+    return ids
+
+
+def _discover_canvas_target_ids() -> set[str]:
+    return {target.id for target in builtin_target_catalog().targets}
+
+
+def _add_nonblank(values: set[str], value: object) -> None:
+    text = str(value or "").strip()
+    if text:
+        values.add(text)
 
 
 def _create_confirmation_presenter() -> object:

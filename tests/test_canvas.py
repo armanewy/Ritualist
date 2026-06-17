@@ -66,6 +66,17 @@ def _valid_canvas() -> CanvasDocument:
 
 def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:
     repo_root = Path(__file__).resolve().parents[1]
+    key_canvas_files = {
+        "ritualist/canvas/models.py",
+        "ritualist/canvas/registry.py",
+        "ritualist/canvas/storage.py",
+        "ritualist/canvas/home_adapter.py",
+        "ritualist/canvas/runtime.py",
+        "ritualist/canvas/controller.py",
+        "ritualist/canvas/view_model.py",
+        "tests/test_canvas.py",
+        "tests/test_canvas_runtime.py",
+    }
     source_files = [
         *sorted((repo_root / "ritualist" / "canvas").glob("*.py")),
         *sorted((repo_root / "tests").glob("test_canvas*.py")),
@@ -83,13 +94,16 @@ def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:
         relative_path = path.relative_to(repo_root).as_posix()
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
+        line_count = len(lines)
         longest = max((len(line) for line in lines), default=0)
         file_size = path.stat().st_size
 
-        assert len(lines) == text.count("\n") + int(not text.endswith("\n")), relative_path
+        assert line_count == text.count("\n") + int(bool(text) and not text.endswith("\n")), relative_path
         assert longest <= 1000, f"{relative_path} has an overlong line: {longest}"
         if file_size > 2048:
-            assert len(lines) >= 20, f"{relative_path} appears collapsed into {len(lines)} lines"
+            assert line_count >= 20, f"{relative_path} appears collapsed into {line_count} lines"
+        if relative_path in key_canvas_files:
+            assert line_count >= 40, f"{relative_path} has suspiciously few lines: {line_count}"
 
 
 def test_canvas_document_serializes_with_schema_alias() -> None:
@@ -372,8 +386,13 @@ def test_canvas_theme_tokens_include_visual_polish_contract() -> None:
         "background",
         "foreground",
         "accent",
+        "success",
         "muted",
         "panel",
+        "success_panel",
+        "warning_panel",
+        "danger_panel",
+        "focus_panel",
         "border",
         "focus_ring",
         "font_family",
