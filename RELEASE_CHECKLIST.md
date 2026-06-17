@@ -379,3 +379,97 @@ Manual release blockers still open:
   repairs the run as `interrupted`.
 - No `v0.2.0-alpha.1` tag was created. Tagging remains blocked until the manual
   packaged desktop dogfood checks above pass.
+
+## v0.2.0-alpha.1 Release Candidate Validation Refresh - 2026-06-17
+
+Validation commit: `edcf54a` (`Check Git blobs in line ending guard`).
+
+Source hygiene release blocker:
+
+- Public raw GitHub was rechecked for the watched Canvas files after push:
+  - `ritualist/canvas/runtime.py`: 539 LF-delimited lines, longest line 114 bytes.
+  - `ritualist/canvas/controller.py`: 255 LF-delimited lines, longest line 112 bytes.
+  - `ritualist/canvas/view_model.py`: 122 LF-delimited lines, longest line 106 bytes.
+  - `tests/test_canvas_runtime.py`: 668 LF-delimited lines, longest line 107 bytes.
+- `scripts/check_line_endings.py` now checks working-tree bytes, Git `HEAD`
+  blobs, and Git index blobs.
+- CI now runs `python scripts/check_line_endings.py --check-git-head --check-git-index`.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 34 managed files.
+
+Automated development-checkout gate:
+
+- `git pull --ff-only`: already up to date.
+- `python -m pip install -e ".[all,dev]"`: passed.
+- `python -m playwright install chromium`: passed.
+- `python -m pytest -q`: `711 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python -m ritualist --help`: passed.
+- `python -m ritualist actions --json`: passed.
+- `python -m ritualist primitives --json`: passed.
+- `python -m ritualist policy show --json`: passed.
+- `python -m ritualist init`: passed; app data already up to date.
+- `python -m ritualist doctor gaming_mode --json --no-strict`: passed.
+- `python -m ritualist dry-run gaming_mode`: passed; final state `success`.
+- Bundled sample recipe dry-run sweep: 12/12 sample YAML recipes passed.
+- `python -m ritualist canvas validate gaming_desktop`: passed.
+- `python -m ritualist canvas runtime gaming_desktop --json`: passed. Live
+  user-data runtime build reported about 1225 ms with 20 recent activity rows.
+- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed,
+  3.944 ms, no warnings.
+- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed,
+  11.462 ms, no warnings.
+- `python -m ritualist perf canvas-runtime --mock-components 100 --json`: passed,
+  3.570 ms, no warnings.
+- `python -m ritualist perf canvas-runtime --mock-components 300 --json`: passed,
+  10.844 ms, no warnings.
+- `python -m ritualist target discover diablo_iv --json`: passed.
+- `python -m ritualist target plan diablo_iv --json`: passed; local state
+  `not_found` on this machine.
+- `python -m ritualist plan preview target.start:diablo_iv --json`: passed.
+- Isolated app-data pack smoke passed:
+  - `python -m ritualist pack export gaming_mode --out <temp>` and import passed.
+  - `python -m ritualist canvas pack export minimal_desktop --out <temp> --json`
+    and import passed.
+  - `python -m ritualist canvas theme export default --out <temp> --json` and
+    import passed.
+- `gaming_desktop` export as a visual Canvas pack is intentionally blocked
+  because it contains behavior-bound components (`ritual.card`,
+  `ritual.controller`, and `target.card`). This is expected pack-governance
+  behavior, not a release failure.
+
+Packaged build and non-visual smoke:
+
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+- Verified packaged files exist:
+  - `dist\Ritualist\Ritualist.exe`
+  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
+  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
+- With `QT_QPA_PLATFORM=offscreen`, these packaged modes stayed alive for 8
+  seconds and were then force-stopped:
+  - `dist\Ritualist\Ritualist.exe`
+  - `dist\Ritualist\Ritualist.exe --canvas gaming_desktop`
+  - `dist\Ritualist\Ritualist.exe --classic-gui`
+- Release-candidate artifact refreshed:
+  `dist\Ritualist-v0.2.0-alpha.1-rc.zip` (395,188,611 bytes).
+- PyInstaller still reports Conda-environment optional DLL warnings in
+  `build\Ritualist\warn-Ritualist.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
+  `UR_LOADER.dll`, `ze_loader.dll`) plus hidden-import warnings already seen in
+  prior builds. Offscreen packaged startup smokes passed despite these warnings.
+
+Manual release blockers still open:
+
+- A human still needs to visually confirm packaged Home and Canvas are not blank,
+  category switching/hover/focus feel acceptable, and no obvious jitter.
+- A human still needs to run packaged Home/Canvas Doctor, Dry Run, Run,
+  Pause/Resume/Stop, target plan preview, logs/recent activity, and About /
+  Diagnostics with real desktop input.
+- A human still needs to run the real `gaming_mode` trace, decline Play, confirm
+  stopped status, hard-kill during wait/confirmation, and confirm next launch
+  repairs the run as `interrupted`.
+- No `v0.2.0-alpha.1` tag was created. Tagging remains blocked until the manual
+  packaged desktop dogfood checks above pass.
