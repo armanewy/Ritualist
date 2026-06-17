@@ -52,6 +52,7 @@ class CanvasComponentRisk(StrEnum):
     READ_ONLY = "read_only"
     LAUNCHES_APP = "launches_app"
     CONTROLS_UI = "controls_ui"
+    MODIFIES_FILES = "modifies_files"
     RISKY = "risky"
 
 
@@ -59,6 +60,47 @@ class CanvasImportedPolicy(StrEnum):
     ALLOWED = "allowed"
     DISCLOSURE_REQUIRED = "disclosure_required"
     BLOCKED = "blocked"
+
+
+class CanvasPropType(StrEnum):
+    STRING = "string"
+    BOOL = "bool"
+    INT = "int"
+    FLOAT = "float"
+    ENUM = "enum"
+    COLOR = "color"
+    LOCAL_ASSET_PATH = "local_asset_path"
+    RECIPE_ID = "recipe_id"
+    TARGET_ID = "target_id"
+
+
+class CanvasComponentPropSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    type: CanvasPropType
+    required: bool = False
+    default: Any | None = None
+    allowed_values: tuple[str, ...] = ()
+    editor_hint: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("canvas component prop schema name must not be blank")
+        return text
+
+    @field_validator("allowed_values", mode="before")
+    @classmethod
+    def normalize_allowed_values(cls, value: object) -> tuple[str, ...]:
+        return _string_tuple(value)
+
+    @field_validator("editor_hint")
+    @classmethod
+    def normalize_editor_hint(cls, value: str) -> str:
+        return value.strip()
 
 
 class CanvasMetadata(BaseModel):
@@ -260,6 +302,7 @@ class CanvasComponentType(BaseModel):
     supported_bindings: tuple[CanvasBindingKind, ...] = ()
     required_props: tuple[str, ...] = ()
     optional_props: tuple[str, ...] = ()
+    prop_schemas: tuple[CanvasComponentPropSchema, ...] = ()
     default_width: int = Field(gt=0)
     default_height: int = Field(gt=0)
     min_width: int = Field(gt=0)
@@ -289,6 +332,15 @@ class CanvasComponentType(BaseModel):
     @classmethod
     def normalize_strings(cls, value: object) -> tuple[str, ...]:
         return _string_tuple(value)
+
+    @field_validator("prop_schemas", mode="before")
+    @classmethod
+    def normalize_prop_schemas(cls, value: object) -> tuple[object, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("canvas component prop schemas must be a list")
+        return tuple(value)
 
     @field_validator("supported_bindings", mode="before")
     @classmethod

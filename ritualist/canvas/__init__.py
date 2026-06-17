@@ -7,6 +7,7 @@ from .models import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
+    CanvasComponentPropSchema,
     CanvasComponentProps,
     CanvasComponentRisk,
     CanvasComponentType,
@@ -17,6 +18,7 @@ from .models import (
     CanvasMetadata,
     CanvasPackMetadata,
     CanvasPerformanceClass,
+    CanvasPropType,
     CanvasResponsivePolicy,
     CanvasTemplate,
     CanvasTheme,
@@ -24,7 +26,14 @@ from .models import (
     CanvasUpdateBehavior,
     CanvasValidationResult,
 )
-from .registry import CanvasComponentRegistry, create_component_registry, validate_canvas_document
+from .registry import (
+    CanvasComponentRegistry,
+    create_component_registry,
+    normalize_canvas_bindings,
+    validate_canvas_bindings,
+    validate_canvas_document,
+    validate_canvas_structure,
+)
 from .storage import (
     CanvasReference,
     CanvasWriteResult,
@@ -47,6 +56,7 @@ __all__ = [
     "CanvasBindingKind",
     "CanvasComponent",
     "CanvasComponentBinding",
+    "CanvasComponentPropSchema",
     "CanvasComponentProps",
     "CanvasComponentRisk",
     "CanvasComponentRegistry",
@@ -58,6 +68,7 @@ __all__ = [
     "CanvasMetadata",
     "CanvasPackMetadata",
     "CanvasPerformanceClass",
+    "CanvasPropType",
     "CanvasReference",
     "CanvasResponsivePolicy",
     "CanvasTemplate",
@@ -77,8 +88,11 @@ __all__ = [
     "default_canvas_document",
     "list_canvases",
     "load_canvas",
+    "normalize_canvas_bindings",
     "recipe_card_component",
     "save_canvas",
     "validate_canvas",
+    "validate_canvas_bindings",
     "validate_canvas_document",
+    "validate_canvas_structure",
 ]

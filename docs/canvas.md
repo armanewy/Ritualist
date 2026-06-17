@@ -12,9 +12,14 @@ The current pipeline is:
 Canvas document -> component registry -> validated component instances -> bindings -> renderer/runtime events
 ```
 
-Canvas loading and validation are side-effect free. They do not run recipes,
-open browsers, call Playwright, scan UI Automation, launch apps, click, type, or
-call Doctor unless a future explicit command asks for live checks.
+Canvas loading and structural validation are side-effect free. They do not run
+recipes, open browsers, call Playwright, scan UI Automation, launch apps, click,
+type, or call Doctor.
+
+Full binding validation can optionally check installed recipes and known target
+catalog entries. That is still read-only, but UI refresh paths should use the
+cheap structural validation path so they do not scan local runtime state during
+rendering.
 
 ## Canvas Documents
 
@@ -85,6 +90,34 @@ imported-canvas policy, update behavior, performance class, and whether it can
 trigger future actions. Trigger-capable components are metadata only in this
 phase; validation and preview do not execute bindings.
 
+Component types also expose prop schema metadata for future editors. Each prop
+schema includes:
+
+- `name`
+- `type`: `string`, `bool`, `int`, `float`, `enum`, `color`,
+  `local_asset_path`, `recipe_id`, or `target_id`
+- `required`
+- `default`
+- `allowed_values`
+- `editor_hint`
+
+`required_props` and `optional_props` remain for compatibility with older
+Canvas-aware code.
+
+## Risk Mapping
+
+Canvas component risk uses the same vocabulary as primitive risk metadata:
+
+- `read_only`
+- `launches_app`
+- `controls_ui`
+- `modifies_files`
+- `risky`
+
+Canvas Foundation v1 does not add mutating Canvas components. The
+`modifies_files` value exists so future component metadata can align with the
+primitive policy layer without inventing a separate taxonomy.
+
 ## Bindings
 
 Bindings describe what a component points at:
@@ -104,6 +137,61 @@ Bindings describe what a component points at:
 Unresolved recipe and target bindings are warnings by default so shared
 templates remain inspectable on machines that do not have the same local setup.
 Strict validation can treat warnings as errors.
+
+The canonical form is the explicit `binding:` object:
+
+```yaml
+components:
+  - id: diablo_night
+    type: ritual.card
+    props:
+      title: Diablo Night
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+```
+
+Legacy props such as `recipe_id`, `target`, and `target_id` are still accepted.
+`normalize_canvas_bindings(document)` returns a copied document with those
+legacy references mirrored into canonical binding objects. It does not mutate
+the input document.
+
+## Asset Sandbox
+
+Canvas image components can reference local assets only. The validator does not
+decode images and does not require asset files to exist unless a future strict
+asset check explicitly adds that behavior.
+
+Canvas v1 rejects:
+
+- remote URLs
+- absolute paths outside `<canvas_dir>/assets`
+- relative `..` traversal outside the assets folder
+- ambiguous drive-relative or stream-like relative paths containing `:`
+- executable or script-like asset names such as `.exe`, `.msi`, `.ps1`, `.bat`,
+  `.cmd`, `.js`, `.vbs`, `.dll`, `.lnk`, and `.url`
+
+Relative paths are resolved into the canvas assets sandbox. Both `hero.png` and
+`assets/hero.png` are treated as canvas-local asset references.
+
+## Validation Modes
+
+Use structural validation for UI/model refreshes:
+
+```python
+validate_canvas_structure(document, canvas_dir=canvas_dir)
+```
+
+Use live binding validation only when a user explicitly asks to check local
+bindings:
+
+```python
+validate_canvas_bindings(document, canvas_dir=canvas_dir)
+```
+
+The older `validate_canvas_document(..., check_bindings=True)` remains
+compatible and performs live binding checks by default. Pass
+`check_bindings=False` or call `validate_canvas_structure` for the cheap path.
 
 ## Use Mode And Edit Mode
 

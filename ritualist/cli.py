@@ -26,6 +26,7 @@ from .canvas import (
     save_canvas,
     validate_canvas,
     validate_canvas_document,
+    validate_canvas_structure,
 )
 from .doctor import build_doctor_report
 from .errors import RitualistError
@@ -1162,7 +1163,7 @@ def perf_canvas_model(
     with measure_operation("perf.canvas-model") as report:
         document = create_mock_canvas(mock_components)
         validation_started = time.perf_counter()
-        validation = validate_canvas_document(document, check_bindings=False)
+        validation = validate_canvas_structure(document)
         validation_duration_ms = max(0.0, (time.perf_counter() - validation_started) * 1000)
         type_count = len({component.type for component in document.components})
         report.counts.update(

@@ -9,14 +9,34 @@ from ritualist.target_resolution import builtin_target_catalog
 from .models import (
     CanvasBindingKind,
     CanvasComponent,
+    CanvasComponentBinding,
+    CanvasComponentPropSchema,
     CanvasComponentRisk,
     CanvasComponentType,
     CanvasDocument,
     CanvasImportedPolicy,
     CanvasPerformanceClass,
+    CanvasPropType,
     CanvasUpdateBehavior,
     CanvasValidationResult,
 )
+
+_SUSPICIOUS_ASSET_SUFFIXES = {
+    ".bat",
+    ".cmd",
+    ".com",
+    ".dll",
+    ".exe",
+    ".js",
+    ".lnk",
+    ".msi",
+    ".ps1",
+    ".py",
+    ".scr",
+    ".sh",
+    ".url",
+    ".vbs",
+}
 
 
 class CanvasComponentRegistry:
@@ -59,6 +79,12 @@ def validate_canvas_document(
     canvas_dir: Path | None = None,
     check_bindings: bool = True,
 ) -> CanvasValidationResult:
+    """Validate a canvas document.
+
+    By default this performs live binding checks against installed recipes and
+    known targets. UI code that needs a cheap, side-effect-free check should
+    call validate_canvas_structure instead.
+    """
     resolved_registry = registry or create_component_registry()
     errors: list[str] = []
     warnings: list[str] = []
@@ -96,6 +122,64 @@ def validate_canvas_document(
         warnings=tuple(warnings),
         component_count=len(document.components),
     )
+
+
+def validate_canvas_structure(
+    document: CanvasDocument,
+    *,
+    registry: CanvasComponentRegistry | None = None,
+    strict: bool = False,
+    imported: bool = False,
+    canvas_dir: Path | None = None,
+) -> CanvasValidationResult:
+    """Run cheap structural validation without recipe or target discovery."""
+    return validate_canvas_document(
+        document,
+        registry=registry,
+        strict=strict,
+        imported=imported,
+        canvas_dir=canvas_dir,
+        check_bindings=False,
+    )
+
+
+def validate_canvas_bindings(
+    document: CanvasDocument,
+    *,
+    registry: CanvasComponentRegistry | None = None,
+    strict: bool = False,
+    imported: bool = False,
+    canvas_dir: Path | None = None,
+) -> CanvasValidationResult:
+    """Run full validation, including live recipe and target binding checks."""
+    return validate_canvas_document(
+        document,
+        registry=registry,
+        strict=strict,
+        imported=imported,
+        canvas_dir=canvas_dir,
+        check_bindings=True,
+    )
+
+
+def normalize_canvas_bindings(document: CanvasDocument) -> CanvasDocument:
+    """Return a copy with legacy binding props mirrored into binding objects."""
+    components: list[CanvasComponent] = []
+    for component in document.components:
+        if component.binding is not None:
+            components.append(component)
+            continue
+        props = component.props_dict()
+        binding_kind = _legacy_binding_kind(component, props)
+        if binding_kind is None or binding_kind is CanvasBindingKind.STATIC:
+            components.append(component)
+            continue
+        reference = _legacy_binding_reference(binding_kind, props)
+        if not reference:
+            components.append(component)
+            continue
+        components.append(component.model_copy(update={"binding": _binding_for(binding_kind, reference)}))
+    return document.model_copy(update={"components": tuple(components)}, deep=True)
 
 
 def _validate_component_against_spec(
@@ -178,6 +262,21 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             supported=(CanvasBindingKind.RECIPE, CanvasBindingKind.INTENT, CanvasBindingKind.TARGET_START),
             required=("title",),
             optional=("subtitle", "description", "recipe_id", "primary_action", "accent", "image"),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("subtitle", CanvasPropType.STRING, hint="single_line"),
+                _prop("description", CanvasPropType.STRING, hint="multiline"),
+                _prop("recipe_id", CanvasPropType.RECIPE_ID, hint="recipe_picker"),
+                _prop(
+                    "primary_action",
+                    CanvasPropType.ENUM,
+                    default="run",
+                    allowed=("run", "dry_run", "doctor", "preview_plan"),
+                    hint="segmented_action",
+                ),
+                _prop("accent", CanvasPropType.COLOR, hint="color"),
+                _prop("image", CanvasPropType.LOCAL_ASSET_PATH, hint="image_asset"),
+            ),
             size=(520, 300),
             minimum=(240, 140),
             behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
@@ -224,6 +323,19 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             supported=(CanvasBindingKind.TARGET_START, CanvasBindingKind.INTENT),
             required=("title",),
             optional=("target", "subtitle", "primary_action"),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("target", CanvasPropType.TARGET_ID, hint="target_picker"),
+                _prop("target_id", CanvasPropType.TARGET_ID, hint="target_picker"),
+                _prop("subtitle", CanvasPropType.STRING, hint="single_line"),
+                _prop(
+                    "primary_action",
+                    CanvasPropType.ENUM,
+                    default="preview_plan",
+                    allowed=("preview_plan",),
+                    hint="segmented_action",
+                ),
+            ),
             size=(360, 220),
             minimum=(220, 120),
             behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
@@ -309,6 +421,10 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             "Recent run and runtime activity feed.",
             supported=(CanvasBindingKind.RECENT_RUNS, CanvasBindingKind.RUNTIME_STATE),
             optional=("limit", "title"),
+            props=(
+                _prop("title", CanvasPropType.STRING, default="Recent Activity", hint="single_line"),
+                _prop("limit", CanvasPropType.INT, default=10, hint="number"),
+            ),
             size=(520, 180),
             minimum=(260, 100),
             behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
@@ -321,6 +437,10 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             "Local clock display.",
             supported=(CanvasBindingKind.STATIC,),
             optional=("format", "timezone"),
+            props=(
+                _prop("format", CanvasPropType.STRING, default="%H:%M", hint="time_format"),
+                _prop("timezone", CanvasPropType.STRING, hint="timezone"),
+            ),
             size=(180, 80),
             minimum=(100, 48),
             behavior=CanvasUpdateBehavior.INTERVAL,
@@ -333,6 +453,18 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             supported=(CanvasBindingKind.STATIC,),
             required=("text",),
             optional=("size", "color", "align"),
+            props=(
+                _prop("text", CanvasPropType.STRING, required=True, hint="multiline"),
+                _prop("size", CanvasPropType.INT, default=16, hint="font_size"),
+                _prop("color", CanvasPropType.COLOR, hint="color"),
+                _prop(
+                    "align",
+                    CanvasPropType.ENUM,
+                    default="left",
+                    allowed=("left", "center", "right"),
+                    hint="alignment",
+                ),
+            ),
             size=(240, 64),
             minimum=(80, 32),
         ),
@@ -344,6 +476,17 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             supported=(CanvasBindingKind.STATIC,),
             required=("path",),
             optional=("fit", "alt"),
+            props=(
+                _prop("path", CanvasPropType.LOCAL_ASSET_PATH, required=True, hint="image_asset"),
+                _prop(
+                    "fit",
+                    CanvasPropType.ENUM,
+                    default="cover",
+                    allowed=("cover", "contain", "fill"),
+                    hint="image_fit",
+                ),
+                _prop("alt", CanvasPropType.STRING, hint="single_line"),
+            ),
             size=(320, 180),
             minimum=(80, 80),
             performance=CanvasPerformanceClass.MODERATE,
@@ -382,6 +525,7 @@ def _component(
     optional: tuple[str, ...] = (),
     size: tuple[int, int],
     minimum: tuple[int, int],
+    props: tuple[CanvasComponentPropSchema, ...] = (),
     behavior: CanvasUpdateBehavior = CanvasUpdateBehavior.STATIC,
     performance: CanvasPerformanceClass = CanvasPerformanceClass.CHEAP,
     risk: CanvasComponentRisk = CanvasComponentRisk.READ_ONLY,
@@ -399,6 +543,7 @@ def _component(
         supported_bindings=supported,
         required_props=required,
         optional_props=optional,
+        prop_schemas=props,
         default_width=size[0],
         default_height=size[1],
         min_width=minimum[0],
@@ -416,6 +561,37 @@ def _component(
         requires_policy_or_doctor_state=requires_policy,
         actions=actions,
     )
+
+
+def _prop(
+    name: str,
+    prop_type: CanvasPropType,
+    *,
+    required: bool = False,
+    default: object | None = None,
+    allowed: tuple[str, ...] = (),
+    hint: str = "",
+) -> CanvasComponentPropSchema:
+    return CanvasComponentPropSchema(
+        name=name,
+        type=prop_type,
+        required=required,
+        default=default,
+        allowed_values=allowed,
+        editor_hint=hint,
+    )
+
+
+def _binding_for(kind: CanvasBindingKind, reference: str) -> CanvasComponentBinding:
+    if kind is CanvasBindingKind.RECIPE:
+        return CanvasComponentBinding(kind=kind, recipe_id=reference)
+    if kind is CanvasBindingKind.TARGET_START:
+        return CanvasComponentBinding(kind=kind, target=reference)
+    if kind is CanvasBindingKind.INTENT:
+        return CanvasComponentBinding(kind=kind, intent_id=reference)
+    if kind is CanvasBindingKind.APP_LAUNCHER:
+        return CanvasComponentBinding(kind=kind, id=reference)
+    return CanvasComponentBinding(kind=kind, id=reference)
 
 
 def _legacy_binding_kind(component: CanvasComponent, props: dict[str, object]) -> CanvasBindingKind | None:
@@ -477,14 +653,27 @@ def _validate_image_path(
         errors.append(f"{component.id}: remote image URLs are not allowed in Canvas v1")
         return
     path = Path(raw)
-    if path.is_absolute() and canvas_dir is not None:
-        allowed_root = (canvas_dir / "assets").resolve()
-        try:
-            resolved = path.resolve()
-        except OSError:
-            resolved = path
-        if allowed_root not in resolved.parents and resolved != allowed_root:
-            errors.append(f"{component.id}: image path must stay inside the canvas assets folder")
+    if path.suffix.casefold() in _SUSPICIOUS_ASSET_SUFFIXES:
+        errors.append(f"{component.id}: executable or script-like image asset paths are not allowed")
+        return
+    if not path.is_absolute() and any(":" in part for part in path.parts):
+        errors.append(f"{component.id}: ambiguous drive-relative or stream-like image paths are not allowed")
+        return
+    if canvas_dir is None:
+        if path.is_absolute() or ".." in path.parts:
+            errors.append(f"{component.id}: image path must be a relative canvas asset path")
+        return
+
+    allowed_root = (canvas_dir / "assets").resolve()
+    candidate = path
+    if not path.is_absolute():
+        candidate = canvas_dir / path if path.parts and path.parts[0] == "assets" else allowed_root / path
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        resolved = candidate.absolute()
+    if resolved != allowed_root and allowed_root not in resolved.parents:
+        errors.append(f"{component.id}: image path must stay inside the canvas assets folder")
 
 
 def _validate_intent_reference(

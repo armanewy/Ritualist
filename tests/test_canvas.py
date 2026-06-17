@@ -12,6 +12,7 @@ from ritualist.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
+    CanvasComponentRisk,
     CanvasDocument,
     CanvasImportedPolicy,
     canvas_to_home_model,
@@ -20,10 +21,13 @@ from ritualist.canvas import (
     create_mock_canvas,
     list_canvases,
     load_canvas,
+    normalize_canvas_bindings,
     recipe_card_component,
     save_canvas,
     validate_canvas,
+    validate_canvas_bindings,
     validate_canvas_document,
+    validate_canvas_structure,
 )
 from ritualist.cli import app
 from ritualist.home.models import HomeCardStatus
@@ -58,6 +62,23 @@ def _valid_canvas() -> CanvasDocument:
             ),
         ),
     )
+
+
+def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    files = {
+        "ritualist/canvas/models.py": 100,
+        "ritualist/canvas/registry.py": 150,
+        "ritualist/canvas/storage.py": 100,
+        "ritualist/canvas/home_adapter.py": 50,
+        "tests/test_canvas.py": 100,
+        "ritualist/sample_canvases/gaming_desktop.yaml": 20,
+    }
+
+    for relative_path, minimum_lines in files.items():
+        lines = (repo_root / relative_path).read_text(encoding="utf-8").splitlines()
+        assert len(lines) >= minimum_lines, relative_path
+        assert max((len(line) for line in lines), default=0) < 240, relative_path
 
 
 def test_canvas_document_serializes_with_schema_alias() -> None:
@@ -220,6 +241,84 @@ def test_arbitrary_component_code_and_autorun_are_rejected() -> None:
     assert any("auto-run behavior is not allowed" in item for item in result.errors)
 
 
+def test_canvas_image_relative_asset_path_is_accepted_without_file_existence(tmp_path: Path) -> None:
+    canvas_dir = tmp_path / "canvas"
+    canvas = CanvasDocument(
+        id="image_canvas",
+        name="Image Canvas",
+        components=(
+            CanvasComponent(
+                id="image",
+                type="image",
+                width=320,
+                height=180,
+                props={"path": "hero.png"},
+            ),
+        ),
+    )
+
+    result = validate_canvas_structure(canvas, canvas_dir=canvas_dir)
+
+    assert result.valid
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("https://example.test/hero.png", "remote image URLs are not allowed"),
+        ("../secret.png", "must stay inside the canvas assets folder"),
+        ("assets/../secret.png", "must stay inside the canvas assets folder"),
+        ("assets/run.exe", "executable or script-like image asset paths are not allowed"),
+        ("hero.png:stream", "ambiguous drive-relative or stream-like image paths are not allowed"),
+    ],
+)
+def test_canvas_image_asset_paths_reject_unsafe_values(
+    tmp_path: Path,
+    path: str,
+    expected: str,
+) -> None:
+    canvas = CanvasDocument(
+        id="bad_image_canvas",
+        name="Bad Image Canvas",
+        components=(
+            CanvasComponent(
+                id="image",
+                type="image",
+                width=320,
+                height=180,
+                props={"path": path},
+            ),
+        ),
+    )
+
+    result = validate_canvas_structure(canvas, canvas_dir=tmp_path / "canvas")
+
+    assert not result.valid
+    assert any(expected in item for item in result.errors)
+
+
+def test_canvas_image_absolute_path_outside_assets_rejected(tmp_path: Path) -> None:
+    outside = tmp_path / "outside" / "hero.png"
+    canvas = CanvasDocument(
+        id="absolute_image_canvas",
+        name="Absolute Image Canvas",
+        components=(
+            CanvasComponent(
+                id="image",
+                type="image",
+                width=320,
+                height=180,
+                props={"path": str(outside)},
+            ),
+        ),
+    )
+
+    result = validate_canvas_structure(canvas, canvas_dir=tmp_path / "canvas")
+
+    assert not result.valid
+    assert any("must stay inside the canvas assets folder" in item for item in result.errors)
+
+
 def test_component_registry_registers_initial_types() -> None:
     registry = create_component_registry()
     required = {
@@ -243,6 +342,64 @@ def test_component_registry_registers_initial_types() -> None:
     assert required.issubset({component.type_id for component in registry.all()})
     assert all(component.imported_canvas_policy for component in registry.all())
     assert all(component.performance_class for component in registry.all())
+
+
+def test_canvas_risk_taxonomy_aligns_with_primitive_risks() -> None:
+    assert CanvasComponentRisk.READ_ONLY.value == "read_only"
+    assert CanvasComponentRisk.LAUNCHES_APP.value == "launches_app"
+    assert CanvasComponentRisk.CONTROLS_UI.value == "controls_ui"
+    assert CanvasComponentRisk.MODIFIES_FILES.value == "modifies_files"
+    assert CanvasComponentRisk.RISKY.value == "risky"
+
+
+def test_core_components_expose_prop_schemas() -> None:
+    registry = create_component_registry()
+    expected_names = {
+        "ritual.card": {"title", "recipe_id", "primary_action", "image"},
+        "target.card": {"title", "target", "target_id", "primary_action"},
+        "text.label": {"text", "size", "color", "align"},
+        "image": {"path", "fit", "alt"},
+        "clock": {"format", "timezone"},
+        "recent.activity": {"title", "limit"},
+    }
+
+    for type_id, names in expected_names.items():
+        prop_schemas = registry.get(type_id).prop_schemas
+        assert prop_schemas, type_id
+        assert names.issubset({schema.name for schema in prop_schemas})
+
+
+def test_normalize_canvas_bindings_copies_legacy_recipe_and_target_props() -> None:
+    canvas = CanvasDocument(
+        id="legacy_normalize",
+        name="Legacy Normalize",
+        components=(
+            CanvasComponent(
+                id="recipe",
+                type="ritual.card",
+                width=320,
+                height=180,
+                props={"title": "Gaming", "recipe_id": "gaming_mode"},
+            ),
+            CanvasComponent(
+                id="target",
+                type="target.card",
+                width=320,
+                height=180,
+                props={"title": "Diablo IV", "target": "diablo_iv"},
+            ),
+        ),
+    )
+
+    normalized = normalize_canvas_bindings(canvas)
+
+    assert canvas.components[0].binding is None
+    assert normalized.components[0].binding is not None
+    assert normalized.components[0].binding.kind is CanvasBindingKind.RECIPE
+    assert normalized.components[0].binding.recipe_id == "gaming_mode"
+    assert normalized.components[1].binding is not None
+    assert normalized.components[1].binding.kind is CanvasBindingKind.TARGET_START
+    assert normalized.components[1].binding.target == "diablo_iv"
 
 
 def test_triggering_components_declare_policy_implications() -> None:
@@ -363,6 +520,57 @@ def test_canvas_validation_does_not_execute_runtime(monkeypatch) -> None:
     result = validate_canvas_document(_valid_canvas())
 
     assert result.valid
+
+
+def test_canvas_structure_validation_does_not_discover_recipes_or_targets(monkeypatch) -> None:
+    def fail_discover_recipes():
+        raise AssertionError("structural validation must not discover recipes")
+
+    def fail_target_catalog():
+        raise AssertionError("structural validation must not read target catalog")
+
+    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", fail_discover_recipes)
+    monkeypatch.setattr("ritualist.canvas.registry.builtin_target_catalog", fail_target_catalog)
+
+    result = validate_canvas_structure(_valid_canvas())
+
+    assert result.valid
+
+
+def test_canvas_live_binding_validation_reports_unresolved_bindings(monkeypatch) -> None:
+    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", lambda: [])
+    monkeypatch.setattr(
+        "ritualist.canvas.registry.builtin_target_catalog",
+        lambda: type("Catalog", (), {"targets": ()})(),
+    )
+    canvas = CanvasDocument(
+        id="live_bindings",
+        name="Live Bindings",
+        components=(
+            CanvasComponent(
+                id="recipe",
+                type="ritual.card",
+                width=320,
+                height=180,
+                props={"title": "Missing"},
+                binding=CanvasComponentBinding(kind=CanvasBindingKind.RECIPE, recipe_id="missing_recipe"),
+            ),
+            CanvasComponent(
+                id="target",
+                type="target.card",
+                width=320,
+                height=180,
+                props={"title": "Missing Target"},
+                binding=CanvasComponentBinding(kind=CanvasBindingKind.TARGET_START, target="missing_target"),
+            ),
+        ),
+    )
+
+    result = validate_canvas_bindings(canvas)
+
+    assert result.valid
+    assert any("recipe binding 'missing_recipe' is unresolved" in item for item in result.warnings)
+    assert any("target binding 'missing_target' is unresolved" in item for item in result.warnings)
 
 
 def test_canvas_to_home_model_converts_recipe_and_target_cards() -> None:
