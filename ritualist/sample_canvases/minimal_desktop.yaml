@@ -1,0 +1,40 @@
+schema: ritualist.canvas.v1
+id: minimal_desktop
+name: Minimal Desktop
+description: Minimal safe Canvas template.
+mode: desktop_canvas
+resolution_policy: responsive
+background:
+  type: solid
+  value: '#0f141b'
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: title
+    type: text.label
+    x: 64
+    y: 64
+    width: 320
+    height: 64
+    z: 1
+    props:
+      text: Ritualist Canvas
+  - id: divider
+    type: spacer/divider
+    x: 64
+    y: 144
+    width: 480
+    height: 8
+    z: 1
+    props:
+      orientation: horizontal
+  - id: clock
+    type: clock
+    x: 64
+    y: 176
+    width: 180
+    height: 80
+    z: 2
+    props:
+      format: short

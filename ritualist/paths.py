@@ -86,6 +86,16 @@ def layouts_path() -> Path:
     return app_data_path() / "layouts"
 
 
+def canvases_dir() -> Path:
+    path = canvases_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def canvases_path() -> Path:
+    return app_data_path() / "canvases"
+
+
 def browser_profiles_dir() -> Path:
     path = browser_profiles_path()
     path.mkdir(parents=True, exist_ok=True)
@@ -108,6 +118,7 @@ def ensure_app_dirs() -> dict[str, Path]:
         "imported_packs": imported_packs_dir(),
         "logs": logs_dir(),
         "runs": runs_dir(),
+        "canvases": canvases_dir(),
         "browser_profiles": browser_profiles_dir(),
     }
     return paths

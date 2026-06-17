@@ -16,6 +16,17 @@ from .actions.registry import create_default_registry
 from .adapters.fake import FakeAdapters
 from .adapters import create_default_adapters
 from .app_setup import initialize_app
+from .canvas import (
+    canvas_show_payload,
+    create_default_canvases,
+    create_mock_canvas,
+    default_canvas_document,
+    list_canvases,
+    load_canvas,
+    save_canvas,
+    validate_canvas,
+    validate_canvas_document,
+)
 from .doctor import build_doctor_report
 from .errors import RitualistError
 from .executor import WorkflowExecutor
@@ -84,6 +95,7 @@ policy_app = typer.Typer(help="Inspect primitive policy and local pack governanc
 diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts.")
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
+canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
@@ -91,6 +103,7 @@ app.add_typer(policy_app, name="policy")
 app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
+app.add_typer(canvas_app, name="canvas")
 console = Console()
 
 
@@ -428,6 +441,53 @@ def _print_target_resolution(resolution: object) -> None:
             console.print(f"- {escape(str(item))}")
 
 
+def _print_canvas_document(document: object) -> None:
+    title = getattr(document, "name", "")
+    canvas_id = getattr(document, "id", "")
+    table = Table(title=f"Canvas: {escape(str(title))} ({escape(str(canvas_id))})")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Geometry", no_wrap=True)
+    table.add_column("Binding", overflow="fold")
+    for component in getattr(document, "components", ()):
+        binding = getattr(component, "binding", None)
+        table.add_row(
+            escape(str(getattr(component, "id", ""))),
+            escape(str(getattr(component, "type", ""))),
+            escape(
+                f"{getattr(component, 'x', 0):g},"
+                f"{getattr(component, 'y', 0):g} "
+                f"{getattr(component, 'width', 0):g}x"
+                f"{getattr(component, 'height', 0):g} "
+                f"z={getattr(component, 'z', 0)}"
+            ),
+            escape(_canvas_binding_label(binding)),
+        )
+    console.print(table)
+
+
+def _print_canvas_validation(validation: object) -> None:
+    data = validation if isinstance(validation, dict) else validation.to_dict()
+    status = "valid" if data.get("valid") else "invalid"
+    style = "green" if data.get("valid") else "red"
+    console.print(
+        f"[bold]Validation:[/] [{style}]{escape(status)}[/] "
+        f"({int(data.get('component_count') or 0)} components)"
+    )
+    for message in data.get("errors", []):
+        console.print(f"[red]error[/] {escape(str(message))}")
+    for message in data.get("warnings", []):
+        console.print(f"[yellow]warning[/] {escape(str(message))}")
+
+
+def _canvas_binding_label(binding: object | None) -> str:
+    if binding is None:
+        return ""
+    kind = getattr(binding, "kind", "")
+    reference = getattr(binding, "reference", "")
+    return f"{kind}: {reference}" if reference else str(kind)
+
+
 @target_app.command("discover")
 def target_discover(
     target: Annotated[str, typer.Argument(help="Target id or alias, such as diablo_iv.")],
@@ -471,6 +531,151 @@ def target_plan(
     _print_plan_preview(plan, doctor)
     if doctor.compatibility == "incompatible":
         raise typer.Exit(1)
+
+
+@canvas_app.command("list")
+def canvas_list(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable canvas list."),
+    ] = False,
+) -> None:
+    """List user and bundled Canvas documents."""
+    rows = list_canvases()
+    if json_output:
+        console.print_json(data=[row.to_dict() for row in rows])
+        return
+    table = Table(title="Ritualist Canvases")
+    table.add_column("ID")
+    table.add_column("Name")
+    table.add_column("Source")
+    table.add_column("Path")
+    for row in rows:
+        table.add_row(
+            escape(row.canvas_id),
+            escape(row.name),
+            escape(row.source),
+            escape(str(row.path)),
+        )
+    console.print(table)
+    if not rows:
+        console.print("No canvases found. Run [bold]ritualist canvas init[/] first.")
+
+
+@canvas_app.command("show")
+def canvas_show(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable canvas document."),
+    ] = False,
+) -> None:
+    """Show a Canvas document without executing bindings."""
+    try:
+        document = load_canvas(canvas)
+        payload = canvas_show_payload(document)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_canvas_document(document)
+    _print_canvas_validation(payload["validation"])
+
+
+@canvas_app.command("validate")
+def canvas_validate(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Treat validation warnings as errors."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable validation result."),
+    ] = False,
+) -> None:
+    """Validate a Canvas document without executing actions or bindings."""
+    try:
+        result = validate_canvas(canvas, strict=strict)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=result.to_dict())
+        if not result.valid:
+            raise typer.Exit(1)
+        return
+    _print_canvas_validation(result.to_dict())
+    if not result.valid:
+        raise typer.Exit(1)
+
+
+@canvas_app.command("init")
+def canvas_init() -> None:
+    """Create default user Canvas documents without overwriting existing files."""
+    results = create_default_canvases()
+    table = Table(title="Canvas Initialization")
+    table.add_column("ID")
+    table.add_column("Status")
+    table.add_column("Path")
+    for result in results:
+        table.add_row(
+            escape(result.canvas_id),
+            "[green]created[/]" if result.changed else "[dim]exists[/]",
+            escape(str(result.path)),
+        )
+    console.print(table)
+    if not any(result.changed for result in results):
+        console.print("Canvas initialization is already up to date.")
+
+
+@canvas_app.command("create-default")
+def canvas_create_default(
+    output: Annotated[
+        Path,
+        typer.Option("--out", help="Output path for the generated Canvas YAML."),
+    ],
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite", help="Overwrite an existing output file."),
+    ] = False,
+) -> None:
+    """Write the bundled default Gaming Desktop canvas to a chosen path."""
+    try:
+        result = save_canvas(default_canvas_document(), output, overwrite=overwrite)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if not result.changed:
+        console.print(f"[yellow]Skipped:[/] {escape(result.message)} at {escape(str(result.path))}")
+        raise typer.Exit(1)
+    console.print(f"[green]Created canvas[/] {escape(result.canvas_id)} at {escape(str(result.path))}")
+
+
+@canvas_app.command("preview")
+def canvas_preview(
+    canvas: Annotated[
+        str | None,
+        typer.Argument(help="Canvas id or YAML path. Omit with --mock."),
+    ] = None,
+    mock: Annotated[
+        bool,
+        typer.Option("--mock", help="Preview a generated mock Canvas document."),
+    ] = False,
+    mock_components: Annotated[
+        int,
+        typer.Option("--mock-components", min=1, help="Mock component count."),
+    ] = 24,
+) -> None:
+    """Text preview of Canvas components without executing bindings."""
+    try:
+        document = create_mock_canvas(mock_components) if mock else load_canvas(canvas or "")
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_canvas_document(document)
 
 
 @diagnostics_app.command("collect")
@@ -935,6 +1140,62 @@ def perf_home_model(
     _print_performance_report(report)
     console.print(f"advisory_budget_ms: {budget_ms:.3f}")
     console.print("thumbnail_cache_work: not_applicable_for_mock_cards")
+
+
+@perf_app.command("canvas-model")
+def perf_canvas_model(
+    mock_components: Annotated[
+        int,
+        typer.Option("--mock-components", min=1, help="Number of generated Canvas components to model."),
+    ] = 120,
+    budget_ms: Annotated[
+        float,
+        typer.Option("--budget-ms", help="Advisory duration budget in milliseconds."),
+    ] = 250.0,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable performance data."),
+    ] = False,
+) -> None:
+    """Measure Canvas model generation and validation with no adapter side effects."""
+    validation_duration_ms = 0.0
+    with measure_operation("perf.canvas-model") as report:
+        document = create_mock_canvas(mock_components)
+        validation_started = time.perf_counter()
+        validation = validate_canvas_document(document, check_bindings=False)
+        validation_duration_ms = max(0.0, (time.perf_counter() - validation_started) * 1000)
+        type_count = len({component.type for component in document.components})
+        report.counts.update(
+            {
+                "components": len(document.components),
+                "component_types": type_count,
+                "warnings": len(validation.warnings),
+                "errors": len(validation.errors),
+            }
+        )
+
+    if budget_ms > 0 and report.duration_ms > budget_ms:
+        report.warnings.append(
+            f"Canvas model generation exceeded advisory budget: "
+            f"{report.duration_ms:.3f} ms > {budget_ms:.3f} ms"
+        )
+
+    payload = _performance_payload(
+        report,
+        advisory_budget_ms=budget_ms,
+        validation_duration_ms=validation_duration_ms,
+        canvas_id=document.id,
+        validation=validation.to_dict(),
+        side_effects="none",
+    )
+    if json_output:
+        console.print_json(data=payload)
+        return
+
+    _print_performance_report(report)
+    console.print(f"advisory_budget_ms: {budget_ms:.3f}")
+    console.print(f"validation_duration_ms: {validation_duration_ms:.3f}")
+    console.print("side_effects: none")
 
 
 @perf_app.command("fake-run")

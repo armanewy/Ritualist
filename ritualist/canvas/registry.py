@@ -1,0 +1,558 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Iterable
+
+from ritualist.recipe_loader import discover_recipes
+from ritualist.target_resolution import builtin_target_catalog
+
+from .models import (
+    CanvasBindingKind,
+    CanvasComponent,
+    CanvasComponentRisk,
+    CanvasComponentType,
+    CanvasDocument,
+    CanvasImportedPolicy,
+    CanvasPerformanceClass,
+    CanvasUpdateBehavior,
+    CanvasValidationResult,
+)
+
+
+class CanvasComponentRegistry:
+    def __init__(self, component_types: Iterable[CanvasComponentType] = ()) -> None:
+        self._types: dict[str, CanvasComponentType] = {}
+        for component_type in component_types:
+            self.register(component_type)
+
+    def register(self, component_type: CanvasComponentType) -> None:
+        if component_type.type_id in self._types:
+            raise ValueError(f"duplicate canvas component type: {component_type.type_id}")
+        self._types[component_type.type_id] = component_type
+
+    def has(self, type_id: str) -> bool:
+        return type_id in self._types
+
+    def get(self, type_id: str) -> CanvasComponentType:
+        return self._types[type_id]
+
+    def all(self) -> tuple[CanvasComponentType, ...]:
+        return tuple(self._types[key] for key in sorted(self._types))
+
+    def to_dict(self) -> list[dict[str, object]]:
+        return [component_type.to_dict() for component_type in self.all()]
+
+
+def create_component_registry() -> CanvasComponentRegistry:
+    registry = CanvasComponentRegistry()
+    for component_type in _builtin_component_types():
+        registry.register(component_type)
+    return registry
+
+
+def validate_canvas_document(
+    document: CanvasDocument,
+    *,
+    registry: CanvasComponentRegistry | None = None,
+    strict: bool = False,
+    imported: bool = False,
+    canvas_dir: Path | None = None,
+    check_bindings: bool = True,
+) -> CanvasValidationResult:
+    resolved_registry = registry or create_component_registry()
+    errors: list[str] = []
+    warnings: list[str] = []
+    recipe_ids = _installed_recipe_ids() if check_bindings else set()
+    target_ids = _target_ids() if check_bindings else set()
+
+    for component in document.components:
+        try:
+            spec = resolved_registry.get(component.type)
+        except KeyError:
+            errors.append(f"{component.id}: unknown component type '{component.type}'")
+            continue
+
+        _validate_component_against_spec(
+            component,
+            spec,
+            errors=errors,
+            warnings=warnings,
+            strict=strict,
+            imported=imported,
+            canvas_dir=canvas_dir,
+            recipe_ids=recipe_ids,
+            target_ids=target_ids,
+            check_bindings=check_bindings,
+        )
+
+    if strict:
+        errors.extend(warnings)
+        warnings = []
+    return CanvasValidationResult(
+        canvas_id=document.id,
+        valid=not errors,
+        strict=strict,
+        errors=tuple(errors),
+        warnings=tuple(warnings),
+        component_count=len(document.components),
+    )
+
+
+def _validate_component_against_spec(
+    component: CanvasComponent,
+    spec: CanvasComponentType,
+    *,
+    errors: list[str],
+    warnings: list[str],
+    strict: bool,
+    imported: bool,
+    canvas_dir: Path | None,
+    recipe_ids: set[str],
+    target_ids: set[str],
+    check_bindings: bool,
+) -> None:
+    props = component.props_dict()
+    if component.width < spec.min_width or component.height < spec.min_height:
+        errors.append(
+            f"{component.id}: size {component.width:g}x{component.height:g} is below "
+            f"minimum {spec.min_width}x{spec.min_height}"
+        )
+    if spec.max_width is not None and component.width > spec.max_width:
+        errors.append(f"{component.id}: width exceeds maximum {spec.max_width}")
+    if spec.max_height is not None and component.height > spec.max_height:
+        errors.append(f"{component.id}: height exceeds maximum {spec.max_height}")
+
+    for prop in spec.required_props:
+        if _blank(props.get(prop)):
+            errors.append(f"{component.id}: missing required prop '{prop}'")
+
+    _validate_no_arbitrary_code(component, props, errors)
+    _validate_no_auto_run(component, props, errors)
+    _validate_image_path(component, props, canvas_dir, errors)
+
+    if imported and (
+        not spec.allowed_in_untrusted_packs
+        or spec.imported_canvas_policy is CanvasImportedPolicy.BLOCKED
+    ):
+        errors.append(f"{component.id}: component type '{spec.type_id}' is blocked in imported canvases")
+    elif imported and spec.imported_canvas_policy is CanvasImportedPolicy.DISCLOSURE_REQUIRED:
+        warnings.append(f"{component.id}: component type '{spec.type_id}' requires import disclosure")
+
+    binding = component.binding
+    legacy_binding_kind = _legacy_binding_kind(component, props)
+    if binding is None and legacy_binding_kind is None:
+        return
+
+    binding_kind = binding.kind if binding is not None else legacy_binding_kind
+    if binding_kind not in spec.supported_bindings:
+        errors.append(f"{component.id}: {spec.type_id} does not support {binding_kind.value} bindings")
+        return
+    if binding is None:
+        reference = _legacy_binding_reference(binding_kind, props)
+        if binding_kind is CanvasBindingKind.RECIPE and check_bindings:
+            _warn_unresolved(reference, recipe_ids, component.id, "recipe", warnings)
+        elif binding_kind is CanvasBindingKind.TARGET_START and check_bindings:
+            _warn_unresolved(reference, target_ids, component.id, "target", warnings)
+        elif binding_kind is CanvasBindingKind.APP_LAUNCHER:
+            _validate_launcher_binding(reference, component.id, props, errors)
+        return
+
+    reference = binding.reference
+    if binding.kind is CanvasBindingKind.RECIPE and check_bindings:
+        _warn_unresolved(reference, recipe_ids, component.id, "recipe", warnings)
+    elif binding.kind is CanvasBindingKind.TARGET_START and check_bindings:
+        _warn_unresolved(reference, target_ids, component.id, "target", warnings)
+    elif binding.kind is CanvasBindingKind.INTENT and check_bindings:
+        _validate_intent_reference(reference, component.id, errors, warnings)
+    elif binding.kind is CanvasBindingKind.APP_LAUNCHER:
+        _validate_launcher_binding(reference, component.id, props, errors)
+
+
+def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
+    return (
+        _component(
+            "ritual.card",
+            "Ritual Card",
+            "ritual",
+            "Recipe or intent card that can expose runbook actions.",
+            supported=(CanvasBindingKind.RECIPE, CanvasBindingKind.INTENT, CanvasBindingKind.TARGET_START),
+            required=("title",),
+            optional=("subtitle", "description", "recipe_id", "primary_action", "accent", "image"),
+            size=(520, 300),
+            minimum=(240, 140),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.CONTROLS_UI,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("run", "dry_run", "doctor"),
+            untrusted=False,
+        ),
+        _component(
+            "ritual.status",
+            "Ritual Status",
+            "ritual",
+            "Displays current or last run state for a recipe.",
+            supported=(CanvasBindingKind.RECIPE, CanvasBindingKind.RUNTIME_STATE),
+            optional=("recipe_id", "title"),
+            size=(520, 120),
+            minimum=(200, 80),
+            behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
+        ),
+        _component(
+            "ritual.controller",
+            "Ritual Controller",
+            "ritual",
+            "Pause, resume, and stop controls for an active ritual.",
+            supported=(CanvasBindingKind.RECIPE, CanvasBindingKind.RUNTIME_STATE),
+            optional=("recipe_id", "controls"),
+            size=(360, 96),
+            minimum=(240, 72),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.CONTROLS_UI,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("pause", "resume", "stop"),
+            untrusted=False,
+        ),
+        _component(
+            "target.card",
+            "Target Card",
+            "target",
+            "Target start plan card backed by Target Resolution.",
+            supported=(CanvasBindingKind.TARGET_START, CanvasBindingKind.INTENT),
+            required=("title",),
+            optional=("target", "subtitle", "primary_action"),
+            size=(360, 220),
+            minimum=(220, 120),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.CONTROLS_UI,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("preview_plan",),
+            untrusted=False,
+        ),
+        _component(
+            "target.status",
+            "Target Status",
+            "target",
+            "Displays target discovery or plan status.",
+            supported=(CanvasBindingKind.TARGET_START, CanvasBindingKind.RUNTIME_STATE),
+            optional=("target", "title"),
+            size=(320, 120),
+            minimum=(180, 80),
+            behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
+        ),
+        _component(
+            "category.dock",
+            "Category Dock",
+            "navigation",
+            "Displays local canvas or ritual categories.",
+            supported=(CanvasBindingKind.CATEGORY, CanvasBindingKind.STATIC),
+            optional=("categories", "orientation"),
+            size=(260, 420),
+            minimum=(140, 160),
+        ),
+        _component(
+            "app.launcher",
+            "App Launcher",
+            "launcher",
+            "Structured launcher button for a configured local app.",
+            supported=(CanvasBindingKind.APP_LAUNCHER,),
+            required=("title",),
+            optional=("command", "app_id"),
+            size=(220, 96),
+            minimum=(160, 64),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.LAUNCHES_APP,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("launch",),
+            untrusted=False,
+        ),
+        _component(
+            "window.layout_button",
+            "Window Layout Button",
+            "window",
+            "Button for a future reviewed window layout primitive plan.",
+            supported=(CanvasBindingKind.WINDOW_LAYOUT, CanvasBindingKind.PRIMITIVE_PLAN_PREVIEW),
+            required=("title",),
+            optional=("layout_id",),
+            size=(220, 96),
+            minimum=(160, 64),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.CONTROLS_UI,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("preview_layout",),
+            untrusted=False,
+        ),
+        _component(
+            "doctor.badge",
+            "Doctor Badge",
+            "diagnostics",
+            "Displays Doctor/policy status.",
+            supported=(CanvasBindingKind.RECIPE, CanvasBindingKind.DOCTOR_STATUS, CanvasBindingKind.INTENT),
+            optional=("recipe_id", "title"),
+            size=(180, 80),
+            minimum=(120, 48),
+            behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
+        ),
+        _component(
+            "recent.activity",
+            "Recent Activity",
+            "runtime",
+            "Recent run and runtime activity feed.",
+            supported=(CanvasBindingKind.RECENT_RUNS, CanvasBindingKind.RUNTIME_STATE),
+            optional=("limit", "title"),
+            size=(520, 180),
+            minimum=(260, 100),
+            behavior=CanvasUpdateBehavior.RUNTIME_EVENT_DRIVEN,
+            performance=CanvasPerformanceClass.MODERATE,
+        ),
+        _component(
+            "clock",
+            "Clock",
+            "display",
+            "Local clock display.",
+            supported=(CanvasBindingKind.STATIC,),
+            optional=("format", "timezone"),
+            size=(180, 80),
+            minimum=(100, 48),
+            behavior=CanvasUpdateBehavior.INTERVAL,
+        ),
+        _component(
+            "text.label",
+            "Text Label",
+            "display",
+            "Static text label.",
+            supported=(CanvasBindingKind.STATIC,),
+            required=("text",),
+            optional=("size", "color", "align"),
+            size=(240, 64),
+            minimum=(80, 32),
+        ),
+        _component(
+            "image",
+            "Image",
+            "display",
+            "Canvas-local image asset.",
+            supported=(CanvasBindingKind.STATIC,),
+            required=("path",),
+            optional=("fit", "alt"),
+            size=(320, 180),
+            minimum=(80, 80),
+            performance=CanvasPerformanceClass.MODERATE,
+        ),
+        _component(
+            "shape",
+            "Shape",
+            "display",
+            "Static visual shape.",
+            supported=(CanvasBindingKind.STATIC,),
+            optional=("shape", "fill", "stroke", "radius"),
+            size=(160, 100),
+            minimum=(32, 32),
+        ),
+        _component(
+            "spacer/divider",
+            "Spacer / Divider",
+            "layout",
+            "Static spacing or divider element.",
+            supported=(CanvasBindingKind.STATIC,),
+            optional=("orientation", "color"),
+            size=(240, 16),
+            minimum=(16, 4),
+        ),
+    )
+
+
+def _component(
+    type_id: str,
+    display_name: str,
+    category: str,
+    description: str,
+    *,
+    supported: tuple[CanvasBindingKind, ...],
+    required: tuple[str, ...] = (),
+    optional: tuple[str, ...] = (),
+    size: tuple[int, int],
+    minimum: tuple[int, int],
+    behavior: CanvasUpdateBehavior = CanvasUpdateBehavior.STATIC,
+    performance: CanvasPerformanceClass = CanvasPerformanceClass.CHEAP,
+    risk: CanvasComponentRisk = CanvasComponentRisk.READ_ONLY,
+    can_trigger: bool = False,
+    display_only: bool = True,
+    requires_policy: bool = False,
+    actions: tuple[str, ...] = (),
+    untrusted: bool = True,
+) -> CanvasComponentType:
+    return CanvasComponentType(
+        type_id=type_id,
+        display_name=display_name,
+        category=category,
+        description=description,
+        supported_bindings=supported,
+        required_props=required,
+        optional_props=optional,
+        default_width=size[0],
+        default_height=size[1],
+        min_width=minimum[0],
+        min_height=minimum[1],
+        update_behavior=behavior,
+        performance_class=performance,
+        risk=risk,
+        imported_canvas_policy=(
+            CanvasImportedPolicy.ALLOWED if untrusted else CanvasImportedPolicy.DISCLOSURE_REQUIRED
+        ),
+        allowed_in_canvas_packs=True,
+        allowed_in_untrusted_packs=untrusted,
+        can_trigger_actions=can_trigger,
+        display_only=display_only,
+        requires_policy_or_doctor_state=requires_policy,
+        actions=actions,
+    )
+
+
+def _legacy_binding_kind(component: CanvasComponent, props: dict[str, object]) -> CanvasBindingKind | None:
+    if "recipe_id" in props:
+        return CanvasBindingKind.RECIPE
+    if "target" in props or "target_id" in props:
+        return CanvasBindingKind.TARGET_START
+    if component.type in {"clock", "text.label", "image", "shape", "spacer/divider", "category.dock"}:
+        return CanvasBindingKind.STATIC
+    return None
+
+
+def _legacy_binding_reference(kind: CanvasBindingKind, props: dict[str, object]) -> str:
+    if kind is CanvasBindingKind.RECIPE:
+        return str(props.get("recipe_id") or "").strip()
+    if kind is CanvasBindingKind.TARGET_START:
+        return str(props.get("target") or props.get("target_id") or "").strip()
+    if kind is CanvasBindingKind.APP_LAUNCHER:
+        return str(props.get("app_id") or props.get("command") or "").strip()
+    return ""
+
+
+def _validate_no_arbitrary_code(
+    component: CanvasComponent,
+    props: dict[str, object],
+    errors: list[str],
+) -> None:
+    forbidden = ("script", "javascript", "qml", "html", "webview", "code", "onclick", "on_click")
+    for key, value in _walk_mapping(props):
+        normalized = key.casefold()
+        if any(marker in normalized for marker in forbidden):
+            errors.append(f"{component.id}: arbitrary component code is not allowed ({key})")
+        if isinstance(value, str) and "<script" in value.casefold():
+            errors.append(f"{component.id}: script-like component content is not allowed")
+
+
+def _validate_no_auto_run(
+    component: CanvasComponent,
+    props: dict[str, object],
+    errors: list[str],
+) -> None:
+    for key in ("auto_run", "autorun", "run_on_load", "launch_on_load"):
+        if bool(props.get(key)):
+            errors.append(f"{component.id}: hidden auto-run behavior is not allowed")
+
+
+def _validate_image_path(
+    component: CanvasComponent,
+    props: dict[str, object],
+    canvas_dir: Path | None,
+    errors: list[str],
+) -> None:
+    if component.type != "image":
+        return
+    raw = str(props.get("path") or "").strip()
+    if not raw:
+        return
+    if "://" in raw:
+        errors.append(f"{component.id}: remote image URLs are not allowed in Canvas v1")
+        return
+    path = Path(raw)
+    if path.is_absolute() and canvas_dir is not None:
+        allowed_root = (canvas_dir / "assets").resolve()
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        if allowed_root not in resolved.parents and resolved != allowed_root:
+            errors.append(f"{component.id}: image path must stay inside the canvas assets folder")
+
+
+def _validate_intent_reference(
+    reference: str,
+    component_id: str,
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    if not reference:
+        warnings.append(f"{component_id}: intent binding is unresolved")
+        return
+    if reference in {"diagnostics.collect:minimal", "workspace.prepare:basic", "target.start:placeholder"}:
+        return
+    if reference.startswith("target.start:") and reference.removeprefix("target.start:").strip():
+        return
+    if "." not in reference:
+        errors.append(f"{component_id}: intent binding '{reference}' is not a known fixture or intent kind")
+    else:
+        warnings.append(f"{component_id}: intent binding '{reference}' is not known locally yet")
+
+
+def _validate_launcher_binding(
+    reference: str,
+    component_id: str,
+    props: dict[str, object],
+    errors: list[str],
+) -> None:
+    command = str(props.get("command") or reference or "").strip()
+    if command.startswith(("http://", "https://")):
+        errors.append(f"{component_id}: remote launcher URLs are not allowed")
+
+
+def _warn_unresolved(
+    reference: str,
+    known: set[str],
+    component_id: str,
+    label: str,
+    warnings: list[str],
+) -> None:
+    if not reference or reference not in known:
+        warnings.append(f"{component_id}: {label} binding '{reference or '<missing>'}' is unresolved")
+
+
+def _installed_recipe_ids() -> set[str]:
+    ids: set[str] = set()
+    for path, recipe, _error in discover_recipes():
+        if recipe is not None:
+            ids.add(recipe.id)
+        else:
+            ids.add(path.stem)
+    return ids
+
+
+def _target_ids() -> set[str]:
+    return {target.id for target in builtin_target_catalog().targets}
+
+
+def _blank(value: object) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _walk_mapping(value: object) -> list[tuple[str, object]]:
+    rows: list[tuple[str, object]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            rows.append((str(key), item))
+            rows.extend(_walk_mapping(item))
+    elif isinstance(value, list):
+        for item in value:
+            rows.extend(_walk_mapping(item))
+    return rows

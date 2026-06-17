@@ -7,6 +7,8 @@ artifact, and test contracts are clear.
 ## Current Focus
 
 - Keep Home and CLI workflows responsive and diagnosable.
+- Evolve Home toward Canvas, the typed customizable desktop command surface,
+  without replacing Explorer or adding arbitrary widget code.
 - Keep recipes local-first and structured.
 - Improve target resolution and intent planning without adding arbitrary code
   execution.
@@ -23,6 +25,8 @@ artifact, and test contracts are clear.
   [Intents And Primitive Plans](intents_and_plans.md).
 - Keep target discovery generic, read-only, and primitive-backed; see
   [Target Resolution Engine](target_resolution.md).
+- Keep Canvas documents typed, local, and side-effect free; see
+  [Ritualist Canvas](canvas.md).
 
 ## Future Mutating And Risky Primitives
 

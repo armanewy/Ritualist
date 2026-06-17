@@ -1,0 +1,92 @@
+schema: ritualist.canvas.v1
+id: gaming_desktop
+name: Gaming Desktop
+description: Gaming-focused activity desktop.
+mode: desktop_canvas
+resolution_policy: responsive
+background:
+  type: gradient
+  value: midnight_violet
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: category_dock
+    type: category.dock
+    x: 32
+    y: 96
+    width: 220
+    height: 420
+    z: 1
+    props:
+      categories:
+        - Gaming
+        - Media
+        - Settings
+  - id: diablo_night
+    type: ritual.card
+    x: 288
+    y: 120
+    width: 520
+    height: 300
+    z: 10
+    props:
+      title: Diablo Night
+      subtitle: YouTube ambience + local target prep
+      recipe_id: gaming_mode
+      primary_action: run
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: run_status
+    type: ritual.status
+    x: 288
+    y: 440
+    width: 520
+    height: 120
+    z: 11
+    props:
+      recipe_id: gaming_mode
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: run_controller
+    type: ritual.controller
+    x: 832
+    y: 440
+    width: 360
+    height: 120
+    z: 12
+    props:
+      recipe_id: gaming_mode
+      controls:
+        - pause
+        - resume
+        - stop
+    binding:
+      kind: runtime_state
+      id: gaming_mode
+  - id: diablo_target
+    type: target.card
+    x: 832
+    y: 120
+    width: 360
+    height: 220
+    z: 10
+    props:
+      title: Diablo IV
+      subtitle: Resolve local launch options
+      target: diablo_iv
+      primary_action: preview_plan
+    binding:
+      kind: target.start
+      target: diablo_iv
+  - id: local_clock
+    type: clock
+    x: 1032
+    y: 32
+    width: 160
+    height: 72
+    z: 3
+    props:
+      format: short

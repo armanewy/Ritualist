@@ -9,6 +9,7 @@ This v0.1 implementation includes:
 - Portable recipe packs: `ritualist pack export`, `ritualist pack import`, `ritualist pack list-imports`, `ritualist pack enable`
 - Desktop diagnostics: `ritualist doctor`, `ritualist inspect-window`
 - GUI launcher: `ritualist gui`
+- Canvas schema and component kernel: `ritualist canvas list`, `ritualist canvas validate`
 - YAML recipe validation and variable templating
 - Persistent browser profiles and URL/media automation through Playwright
 - Windows app/window/UI Automation adapters behind lazy imports
@@ -90,6 +91,22 @@ ritualist home --mock
 ```
 
 The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
+
+## Canvas Foundation
+
+Canvas is the next Ritualist product layer: a typed, customizable desktop command surface that Home can gradually render. It is not a true Windows shell replacement, does not hide the taskbar, and does not allow arbitrary QML, JavaScript, HTML, Python, shell snippets, or remote widgets.
+
+Canvas documents are local YAML layouts made of native Ritualist components bound to recipes, intents, targets, runtime state, and static display data. Canvas validation is side-effect free; it does not run recipes, launch apps, click, type, open browsers, call UI Automation, or execute bindings.
+
+```powershell
+python -m ritualist canvas init
+python -m ritualist canvas list
+python -m ritualist canvas validate gaming_desktop
+python -m ritualist canvas show gaming_desktop --json
+python -m ritualist perf canvas-model --mock-components 300 --json
+```
+
+See [docs/canvas.md](docs/canvas.md) for the schema, component registry, binding model, pack-domain separation, and performance rules.
 
 ## Home Alpha Dogfood
 

@@ -1,0 +1,1 @@
+"""Bundled safe Canvas templates."""

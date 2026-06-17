@@ -1,0 +1,57 @@
+schema: ritualist.canvas.v1
+id: coding_desktop
+name: Coding Desktop
+description: Quiet canvas for local development runbooks.
+mode: desktop_canvas
+resolution_policy: responsive
+background:
+  type: solid
+  value: '#111820'
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: title
+    type: text.label
+    x: 64
+    y: 48
+    width: 360
+    height: 64
+    z: 1
+    props:
+      text: Coding Desktop
+  - id: diagnostics
+    type: ritual.card
+    x: 64
+    y: 144
+    width: 440
+    height: 220
+    z: 10
+    props:
+      title: Minimal Diagnostics
+      subtitle: Preview a local diagnostics plan
+    binding:
+      kind: intent
+      intent_id: diagnostics.collect:minimal
+  - id: recent_activity
+    type: recent.activity
+    x: 64
+    y: 392
+    width: 640
+    height: 180
+    z: 11
+    props:
+      title: Recent activity
+      limit: 8
+    binding:
+      kind: recent_runs
+      id: local
+  - id: clock
+    type: clock
+    x: 760
+    y: 48
+    width: 160
+    height: 72
+    z: 2
+    props:
+      format: short

@@ -1,0 +1,60 @@
+schema: ritualist.canvas.v1
+id: helpdesk_desktop
+name: Helpdesk Desktop
+description: Local diagnostics and support canvas.
+mode: desktop_canvas
+resolution_policy: responsive
+background:
+  type: solid
+  value: '#151922'
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: title
+    type: text.label
+    x: 48
+    y: 48
+    width: 420
+    height: 72
+    z: 1
+    props:
+      text: Helpdesk Desktop
+  - id: doctor_badge
+    type: doctor.badge
+    x: 48
+    y: 152
+    width: 240
+    height: 96
+    z: 3
+    props:
+      title: Doctor
+    binding:
+      kind: doctor_status
+      id: local
+  - id: diagnostics_card
+    type: ritual.card
+    x: 320
+    y: 152
+    width: 440
+    height: 220
+    z: 10
+    props:
+      title: Minimal Diagnostics
+      subtitle: Collect redacted local diagnostics
+    binding:
+      kind: intent
+      intent_id: diagnostics.collect:minimal
+  - id: recent_runs
+    type: recent.activity
+    x: 48
+    y: 408
+    width: 712
+    height: 200
+    z: 11
+    props:
+      title: Recent runs
+      limit: 10
+    binding:
+      kind: recent_runs
+      id: local
