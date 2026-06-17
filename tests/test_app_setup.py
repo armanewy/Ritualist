@@ -17,6 +17,7 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "imported_packs": app_data / "imported-packs",
         "logs": app_data / "logs",
         "runs": app_data / "runs",
+        "watch_me": app_data / "watch-me",
         "browser_profiles": app_data / "browser-profiles",
     }
     monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
@@ -28,6 +29,7 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("ritualist.app_setup.watch_me_path", lambda: created_dirs["watch_me"])
     monkeypatch.setattr(
         "ritualist.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],
@@ -99,6 +101,7 @@ steps:
         "imported_packs": tmp_path / "imported-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
+        "watch_me": tmp_path / "watch-me",
         "browser_profiles": tmp_path / "browser-profiles",
     }
 
@@ -111,6 +114,7 @@ steps:
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("ritualist.app_setup.watch_me_path", lambda: created_dirs["watch_me"])
     monkeypatch.setattr(
         "ritualist.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],
@@ -150,6 +154,7 @@ def test_initialize_app_reports_noop_when_up_to_date(tmp_path, monkeypatch):
         "imported_packs": tmp_path / "imported-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
+        "watch_me": tmp_path / "watch-me",
         "browser_profiles": tmp_path / "browser-profiles",
     }
     for path in created_dirs.values():
@@ -179,6 +184,7 @@ steps:
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("ritualist.app_setup.watch_me_path", lambda: created_dirs["watch_me"])
     monkeypatch.setattr(
         "ritualist.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],

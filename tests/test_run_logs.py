@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.executor import WorkflowExecutor
@@ -17,6 +18,7 @@ from ritualist.run_logs import (
     load_run,
     reconcile_running_runs,
     summarize_run_record,
+    _atomic_write_json,
 )
 
 
@@ -29,6 +31,27 @@ class FakeClock:
 
     def advance(self, seconds: float) -> None:
         self.now += seconds
+
+
+def test_atomic_write_json_retries_transient_permission_error(tmp_path, monkeypatch):
+    calls = 0
+    original_replace = Path.replace
+
+    def flaky_replace(self, target):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise PermissionError("transient lock")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", flaky_replace)
+
+    _atomic_write_json(tmp_path / "run.json", {"status": "running"})
+
+    assert calls == 2
+    assert json.loads((tmp_path / "run.json").read_text(encoding="utf-8")) == {
+        "status": "running"
+    }
 
 
 def test_run_log_writer_creates_run_files_and_redacts_browser_url(tmp_path):

@@ -923,7 +923,14 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    tmp_path.replace(path)
+    for attempt in range(5):
+        try:
+            tmp_path.replace(path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.05)
 
 
 def _append_metadata_run_state(

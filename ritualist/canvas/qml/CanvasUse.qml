@@ -368,6 +368,71 @@ ApplicationWindow {
                 enabled: root.runtimeActive && root.canvasController
                 onClicked: root.canvasController.stopCurrentRun()
             }
+
+            Button {
+                text: "Create from what I do"
+                enabled: root.canvasController && !root.mockMode && !root.canvasController.watchMeRecording
+                onClicked: root.canvasController.startWatchMe()
+            }
+
+            Button {
+                text: "Stop Watch Me"
+                enabled: root.canvasController && root.canvasController.watchMeRecording
+                onClicked: root.canvasController.stopWatchMe()
+            }
+
+            Button {
+                text: "Create Draft"
+                enabled: root.canvasController && root.canvasController.watchMeDraftAvailable
+                onClicked: root.canvasController.createWatchMeDraft()
+            }
+
+            Button {
+                text: "Discard"
+                enabled: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
+                onClicked: root.canvasController.discardWatchMe()
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            height: watchMeStatus.visible ? 44 : 0
+            radius: root.token("radius_sm", 4)
+            color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning_panel", "#252014") : root.token("panel", "#101720")
+            border.color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning", "#f5c45b") : root.token("border", "#203044")
+            visible: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
+
+            RowLayout {
+                id: watchMeStatus
+                anchors.fill: parent
+                anchors.margins: 8
+                visible: parent.visible
+                spacing: 8
+
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: root.canvasController && root.canvasController.watchMeRecording ? root.token("warning", "#f5c45b") : root.token("accent", "#3dd6a5")
+                }
+
+                Text {
+                    text: root.canvasController ? root.canvasController.watchMeStatusLabel : ""
+                    color: root.token("foreground", "#f4f7fb")
+                    font.pixelSize: 12
+                    font.bold: true
+                    elide: Text.ElideRight
+                    Layout.preferredWidth: 260
+                }
+
+                Text {
+                    text: root.canvasController ? root.canvasController.watchMeDraftSummary : ""
+                    color: root.token("muted", "#91a2b8")
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
         }
 
         RowLayout {

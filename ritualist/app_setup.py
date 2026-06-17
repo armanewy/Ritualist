@@ -17,6 +17,7 @@ from .paths import (
     logs_path,
     recipes_path,
     runs_path,
+    watch_me_path,
 )
 
 
@@ -67,6 +68,7 @@ def _planned_paths() -> dict[str, Path]:
         "imported_packs": imported_packs_path(),
         "logs": logs_path(),
         "runs": runs_path(),
+        "watch_me": watch_me_path(),
         "browser_profiles": browser_profiles_path(),
     }
 

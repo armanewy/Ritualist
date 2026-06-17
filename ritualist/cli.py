@@ -93,6 +93,7 @@ from .target_resolution import (
     resolve_target,
     target_plan_payload,
 )
+from .watch_me import WatchMeDraft, WatchMeService, WatchMeSession
 
 app = typer.Typer(help="Run local, inspectable desktop rituals.")
 perf_app = typer.Typer(help="Measure Ritualist CLI operations without timing gates.")
@@ -103,6 +104,7 @@ diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
+watch_app = typer.Typer(help="Explicitly observe a setup session and create a disabled draft.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
@@ -111,6 +113,7 @@ app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(canvas_app, name="canvas")
+app.add_typer(watch_app, name="watch-me")
 console = Console()
 
 
@@ -814,6 +817,90 @@ def canvas_use(
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
+
+
+@watch_app.command("start")
+def watch_me_start(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable session details."),
+    ] = False,
+) -> None:
+    """Start an explicit Watch Me session and capture a safe baseline."""
+    try:
+        session = WatchMeService(adapters=create_default_adapters()).start()
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_watch_me_session(session, json_output=json_output)
+
+
+@watch_app.command("stop")
+def watch_me_stop(
+    session_id: Annotated[str, typer.Argument(help="Watch Me session id.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable session details."),
+    ] = False,
+) -> None:
+    """Stop a Watch Me session and capture safe final signals."""
+    try:
+        session = WatchMeService(adapters=create_default_adapters()).stop(session_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_watch_me_session(session, json_output=json_output)
+
+
+@watch_app.command("create-draft")
+def watch_me_create_draft(
+    session_id: Annotated[str, typer.Argument(help="Watch Me session id.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable draft details."),
+    ] = False,
+) -> None:
+    """Create a disabled draft recipe/card suggestion from a Watch Me session."""
+    try:
+        draft = WatchMeService(adapters=create_default_adapters()).create_draft(session_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_watch_me_draft(draft, json_output=json_output)
+
+
+@watch_app.command("discard")
+def watch_me_discard(
+    session_id: Annotated[str, typer.Argument(help="Watch Me session id.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable session details."),
+    ] = False,
+) -> None:
+    """Discard a Watch Me session."""
+    try:
+        session = WatchMeService().discard(session_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_watch_me_session(session, json_output=json_output)
+
+
+@watch_app.command("show")
+def watch_me_show(
+    session_id: Annotated[str, typer.Argument(help="Watch Me session id.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable session details."),
+    ] = False,
+) -> None:
+    """Show a Watch Me session."""
+    try:
+        session = WatchMeService().load(session_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_watch_me_session(session, json_output=json_output)
 
 
 @diagnostics_app.command("collect")
@@ -2085,6 +2172,36 @@ def _print_paths(paths: dict[str, object]) -> None:
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
     console.print(table)
+
+
+def _print_watch_me_session(session: WatchMeSession, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=session.model_dump(mode="json", by_alias=True))
+        return
+    console.print(f"Watch Me session: [bold]{escape(session.session_id)}[/]")
+    console.print(f"Status: {escape(session.status.value)}")
+    console.print(f"Events: {len(session.events)}")
+    if session.draft_path:
+        console.print(f"Draft: {escape(session.draft_path)}")
+    if session.redaction_summary:
+        console.print("Redactions:")
+        for item in session.redaction_summary:
+            console.print(f"- {escape(item)}")
+
+
+def _print_watch_me_draft(draft: WatchMeDraft, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=draft.model_dump(mode="json", by_alias=True))
+        return
+    console.print(f"Watch Me draft for session [bold]{escape(draft.session_id)}[/]")
+    console.print("Status: disabled until you review and save it as a real ritual")
+    console.print(f"Recipe id: {escape(str(draft.recipe.get('id', '')))}")
+    console.print(f"Steps: {len(draft.recipe.get('steps', []))}")
+    if draft.todo:
+        console.print("TODO:")
+        for item in draft.todo:
+            console.print(f"- {escape(item)}")
+    console.print("Run Doctor and dry-run before saving or running this draft.")
 
 
 def _print_import_record(record: ImportedPackRecord) -> None:
