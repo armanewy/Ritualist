@@ -1,6 +1,6 @@
-# Ritualist v0.1.0-alpha.1 Release Checklist
+# Ritualist v0.2.0-alpha.1 Release Checklist
 
-Use this checklist for a local v0.1.0-alpha.1 release build.
+Use this checklist for the local v0.2.0-alpha.1 Canvas-era release candidate.
 
 ## Build
 
@@ -45,7 +45,7 @@ Remove-Item Env:\PYTHONFAULTHANDLER -ErrorAction SilentlyContinue
 
 On Linux CI, keep `QT_QPA_PLATFORM=offscreen` for optional GUI/Home tests.
 
-## Release Candidate Validation - 2026-06-16
+## Historical v0.1.0-alpha.1 Release Candidate Validation - 2026-06-16
 
 Validation commit: `2d83b66`.
 
@@ -241,7 +241,7 @@ Manual checks still required:
 - [ ] Launch `dist\Ritualist\Ritualist.exe` and confirm Home opens.
 - [ ] Launch `dist\Ritualist\Ritualist.exe --classic-gui`.
 - [ ] Open About / Diagnostics.
-- [ ] Confirm diagnostics reports version `0.1.0-alpha.1`.
+- [ ] Confirm diagnostics reports version `0.2.0-alpha.1`.
 - [ ] Copy diagnostics and save it with the release notes.
 - [ ] Click Initialize App.
 - [ ] Click Refresh Recipes.
@@ -302,3 +302,80 @@ Manual checks still required:
 - [ ] Include `README.md`, `CHANGELOG.md`, `RELEASE_NOTES.md`, and this checklist.
 - [ ] Include known limitations from `RELEASE_NOTES.md`.
 - [ ] Do not include `build`, `.pytest_cache`, `__pycache__`, or `Ritualist.spec`.
+
+## v0.2.0-alpha.1 Release Candidate Validation - 2026-06-17
+
+Validation state: local `main` workspace after Prompt 8 (`efedfa1`) plus
+release-candidate version/docs updates.
+
+Automated development-checkout gate:
+
+- `python -m pip install -e ".[all,dev]"`: passed.
+- `python -m playwright install chromium`: passed.
+- Project version and diagnostics version: `0.2.0-alpha.1`.
+- `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
+  `702 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python -m ritualist init`: passed; migrated installed `gaming_mode.yaml`
+  browser clean-start fields.
+- `python -m ritualist doctor gaming_mode --json --no-strict`: passed;
+  compatibility `compatible`, `errors_count: 0`, `warnings_count: 0`.
+- `python -m ritualist dry-run gaming_mode`: passed; final state `success`.
+- `python -m ritualist canvas validate gaming_desktop`: passed.
+- `python -m ritualist canvas runtime gaming_desktop --json`: passed. Live
+  user-data runtime build reported about 1680 ms with 20 recent activity rows.
+- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed,
+  4.324 ms, no warnings.
+- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed,
+  11.379 ms, no warnings.
+- `python -m ritualist perf canvas-runtime --mock-components 100 --json`: passed,
+  5.827 ms, no warnings.
+- `python -m ritualist perf canvas-runtime --mock-components 300 --json`: passed,
+  9.638 ms, no warnings.
+- `python -m ritualist target plan diablo_iv --json`: passed; local state
+  `not_found` on this machine.
+- `python -m ritualist plan preview target.start:diablo_iv --json`: passed.
+- `python -m ritualist pack export gaming_mode --out <temp>`: passed.
+- `python -m ritualist pack import <temp>`: passed into quarantine. Temporary
+  `gaming_mode-3` validation import was removed afterward.
+- `python -m ritualist canvas pack export <visual-test-canvas> --out <temp> --json`: passed.
+- `python -m ritualist canvas pack import <temp> --json`: passed into quarantine.
+  Temporary `rc_visual` validation import was removed afterward.
+
+Packaged build and smoke:
+
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+- Verified packaged files exist:
+  - `dist\Ritualist\Ritualist.exe`
+  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
+  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
+- `dist\Ritualist\Ritualist.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
+  for 8 seconds.
+- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` with
+  `QT_QPA_PLATFORM=offscreen` stayed alive for 8 seconds.
+- `dist\Ritualist\Ritualist.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
+  stayed alive for 8 seconds.
+- Release-candidate artifact created:
+  `dist\Ritualist-v0.2.0-alpha.1-rc.zip` (packaged app plus README,
+  CHANGELOG, RELEASE_NOTES, and RELEASE_CHECKLIST).
+- PyInstaller still reports Conda-environment optional DLL warnings in
+  `build\Ritualist\warn-Ritualist.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
+  `UR_LOADER.dll`, `ze_loader.dll`) plus hidden-import warnings already seen in
+  prior builds. Offscreen packaged startup smokes passed despite these warnings.
+
+Manual release blockers still open:
+
+- A human still needs to visually confirm packaged Home and Canvas are not blank,
+  category switching/hover/focus feel acceptable, and no obvious jitter.
+- A human still needs to run packaged Home/Canvas Doctor, Dry Run, Run,
+  Pause/Resume/Stop, target plan preview, logs/recent activity, and About /
+  Diagnostics.
+- A human still needs to run the real `gaming_mode` trace, decline Play, confirm
+  stopped status, hard-kill during wait/confirmation, and confirm next launch
+  repairs the run as `interrupted`.
+- No `v0.2.0-alpha.1` tag was created. Tagging remains blocked until the manual
+  packaged desktop dogfood checks above pass.

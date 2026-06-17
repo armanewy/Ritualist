@@ -2,7 +2,7 @@
 
 Ritualist is a local-first Windows desktop workflow automation app for repeatable personal routines. A ritual is a readable YAML recipe with explicit steps, validation, dry-run support, logs, and confirmation gates for risky actions.
 
-This v0.1 implementation includes:
+This alpha implementation includes:
 
 - CLI runner: `ritualist run recipe.yaml`
 - Recipe initialization and discovery: `ritualist init`, `ritualist list`, `ritualist paths`
@@ -17,7 +17,7 @@ This v0.1 implementation includes:
 - Step-by-step logging, per-run logs, and status
 - Tests for the workflow engine using fake adapters
 
-Release details for `v0.1.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
+Release-candidate details for `v0.2.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
 
 ## Install
 
@@ -64,7 +64,7 @@ Pack export writes a `.ritualistpack` zip containing `manifest.yaml`, `recipe.ya
 optionally `README.md` when `--readme` points at an explicit UTF-8 text file. Pack import
 validates the archive and copies it into disabled quarantine storage under local app data. It
 does not enable, run, launch, click, type, open browsers, or contact any remote service. Packs
-containing UI, app-launch, or browser-control actions remain blocked from enable in v0.1 and
+containing UI, app-launch, or browser-control actions remain blocked from enable by the current imported-pack policy and
 should be reviewed with Doctor and dry-run from quarantine. Enable is only available for actions
 allowed by the imported-pack policy, and still does not run recipes. Logs, run history, browser
 profiles, cookies, screenshots, secrets, local paths, and user data are never included in exported
@@ -329,7 +329,7 @@ Assertions do not click, type, launch apps, or modify browser/page state. They p
 
 ## Safety
 
-- Coordinate clicks are not implemented in v0.1.
+- Coordinate clicks are not implemented.
 - `desktop.click_text` must be scoped with `window_title_contains`.
 - The workflow stops on the first failed step unless that step has `optional: true`.
 - Clicking visible text exactly equal to `Play` must include `requires_confirmation: true`.
@@ -395,10 +395,10 @@ GUI/tray mode is the better long-running shape for media rituals because the app
 `browser-profiles` directory. Set `clean_start: true` to launch with safe
 Chromium startup flags that reduce first-run and session-restore prompts without
 deleting profile data. `dismiss_restore_prompt: true` is accepted for forward
-compatibility, but v0.1 treats it as a safe no-op unless Ritualist has a browser
+compatibility, but this release treats it as a safe no-op unless Ritualist has a browser
 UI-scoped mechanism available. Ritualist does not use webpage text or buttons to
 dismiss Chrome restore prompts, because page content can imitate browser prompts.
-`use_dedicated_profile: false` is rejected in v0.1 so Ritualist cannot silently
+`use_dedicated_profile: false` is rejected so Ritualist cannot silently
 operate on a user's normal browser profile.
 
 ## Structured Browser Runbooks
@@ -456,7 +456,7 @@ only waits for structured page state or clicks explicit, reviewable controls.
 
 ## Building A Local Windows App
 
-Use a PyInstaller one-folder build for v0.1-alpha packaging. One-folder mode leaves the executable and its support files visible under `dist\Ritualist`, which makes missing data files and DLL issues easier to diagnose than a one-file bundle.
+Use a PyInstaller one-folder build for alpha packaging. One-folder mode leaves the executable and its support files visible under `dist\Ritualist`, which makes missing data files and DLL issues easier to diagnose than a one-file bundle.
 
 Build on Windows:
 

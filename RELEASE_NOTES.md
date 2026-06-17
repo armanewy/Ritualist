@@ -1,22 +1,19 @@
-# Ritualist v0.1.0-alpha.1 Release Notes
+# Ritualist v0.2.0-alpha.1 Release Candidate Notes
 
-Ritualist v0.1.0-alpha.1 is an alpha release of a local Windows personal workflow app for the proven `gaming_mode` routine.
+Ritualist v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC runbooks. It keeps the existing CLI/classic GUI workflow and adds a typed Canvas command surface, deterministic planning, read-only diagnostics primitives, safe Watch Me drafting, and local visual pack separation.
 
 ## What Works
 
-- Run recipes from the CLI with `ritualist run <recipe-id-or-path>`.
-- Dry-run recipes from the CLI or GUI.
-- Initialize local app directories and install the bundled `gaming_mode` sample.
-- Discover installed recipes by id.
-- Launch Home from the packaged Windows executable, with the classic GUI available by flag.
-- Run Doctor checks without side effects.
-- Inspect Windows UI Automation windows with `inspect-window`.
-- Keep browser media open with recipe-level `keep_open: true` or CLI `--keep-alive`.
-- Write per-run logs and inspect them with `ritualist runs` and `ritualist show-run`.
-- Recover abandoned `running` histories as `interrupted` after hard process termination.
-- Use About / Diagnostics in the packaged GUI to copy version, environment, dependency, and path information.
-- Open the experimental Home dashboard for installed recipe cards, local run status, dry-run, Doctor, edit, log access, and guarded run controls.
-- Run the generated-data Home mock for card-grid and event-update dogfooding without launching recipes or desktop automation.
+- CLI recipe run, dry-run, Doctor, run history, notes, stale-run repair, and inspect-window diagnostics.
+- Packaged Windows one-folder app at `dist\Ritualist\Ritualist.exe`.
+- Packaged Home, packaged Canvas Use Mode, and classic GUI launch paths.
+- Bundled `gaming_mode` sample and `gaming_desktop` Canvas.
+- Canvas typed components, runtime model, Edit Mode model/UI MVP, theme tokens, performance modes, and perf smoke commands.
+- Deterministic intent plan preview and generic target resolution preview.
+- Primitive Kernel metadata, policy/governance, read-only primitive families, and Doctor visibility.
+- Structured browser runbook actions plus clean-start options for Ritualist-managed browser profiles.
+- Explicit Watch Me sessions that create disabled drafts from safe high-level signals only.
+- Local `.ritualistcanvas` and `.ritualisttheme` export/import into quarantine.
 
 ## Build The Packaged App
 
@@ -34,70 +31,53 @@ The output is:
 dist\Ritualist\Ritualist.exe
 ```
 
-The packaged app launches Home by default. It does not run any ritual automatically.
-Use `dist\Ritualist\Ritualist.exe --classic-gui` for About / Diagnostics,
-Initialize App, and the classic utility workflow.
+The packaged app launches Home by default. Use:
 
-## Home Alpha Dogfood
-
-Home is an alpha dashboard for local recipes. It should be dogfooded from both the packaged app and the development checkout before a Home-focused release:
-
-```text
-1. Launch dist\Ritualist\Ritualist.exe
-2. Confirm Home opens
-3. Run python -m ritualist home --mock from the development checkout
-4. Run gaming_mode from Home
-5. Pause a visible window.wait action, then resume it
-6. Stop an active ritual from Home
-7. Hard-kill Ritualist.exe during a run, relaunch it, and confirm the abandoned run is interrupted
-8. Inspect logs from Home and confirm run.json and steps.jsonl are present for the run
+```powershell
+dist\Ritualist\Ritualist.exe --canvas gaming_desktop
+dist\Ritualist\Ritualist.exe --classic-gui
 ```
 
 ## First Real Trace
 
-Use this sequence for the first packaged `gaming_mode` trace:
+Use this sequence for a real packaged `gaming_mode` trace:
 
 ```text
-1. Launch dist\Ritualist\Ritualist.exe and confirm Home opens
-2. Launch dist\Ritualist\Ritualist.exe --classic-gui
-3. Open About / Diagnostics and copy diagnostics
-4. Initialize App
-5. Refresh Recipes
-6. Select gaming_mode
-7. Click Doctor
-8. Dry Run
-9. Run
-10. Confirm YouTube opens and loops
-11. Confirm Battle.net launches
-12. Confirm Diablo IV is selected
-13. Decline Play once
-14. Confirm the run appears as stopped
-15. Run again and accept Play only if you actually want to
+1. Launch dist\Ritualist\Ritualist.exe.
+2. Confirm Home opens and installed recipes load.
+3. Launch dist\Ritualist\Ritualist.exe --canvas gaming_desktop.
+4. Confirm Canvas renders gaming_desktop components.
+5. Run Doctor for gaming_mode.
+6. Dry-run gaming_mode.
+7. Run gaming_mode only when it is safe to open browser media and Battle.net.
+8. Confirm YouTube opens and loops.
+9. Confirm Battle.net launches and Diablo IV is selected.
+10. Confirm the Play confirmation is a separate top-level dialog above Battle.net.
+11. Decline Play once.
+12. Confirm the run appears as stopped and recent activity/logs show the stopped reason.
+13. Hard-kill during a later wait/confirmation and confirm next launch repairs the run as interrupted.
 ```
 
 ## Known Limitations
 
-- This is an alpha build intended for local personal use.
-- The packaged app is a one-folder PyInstaller build, not an installer.
-- Home is an experimental alpha surface. CLI and classic GUI flows remain the fallback for release-critical validation.
-- Home mock data is generated locally for UI dogfooding only; it does not validate real recipe execution.
-- Home performance depends on keeping recipe loading, run-history repair, thumbnail work, Playwright calls, and Windows UI Automation scans off the GUI thread.
-- Pause and Resume are meaningful only while a running workflow is in a pausable wait or runtime state that supports those controls.
-- Stop requests are cooperative; adapter work that is already inside an external app or browser call may finish before the stop is reflected.
-- Playwright browser binaries and persistent profiles should be tested on the target Windows machine after building.
-- UI Automation labels can vary between Battle.net states, languages, and updates.
-- Stale-run recovery can mark hard-killed runs as `interrupted`, but it cannot reconstruct a step result that was never written.
-- Long-running browser media is best kept inside the GUI or with `keep_open: true`; CLI exit may close the Playwright-owned browser.
-- Windows-specific desktop actions are not supported on non-Windows systems.
+- This is an alpha candidate, not a signed installer or stable release.
+- The packaged app is a one-folder PyInstaller build.
+- The automated gate can verify build/startup/perf paths, but final release tagging still requires a human packaged desktop dogfood pass.
+- Canvas Use/Edit Mode is functional but still an alpha surface.
+- Real Battle.net/UIA labels can change by locale, app state, and launcher updates.
+- Target resolution can report `not_found` if Diablo IV is not discoverable through running processes, shortcuts, explicit paths, installed-app metadata, removable media, or local memory.
+- Watch Me drafts are disabled and require review, Doctor, and dry-run before use.
+- Theme packs reject assets in this candidate until explicit theme asset references exist.
+- PyInstaller may report Conda-environment optional DLL warnings; the release checklist records whether startup still works.
 
 ## Explicit Non-Goals
 
-- No AI features.
+- No AI features or AI planning.
 - No macro recording.
 - No OCR.
-- No arbitrary recipe-supplied Python or JavaScript actions.
+- No arbitrary recipe-supplied Python, shell, PowerShell, JavaScript, QML, HTML, or plugin code.
 - No coordinate clicks.
-- No cloud sync.
-- No plugin system.
+- No cloud sync, network marketplace, remote execution, telemetry, or auto-install.
+- No password/login automation.
+- No firmware, driver, storage, registry, firewall, service-control, or package-install mutation.
 - No gameplay automation.
-- No telemetry or remote execution.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ritualist"
-version = "0.1.0-alpha.1"
+version = "0.2.0-alpha.1"
 description = "Local-first Windows desktop workflow automation for inspectable personal rituals."
 readme = "README.md"
 requires-python = ">=3.11"
