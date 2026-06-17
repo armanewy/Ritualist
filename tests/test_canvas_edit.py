@@ -181,6 +181,33 @@ def test_edit_session_duplicate_undo_redo() -> None:
     assert [component.id for component in session.document.components] == ["title", "title_copy"]
 
 
+def test_duplicate_component_validates_copied_component() -> None:
+    canvas = CanvasDocument(
+        id="max_z_canvas",
+        name="Max Z Canvas",
+        components=(
+            CanvasComponent(
+                id="title",
+                type="text.label",
+                x=10,
+                y=20,
+                width=200,
+                height=64,
+                z=10000,
+                props={"text": "Hello"},
+            ),
+        ),
+    )
+    session = CanvasEditSession(document=canvas)
+
+    try:
+        session.duplicate_component("title")
+    except RitualistError as exc:
+        assert "z must be between" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("invalid duplicate z should fail validation")
+
+
 def test_undo_redo_dirty_state_tracks_original_document() -> None:
     session = CanvasEditSession(document=_canvas())
 

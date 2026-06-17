@@ -313,6 +313,7 @@ class CanvasEditSession:
             },
             deep=True,
         )
+        self._validate_component(duplicated)
         self._mutate(
             CanvasEditCommand(
                 CanvasEditCommandType.DUPLICATE_COMPONENT,
