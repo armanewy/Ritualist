@@ -22,6 +22,7 @@ from .canvas import (
     build_canvas_runtime_model,
     build_canvas_view_model,
     canvas_show_payload,
+    create_edit_session,
     create_default_canvases,
     create_mock_canvas,
     default_canvas_document,
@@ -705,6 +706,31 @@ def canvas_preview(
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
     _print_canvas_document(document)
+
+
+@canvas_app.command("edit-model")
+def canvas_edit_model(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Canvas Edit Mode model."),
+    ] = False,
+) -> None:
+    """Build the side-effect-free Canvas Edit Mode model."""
+    try:
+        session = create_edit_session(canvas)
+        payload = session.to_dict()
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"Canvas: {escape(str(payload['canvas']['id']))}")
+    console.print(f"Source: {escape(str(payload['source']))}")
+    console.print(f"Dirty: {escape(str(payload['dirty']))}")
+    console.print(f"Palette entries: {len(payload['palette'])}")
+    _print_canvas_validation(payload["validation"])
 
 
 @canvas_app.command("runtime")
