@@ -636,9 +636,9 @@ Release note:
 ## Packaged Release Acceptance Harness - 2026-06-17
 
 Status: Machine-verifiable packaged GUI/runtime acceptance plus source CLI
-supplemental command evidence passed all objective checks the harness can
-assert. Two release gates remain `NEEDS_HUMAN_REVIEW`; do not tag
-`v0.2.0-alpha.1` yet.
+supplemental command evidence passed with no `FAIL` or `NEEDS_HUMAN_REVIEW`
+checks. The harness marks `v0.2.0-alpha.1` taggable, but no tag has been
+created.
 
 Harness/spec added:
 
@@ -654,16 +654,13 @@ Command evidence:
 
 - `git pull --ff-only`: already up to date.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
-  passed for 35 managed files.
-- `python -m pytest -q`: `723 passed, 1 skipped`.
+  passed for 39 managed files.
+- `python -m pytest -q`: `764 passed, 1 skipped`.
 - `python -m compileall -q ritualist tests`: passed.
 - `.\scripts\build_windows_app.ps1`: passed and built
   `dist\Ritualist\Ritualist.exe`.
-- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen`: passed
-  with no machine `FAIL` checks.
 - `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
-  passed with no machine `FAIL` checks after adding explicit `-EvidenceDir`
-  support to the harness.
+  passed with `22` `PASS`, `0` `FAIL`, and `0` `NEEDS_HUMAN_REVIEW`.
 - Command scope: the packaged executable is used for Home, Canvas Use Mode,
   classic GUI, and runtime scenarios. Source-tree `python -m ritualist` is used
   for supplemental CLI-only safety, perf, run-log, and visual-pack command
@@ -689,36 +686,40 @@ Acceptance artifacts:
 
 Acceptance summary:
 
-- `PASS`: 19
+- `PASS`: 22
 - `FAIL`: 0
-- `NEEDS_HUMAN_REVIEW`: 2
-- `taggable`: `false`
+- `NEEDS_HUMAN_REVIEW`: 0
+- `taggable`: `true`
 - `tag_created`: `false`
 
 Objective checks that passed:
 
 - Packaged Home, Canvas Use Mode, and classic GUI opened and stayed alive.
-- Packaged `gaming_desktop` rendered with expected Canvas controls.
+- Packaged `gaming_desktop` rendered with expected Canvas controls and
+  `recent.activity` component evidence in the packaged `canvas.ready` event.
 - Packaged Canvas produced machine evidence for Doctor, Dry Run, safe Run,
   `ritual.status` transitions, Pause/Resume/Stop, target preview status, native
   confirmation z-order over the fake Battle.net fixture, declined Play stop
-  handling, hard-kill repair to `interrupted`, and Watch Me preview privacy.
+  handling, recent activity run-history update, hard-kill repair to
+  `interrupted`, and Watch Me preview privacy.
+- Recent activity evidence includes a packaged `canvas.ui_heartbeat` payload
+  where `recent_activity_run_ids` contains
+  `20260617T210234Z_gaming_mode` with stopped reason
+  `stopped_user_declined_confirmation`.
 - Source CLI supplemental checks produced machine evidence for structured target
   plan JSON, `show-run` declined-confirmation output, Canvas/theme pack
   import/export quarantine behavior, arbitrary component-code rejection, and
   100/300 component perf command outputs.
+- UI heartbeat evidence recorded `5` screen frames with a maximum frame gap of
+  `664.1` ms and packaged Canvas QML heartbeat events with a maximum app
+  heartbeat gap of `261.9` ms against the `1500` ms conservative harness
+  threshold.
 
 Release blockers still open:
 
-- `ui_heartbeat_no_obvious_freeze`: `NEEDS_HUMAN_REVIEW`. The harness captured
-  frame/e2e timing evidence, but subjective smoothness still needs a human
-  visual pass.
-- `recent_activity_updates`: `NEEDS_HUMAN_REVIEW`. Run history was captured, but
-  packaged Home Recent activity was not exposed through UI Automation for a
-  machine assertion.
+- None in the current packaged acceptance summary.
 
 Release note:
 
-- No `v0.2.0-alpha.1` tag was created. The release is not taggable until the two
-  `NEEDS_HUMAN_REVIEW` items above are resolved or explicitly accepted by a
-  human release owner.
+- No `v0.2.0-alpha.1` tag was created. The current acceptance summary marks the
+  release taggable, but tagging remains a separate release-owner action.

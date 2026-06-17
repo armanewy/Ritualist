@@ -69,6 +69,16 @@ components:
     binding:
       kind: runtime_state
       id: gaming_mode
+  - id: recent_activity
+    type: recent.activity
+    x: 832
+    y: 580
+    width: 360
+    height: 140
+    z: 12
+    props:
+      title: Recent Activity
+      limit: 5
   - id: diablo_target
     type: target.card
     x: 832

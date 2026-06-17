@@ -120,11 +120,15 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     assert "Apply Binding" in qml
     assert "if (root.canvasController.saveCanvas())" in qml
     assert "dispatch(componentId, actionId)" in qml
+    assert "ritualistE2EEnabled" in qml
+    assert "recordUiHeartbeat" in qml
 
     app = Path("ritualist/canvas/app.py").read_text(encoding="utf-8")
     assert "@Slot(result=bool)" in app
     assert "def saveCanvas(self) -> bool:" in app
     assert "return True" in app
+    assert "canvas.ui_heartbeat" in app
+    assert "recent_activity_run_ids" in app
 
 
 def test_canvas_use_qml_contains_low_spec_performance_controls() -> None:

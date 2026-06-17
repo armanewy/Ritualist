@@ -20,6 +20,7 @@ from ritualist.canvas import (
     create_default_canvases,
     create_mock_canvas,
     list_canvases,
+    load_bundled_canvas,
     load_canvas,
     normalize_canvas_bindings,
     recipe_card_component,
@@ -29,8 +30,10 @@ from ritualist.canvas import (
     validate_canvas_document,
     validate_canvas_structure,
 )
+from ritualist.canvas.app import _recent_activity_items, build_canvas_use_payload
 from ritualist.cli import app
 from ritualist.home.models import HomeCardStatus
+from ritualist.run_logs import RunRecord
 
 
 def _valid_canvas() -> CanvasDocument:
@@ -495,6 +498,78 @@ def test_sample_canvases_validate() -> None:
             continue
         result = validate_canvas(reference.path)
         assert result.valid, (reference.canvas_id, result.errors)
+
+
+def test_gaming_desktop_includes_recent_activity_for_release_acceptance() -> None:
+    canvas = load_bundled_canvas("gaming_desktop")
+    components = {component.id: component for component in canvas.components}
+
+    assert components["recent_activity"].type == "recent.activity"
+
+
+def test_recent_activity_e2e_snapshot_extracts_run_ids() -> None:
+    payload = {
+        "components": [
+            {
+                "id": "recent_activity",
+                "type": "recent.activity",
+                "data": {
+                    "items": [
+                        {
+                            "run_id": "run-123",
+                            "recipe_id": "gaming_mode",
+                            "status": "stopped",
+                            "message": "Confirmation declined",
+                            "stopped_reason": "stopped_user_declined_confirmation",
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+
+    assert _recent_activity_items(payload) == [
+        {
+            "component_id": "recent_activity",
+            "run_id": "run-123",
+            "recipe_id": "gaming_mode",
+            "status": "stopped",
+            "message": "Confirmation declined",
+            "stopped_reason": "stopped_user_declined_confirmation",
+        }
+    ]
+
+
+def test_canvas_use_payload_loads_recent_runs_only_when_requested(monkeypatch, tmp_path: Path) -> None:
+    canvas = CanvasDocument(
+        id="recent_canvas",
+        name="Recent Canvas",
+        components=(
+            CanvasComponent(id="activity", type="recent.activity", width=320, height=160),
+        ),
+    )
+    record = RunRecord(
+        run_id="run-123",
+        path=tmp_path / "run-123",
+        metadata={
+            "recipe_id": "gaming_mode",
+            "final_state": "stopped",
+            "final_message": "Confirmation declined",
+        },
+        steps=[],
+    )
+    monkeypatch.setattr("ritualist.canvas.runtime.list_recent_runs", lambda *, limit: [record])
+
+    default_payload = build_canvas_use_payload(canvas, recipe_ids=set(), target_ids=set())
+    live_payload = build_canvas_use_payload(
+        canvas,
+        recipe_ids=set(),
+        target_ids=set(),
+        load_recent_runs=True,
+    )
+
+    assert default_payload["components"][0]["data"]["items"] == []
+    assert live_payload["components"][0]["data"]["items"][0]["run_id"] == "run-123"
 
 
 def test_canvas_storage_default_creation_and_no_overwrite(tmp_path: Path, monkeypatch) -> None:

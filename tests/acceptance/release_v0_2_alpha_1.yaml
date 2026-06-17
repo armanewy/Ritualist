@@ -44,7 +44,7 @@ checks:
     expected_evidence:
       - ui_automation_controls
       - canvas_component_names
-    pass_when: "category dock, Diablo Night, run status/controller, target card, and clock component evidence is present."
+    pass_when: "category dock, Diablo Night, run status/controller, target card, recent activity, and clock component evidence is present."
   - id: ritual_card_doctor
     blocker: "Ritual card Doctor works."
     expected_evidence:
@@ -91,10 +91,13 @@ checks:
   - id: recent_activity_updates
     blocker: "Recent activity updates."
     expected_evidence:
-      - home_recent_activity
+      - canvas_recent_activity_component
+      - recent_activity_model
       - run_history
       - screenshot
-    pass_when: "Recent activity evidence shows the latest stopped/interrupted run, or NEEDS_HUMAN_REVIEW if not exposed to UIA."
+      - e2e_event: canvas.ready
+      - e2e_event: canvas.ui_heartbeat
+    pass_when: "Packaged gaming_desktop exposes recent.activity, fixture run history contains the latest stopped/interrupted run, and a packaged Canvas heartbeat payload includes that run in the recent.activity model; NEEDS_HUMAN_REVIEW if the model update is not machine-observable."
   - id: native_confirmation_z_order
     blocker: "Native confirmation stays above Chrome/Battle.net."
     expected_evidence:
@@ -154,5 +157,8 @@ checks:
     blocker: "UI heartbeat/render timing has no obvious freeze."
     expected_evidence:
       - frame_timing
+      - max_frame_gap_ms
+      - app_heartbeat_timing
       - e2e_event_timing
-    pass_when: "Frame/e2e timing shows no long acceptance-harness stall; subjective smoothness can still be NEEDS_HUMAN_REVIEW."
+      - e2e_event: canvas.ui_heartbeat
+    pass_when: "Recorded frame timing and packaged Canvas ui heartbeat timing have sufficient samples and no gap above the conservative acceptance threshold; NEEDS_HUMAN_REVIEW if timing evidence is missing or inconclusive."

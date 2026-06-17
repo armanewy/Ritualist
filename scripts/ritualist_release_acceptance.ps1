@@ -206,6 +206,45 @@ function Capture-ScreenFrames {
     return [ordered]@{ manifest = $manifest; frame_count = $frames.Count; directory = $dir }
 }
 
+function Get-FrameTimingEvidence {
+    param([object]$Frames, [int]$MaxAllowedGapMilliseconds = 1500)
+    if (-not $Frames -or -not $Frames.manifest -or -not (Test-Path $Frames.manifest)) {
+        return [ordered]@{
+            available = $false
+            reason = "frame manifest missing"
+            max_allowed_gap_ms = $MaxAllowedGapMilliseconds
+        }
+    }
+    $manifest = Get-Content -Path $Frames.manifest -Raw | ConvertFrom-Json
+    $elapsed = @(
+        $manifest.frames |
+            ForEach-Object { [double]$_.elapsed_ms } |
+            Sort-Object
+    )
+    $gaps = @()
+    for ($index = 1; $index -lt $elapsed.Count; $index += 1) {
+        $gaps += [Math]::Round(($elapsed[$index] - $elapsed[$index - 1]), 1)
+    }
+    $maxGap = if ($gaps.Count -gt 0) {
+        [Math]::Round((($gaps | Measure-Object -Maximum).Maximum), 1)
+    }
+    else {
+        $null
+    }
+    $passed = $elapsed.Count -ge 3 -and $null -ne $maxGap -and $maxGap -le $MaxAllowedGapMilliseconds
+    return [ordered]@{
+        available = $true
+        manifest = $Frames.manifest
+        directory = $Frames.directory
+        frame_count = $elapsed.Count
+        elapsed_ms = $elapsed
+        gaps_ms = $gaps
+        max_frame_gap_ms = $maxGap
+        max_allowed_gap_ms = $MaxAllowedGapMilliseconds
+        passed = $passed
+    }
+}
+
 function Get-TopLevelWindows {
     $handles = New-Object System.Collections.Generic.List[System.IntPtr]
     $callback = [RitualistAcceptanceWin32+EnumWindowsProc]{
@@ -581,6 +620,62 @@ function Get-RuntimeEventsForRun {
     )
 }
 
+function Get-UiHeartbeatEvents {
+    param([int]$ProcessId = 0)
+    $events = Get-E2EEvents | Where-Object { $_.event -eq "canvas.ui_heartbeat" }
+    if ($ProcessId -gt 0) {
+        $events = $events | Where-Object { [int]$_.process_id -eq $ProcessId }
+    }
+    return @($events | Sort-Object { [double]$_.payload.monotonic_ms })
+}
+
+function Get-UiHeartbeatTimingEvidence {
+    param([int]$ProcessId, [int]$MaxAllowedGapMilliseconds = 1500)
+    $events = Get-UiHeartbeatEvents $ProcessId
+    $elapsed = @($events | ForEach-Object { [double]$_.payload.monotonic_ms })
+    $gaps = @()
+    for ($index = 1; $index -lt $elapsed.Count; $index += 1) {
+        $gaps += [Math]::Round(($elapsed[$index] - $elapsed[$index - 1]), 1)
+    }
+    $maxGap = if ($gaps.Count -gt 0) {
+        [Math]::Round((($gaps | Measure-Object -Maximum).Maximum), 1)
+    }
+    else {
+        $null
+    }
+    $passed = $elapsed.Count -ge 3 -and $null -ne $maxGap -and $maxGap -le $MaxAllowedGapMilliseconds
+    return [ordered]@{
+        available = $events.Count -gt 0
+        process_id = $ProcessId
+        event_count = $events.Count
+        elapsed_ms = $elapsed
+        gaps_ms = $gaps
+        max_app_heartbeat_gap_ms = $maxGap
+        max_allowed_gap_ms = $MaxAllowedGapMilliseconds
+        passed = $passed
+    }
+}
+
+function Get-RecentActivityModelEvidence {
+    param([int]$ProcessId, [string]$RunId)
+    $events = Get-UiHeartbeatEvents $ProcessId
+    $matching = @(
+        $events |
+            Where-Object {
+                @($_.payload.recent_activity_run_ids) -contains $RunId
+            }
+    )
+    $latest = if ($matching.Count -gt 0) { $matching[-1] } else { $null }
+    return [ordered]@{
+        process_id = $ProcessId
+        run_id = $RunId
+        heartbeat_event_count = $events.Count
+        matching_event_count = $matching.Count
+        contains_run = $matching.Count -gt 0
+        latest_matching_event = $latest
+    }
+}
+
 function Test-WindowTreeContainsText {
     param([string]$Path, [string]$Text)
     if (-not (Test-Path $Path)) {
@@ -862,17 +957,22 @@ function Invoke-CanvasStaticActions {
         $initial = Save-Screenshot "canvas-initial"
         $tree = Save-WindowTree "canvas-initial" $window
         $themeEvidence = Get-CanvasThemeEvidence (Get-E2EEvents)
+        $readyEvents = @(
+            Get-E2EEvents |
+                Where-Object {
+                    $_.event -eq "canvas.ready" -and
+                    $_.payload.canvas -eq "gaming_desktop" -and
+                    @($_.payload.recent_activity_component_ids) -contains "recent_activity"
+                }
+        )
+        $recentActivityVisible = Test-WindowTreeContainsText $tree "Recent Activity"
         $buttons = @("run", "dry_run", "doctor", "preview_plan") | Where-Object {
             $window -and (Find-Button $window $_)
         }
-        if ($window -and (Test-ScreenshotNonBlank $initial) -and $buttons.Count -ge 4) {
+        $rendered = $window -and (Test-ScreenshotNonBlank $initial) -and $buttons.Count -ge 4
+        $componentsPresent = $rendered -and ($readyEvents.Count -gt 0)
+        if ($rendered) {
             Set-Check "gaming_desktop_renders" "PASS" "gaming_desktop rendered with expected controls." @{
-                screenshot = $initial
-                window_tree = $tree
-                controls = $buttons
-                theme = $themeEvidence
-            }
-            Set-Check "expected_canvas_components_appear" "PASS" "Expected Canvas action controls were visible to UIA." @{
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
@@ -886,11 +986,25 @@ function Invoke-CanvasStaticActions {
                 controls = $buttons
                 theme = $themeEvidence
             }
-            Set-Check "expected_canvas_components_appear" "FAIL" "Expected Canvas controls were not available." @{
+        }
+        if ($componentsPresent) {
+            Set-Check "expected_canvas_components_appear" "PASS" "Expected Canvas action controls and recent.activity component evidence were present." @{
                 screenshot = $initial
                 window_tree = $tree
                 controls = $buttons
                 theme = $themeEvidence
+                recent_activity_ready_event = $readyEvents[0]
+                recent_activity_title_visible = $recentActivityVisible
+            }
+        }
+        else {
+            Set-Check "expected_canvas_components_appear" "FAIL" "Expected Canvas controls or recent.activity component evidence were not available." @{
+                screenshot = $initial
+                window_tree = $tree
+                controls = $buttons
+                theme = $themeEvidence
+                recent_activity_ready_event_count = $readyEvents.Count
+                recent_activity_title_visible = $recentActivityVisible
             }
         }
 
@@ -1120,6 +1234,39 @@ function Invoke-CanvasRunDecline {
         )
         $canvasStatusEvents = Get-CanvasStatusEvents "diablo_night" |
             Where-Object { $_.payload.message -match "Run state:" -or $_.payload.message -match "Confirmation required" }
+        $activityShot = Save-Screenshot "recent-activity-after-decline"
+        $activityTree = Save-WindowTree "recent-activity-after-decline" $window
+        $activityTitleVisible = Test-WindowTreeContainsText $activityTree "Recent Activity"
+        $readyEvents = @(
+            Get-E2EEvents |
+                Where-Object {
+                    $_.event -eq "canvas.ready" -and
+                    $_.payload.canvas -eq "gaming_desktop" -and
+                    @($_.payload.recent_activity_component_ids) -contains "recent_activity"
+                }
+        )
+        $runsCommand = if ($run) {
+            Invoke-CapturedCommand "runs-after-decline" "python" @("-m", "ritualist", "runs", "--limit", "5", "--no-repair")
+        }
+        else {
+            $null
+        }
+        $runHistoryContainsRun = $false
+        if ($run -and $runsCommand) {
+            $runHistoryContainsRun = $runsCommand.stdout_text -match ([regex]::Escape($run.Name))
+        }
+        $recentActivityModel = if ($run) {
+            Get-RecentActivityModelEvidence -ProcessId $process.Id -RunId $run.Name
+        }
+        else {
+            [ordered]@{
+                process_id = $process.Id
+                run_id = $null
+                heartbeat_event_count = 0
+                matching_event_count = 0
+                contains_run = $false
+            }
+        }
         if ($runJson -and $runJson.status -eq "stopped" -and $runJson.stopped_reason -eq "stopped_user_declined_confirmation") {
             Set-Check "declining_play_stopped" "PASS" "Declined Play ended as stopped." @{
                 run_id = $run.Name
@@ -1138,6 +1285,33 @@ function Invoke-CanvasRunDecline {
                     run_id = $run.Name
                     run_log = $runEvidence
                     fixture_window_tree = $fakeWindowTree
+                }
+            }
+            if ($readyEvents.Count -gt 0 -and $runHistoryContainsRun -and $recentActivityModel.contains_run) {
+                Set-Check "recent_activity_updates" "PASS" "Packaged Canvas recent.activity model and fixture run history record the declined stopped run." @{
+                    run_id = $run.Name
+                    run_log = $runEvidence
+                    screenshot = $activityShot
+                    window_tree = $activityTree
+                    activity_title_visible = $activityTitleVisible
+                    canvas_ready_event = $readyEvents[0]
+                    recent_activity_model = $recentActivityModel
+                    runs_stdout = $runsCommand.stdout
+                    runs_stderr = $runsCommand.stderr
+                }
+            }
+            else {
+                Set-Check "recent_activity_updates" "NEEDS_HUMAN_REVIEW" "Run history exists, but packaged recent.activity model evidence was incomplete." @{
+                    run_id = $run.Name
+                    run_log = $runEvidence
+                    screenshot = $activityShot
+                    window_tree = $activityTree
+                    activity_title_visible = $activityTitleVisible
+                    canvas_ready_event_count = $readyEvents.Count
+                    recent_activity_model = $recentActivityModel
+                    run_history_contains_run = $runHistoryContainsRun
+                    runs_stdout = if ($runsCommand) { $runsCommand.stdout } else { $null }
+                    runs_stderr = if ($runsCommand) { $runsCommand.stderr } else { $null }
                 }
             }
             if (
@@ -1174,6 +1348,16 @@ function Invoke-CanvasRunDecline {
             Set-Check "ritual_status_updates" "FAIL" "Runtime state evidence was missing." @{
                 run_id = if ($run) { $run.Name } else { $null }
                 run_log = $runEvidence
+            }
+            Set-Check "recent_activity_updates" "FAIL" "Recent activity could not be asserted because the declined run log was missing or did not stop cleanly." @{
+                run_id = if ($run) { $run.Name } else { $null }
+                run_log = $runEvidence
+                screenshot = $activityShot
+                window_tree = $activityTree
+                activity_title_visible = $activityTitleVisible
+                canvas_ready_event_count = $readyEvents.Count
+                recent_activity_model = $recentActivityModel
+                run_history_contains_run = $runHistoryContainsRun
             }
         }
         if (
@@ -1325,17 +1509,65 @@ components:
 function Invoke-PerformanceChecks {
     $perf100 = Invoke-CapturedCommand "perf-100" "python" @("-m", "ritualist", "perf", "canvas-use", "--mock-components", "100", "--json")
     $perf300 = Invoke-CapturedCommand "perf-300" "python" @("-m", "ritualist", "perf", "canvas-use", "--mock-components", "300", "--json")
-    $frames = Capture-ScreenFrames "perf-heartbeat-sample" 3
+    $heartbeatProcess = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "gaming_desktop")
+    $heartbeatWindow = $null
+    $heartbeatShot = $null
+    $heartbeatTree = $null
+    $frames = $null
+    $frameTiming = $null
+    $appHeartbeatTiming = $null
+    try {
+        Start-Sleep -Seconds 5
+        $heartbeatWindow = Get-WindowByName "Ritualist Canvas" 15
+        $heartbeatShot = Save-Screenshot "perf-heartbeat-canvas"
+        $heartbeatTree = Save-WindowTree "perf-heartbeat-canvas" $heartbeatWindow
+        $frames = Capture-ScreenFrames "perf-heartbeat-sample" 3
+        Start-Sleep -Milliseconds 500
+        $frameTiming = Get-FrameTimingEvidence $frames
+        $appHeartbeatTiming = Get-UiHeartbeatTimingEvidence -ProcessId $heartbeatProcess.Id
+    }
+    finally {
+        Stop-AcceptanceProcess $heartbeatProcess
+    }
     $ok = $perf100.exit_code -eq 0 -and $perf300.exit_code -eq 0
     if ($ok) {
             Set-Check "component_perf_100_300_recorded" "PASS" "Source CLI 100/300 component perf outputs were recorded." @{
             perf_100_stdout = $perf100.stdout
             perf_300_stdout = $perf300.stdout
+            heartbeat_screenshot = $heartbeatShot
+            heartbeat_window_tree = $heartbeatTree
             frames = $frames
+            frame_timing = $frameTiming
+            app_heartbeat_timing = $appHeartbeatTiming
         }
-        Set-Check "ui_heartbeat_no_obvious_freeze" "NEEDS_HUMAN_REVIEW" "Frame/e2e timing was captured, but subjective smoothness still needs human review." @{
-            frames = $frames
-            e2e_dir = $E2ERoot
+        $heartbeatNonBlank = $heartbeatShot -and (Test-ScreenshotNonBlank $heartbeatShot)
+        if (
+            $heartbeatWindow -and
+            $heartbeatNonBlank -and
+            $frameTiming.available -and
+            $frameTiming.passed -and
+            $appHeartbeatTiming.available -and
+            $appHeartbeatTiming.passed
+        ) {
+            Set-Check "ui_heartbeat_no_obvious_freeze" "PASS" "Packaged Canvas emitted bounded QML heartbeat events while frame timing captured no long gap." @{
+                heartbeat_screenshot = $heartbeatShot
+                heartbeat_window_tree = $heartbeatTree
+                frames = $frames
+                frame_timing = $frameTiming
+                app_heartbeat_timing = $appHeartbeatTiming
+                e2e_dir = $E2ERoot
+            }
+        }
+        else {
+            Set-Check "ui_heartbeat_no_obvious_freeze" "NEEDS_HUMAN_REVIEW" "Canvas heartbeat or frame timing evidence was missing or exceeded the conservative gap threshold." @{
+                heartbeat_screenshot = $heartbeatShot
+                heartbeat_window_tree = $heartbeatTree
+                heartbeat_nonblank = $heartbeatNonBlank
+                frames = $frames
+                frame_timing = $frameTiming
+                app_heartbeat_timing = $appHeartbeatTiming
+                e2e_dir = $E2ERoot
+            }
         }
     }
     else {
@@ -1345,14 +1577,17 @@ function Invoke-PerformanceChecks {
             perf_300_stdout = $perf300.stdout
             perf_300_stderr = $perf300.stderr
         }
-        Set-Check "ui_heartbeat_no_obvious_freeze" "FAIL" "Perf command failure prevents heartbeat/render timing confidence." @{}
+        Set-Check "ui_heartbeat_no_obvious_freeze" "FAIL" "Perf command failure prevents heartbeat/render timing confidence." @{
+            frame_timing = $frameTiming
+            app_heartbeat_timing = $appHeartbeatTiming
+        }
     }
 }
 
 function Set-RemainingReviewChecks {
     if (-not $Results.Contains("recent_activity_updates")) {
         $runsCommand = Invoke-CapturedCommand "runs-after-acceptance" "python" @("-m", "ritualist", "runs", "--limit", "5", "--no-repair")
-        Set-Check "recent_activity_updates" "NEEDS_HUMAN_REVIEW" "Source CLI run history was captured, but packaged Home Recent activity was not exposed through UIA for machine assertion." @{
+        Set-Check "recent_activity_updates" "NEEDS_HUMAN_REVIEW" "Source CLI run history was captured, but packaged recent.activity evidence was not produced." @{
             runs_stdout = $runsCommand.stdout
             runs_stderr = $runsCommand.stderr
         }

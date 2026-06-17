@@ -13,6 +13,7 @@ ApplicationWindow {
     property var canvasPayload: typeof ritualistCanvasPayload === "undefined" ? ({}) : ritualistCanvasPayload
     property var editPayload: canvasController ? canvasController.editPayload : ritualistCanvasEditPayload
     property var performanceSettings: typeof ritualistCanvasPerformance === "undefined" ? ({}) : ritualistCanvasPerformance
+    property bool e2eEnabled: typeof ritualistE2EEnabled === "undefined" ? false : ritualistE2EEnabled
     property bool editMode: canvasController ? canvasController.editMode : false
     property bool mockMode: typeof ritualistMockMode === "undefined" ? false : ritualistMockMode
     property bool animationsEnabled: performanceSettings.animations === undefined ? true : performanceSettings.animations
@@ -514,6 +515,21 @@ ApplicationWindow {
             root.measuredFps = root.frameTicksThisSecond
             root.frameTicksThisSecond = 0
         }
+    }
+
+    Timer {
+        id: e2eHeartbeatTimer
+        interval: 250
+        repeat: true
+        running: root.e2eEnabled && root.canvasController !== null
+        triggeredOnStart: true
+        onTriggered: root.canvasController.recordUiHeartbeat(
+            Date.now(),
+            root.payloadVersion,
+            root.lastPayloadUpdateMs,
+            root.payloadUpdatesThisSecond,
+            root.measuredFps
+        )
     }
 
     Timer {

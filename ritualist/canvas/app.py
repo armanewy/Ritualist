@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from importlib.resources import as_file, files
 from pathlib import Path
@@ -8,6 +9,7 @@ from threading import Event
 from typing import Any
 
 from ritualist.adapters import create_default_adapters
+from ritualist.e2e import enabled as e2e_enabled
 from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError, RitualistError
 from ritualist.config import load_app_config
@@ -34,15 +36,21 @@ def build_canvas_use_payload(
     runtime_state: dict[str, dict[str, Any]] | None = None,
     recipe_ids: set[str] | None = None,
     target_ids: set[str] | None = None,
+    load_recent_runs: bool = False,
 ) -> dict[str, object]:
-    """Build a Canvas Use payload from explicit, side-effect-free context."""
+    """Build a Canvas Use payload from explicit context.
+
+    Recent runs stay disabled by default so CLI/perf/test callers remain
+    side-effect-free. The live Canvas opts in so `recent.activity` can reflect
+    local run history.
+    """
     model = build_canvas_view_model(
         document,
         context=CanvasRuntimeContext(
             recipe_ids=set(recipe_ids or ()),
             target_ids=set(target_ids or ()),
             runtime_state=runtime_state or {},
-            recent_runs=(),
+            recent_runs=None if load_recent_runs else (),
             resolve_targets=False,
         ),
     )
@@ -105,6 +113,7 @@ def run_canvas_use(
             self._confirmation_result = False
             self._confirmation_presenter = _create_confirmation_presenter()
             self._runtime_controller = CanvasRuntimeController()
+            self._heartbeat_start = time.perf_counter()
             self._watch_me_service = WatchMeService(adapters=create_default_adapters())
             self._watch_me_session_id: str | None = None
             self._watch_me_recording = False
@@ -206,6 +215,35 @@ def run_canvas_use(
             self._action_future = future
             future.add_done_callback(lambda completed: self._complete_future(component_id, completed))
             self.actionStateChanged.emit()
+
+        @Slot(float, int, float, int, int)
+        def recordUiHeartbeat(
+            self,
+            qml_wall_ms: float,
+            payload_version: int,
+            last_payload_update_ms: float,
+            payload_updates_this_second: int,
+            measured_fps: int,
+        ) -> None:
+            if not e2e_enabled():
+                return
+            recent_items = _recent_activity_items(self._payload())
+            record_event(
+                "canvas.ui_heartbeat",
+                canvas=self._document.id,
+                mock=self._mock,
+                monotonic_ms=round((time.perf_counter() - self._heartbeat_start) * 1000, 1),
+                qml_wall_ms=round(float(qml_wall_ms), 1),
+                payload_version=int(payload_version),
+                last_payload_update_ms=round(float(last_payload_update_ms), 1),
+                payload_updates_this_second=int(payload_updates_this_second),
+                measured_fps=int(measured_fps),
+                action_busy=self._action_busy,
+                runtime_active=self._runtime_control is not None,
+                recent_activity_count=len(recent_items),
+                recent_activity_run_ids=[str(item.get("run_id") or "") for item in recent_items],
+                recent_activity_items=recent_items[:5],
+            )
 
         @Slot(bool)
         def setEditMode(self, enabled: bool) -> None:
@@ -442,6 +480,7 @@ def run_canvas_use(
                 runtime_state=self._runtime_state,
                 recipe_ids=self._recipe_ids,
                 target_ids=self._target_ids,
+                load_recent_runs=not self._mock,
             )
 
         def _apply_edit(self, operation) -> None:
@@ -601,6 +640,7 @@ def run_canvas_use(
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("ritualistMockMode", mock)
+    engine.rootContext().setContextProperty("ritualistE2EEnabled", e2e_enabled())
     engine.rootContext().setContextProperty("ritualistCanvasUseController", controller)
     engine.rootContext().setContextProperty("ritualistCanvasPayload", controller.payload)
     engine.rootContext().setContextProperty("ritualistCanvasEditPayload", controller.editPayload)
@@ -620,6 +660,12 @@ def run_canvas_use(
         "canvas.ready",
         canvas=str(canvas),
         mock=mock,
+        component_count=len(document.components),
+        component_ids=[component.id for component in document.components],
+        component_types=[component.type for component in document.components],
+        recent_activity_component_ids=[
+            component.id for component in document.components if component.type == "recent.activity"
+        ],
         theme_id=str(ready_theme.get("id") or ""),
         theme_valid=bool(ready_validation.get("valid")),
         theme_source=str(ready_theme.get("source") or ""),
@@ -648,6 +694,36 @@ def _component_reference(document: CanvasDocument, component_id: str) -> str:
             or component.id
         )
     return component_id
+
+
+def _recent_activity_items(payload: dict[str, object]) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    components = payload.get("components")
+    if not isinstance(components, list):
+        return items
+    for component in components:
+        if not isinstance(component, dict) or component.get("type") != "recent.activity":
+            continue
+        data = component.get("data")
+        if not isinstance(data, dict):
+            continue
+        rows = data.get("items")
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            items.append(
+                {
+                    "component_id": str(component.get("id") or ""),
+                    "run_id": str(row.get("run_id") or ""),
+                    "recipe_id": str(row.get("recipe_id") or ""),
+                    "status": str(row.get("status") or ""),
+                    "message": str(row.get("message") or ""),
+                    "stopped_reason": str(row.get("stopped_reason") or ""),
+                }
+            )
+    return items
 
 
 def _canvas_recipe_ids(document: CanvasDocument) -> set[str]:
