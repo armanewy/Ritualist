@@ -512,8 +512,9 @@ def enable_import(import_id: str, *, registry: ActionRegistry | None = None) -> 
         raise PackImportError(
             "imported pack is blocked by primitive policy: " + "; ".join(blocked)
         )
-    doctor_report = build_doctor_report(pack.recipe)
-    if doctor_report.compatibility == "incompatible":
+    doctor_report = build_doctor_report(pack.recipe, registry=resolved_registry)
+    blocking_doctor_errors = _blocking_import_doctor_errors(doctor_report)
+    if blocking_doctor_errors:
         raise PackImportError(
             f"doctor validation failed for {pack.recipe.id}; run 'ritualist doctor {record.recipe_path}'"
         )
@@ -537,6 +538,30 @@ def enable_import(import_id: str, *, registry: ActionRegistry | None = None) -> 
     )
     _write_import_record(enabled)
     return enabled
+
+
+def _blocking_import_doctor_errors(doctor_report: Any) -> list[Any]:
+    """Return Doctor errors that should block enabling a quarantined pack.
+
+    Pack import already validates schema, action metadata, declared capabilities,
+    platform compatibility, and primitive policy. Playwright availability still
+    belongs in Doctor output, but it should not prevent a safe read-only browser
+    wait recipe from leaving quarantine in environments where browser extras are
+    not installed yet.
+    """
+
+    return [
+        check
+        for check in doctor_report.checks
+        if check.status == "error" and not _is_non_blocking_import_doctor_error(check)
+    ]
+
+
+def _is_non_blocking_import_doctor_error(check: Any) -> bool:
+    return (
+        check.section == "Capabilities"
+        and getattr(check, "details", {}).get("module") == "playwright.sync_api"
+    )
 
 
 def validate_imported_pack(
