@@ -19,6 +19,7 @@ from .app_setup import initialize_app
 from .canvas import (
     CanvasRuntimeController,
     CanvasRuntimeContext,
+    build_edit_plan,
     build_canvas_runtime_model,
     build_canvas_view_model,
     canvas_show_payload,
@@ -849,6 +850,64 @@ def canvas_edit_model(
     console.print(f"Dirty: {escape(str(payload['dirty']))}")
     console.print(f"Palette entries: {len(payload['palette'])}")
     _print_canvas_validation(payload["validation"])
+
+
+@canvas_app.command("edit-plan")
+def canvas_edit_plan(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    mock_change: Annotated[
+        str,
+        typer.Option(
+            "--mock-change",
+            help="In-memory change to plan: noop, move, resize, property, binding, create, duplicate, delete.",
+        ),
+    ] = "noop",
+    component: Annotated[str, typer.Option("--component", help="Component id to edit.")] = "",
+    x: Annotated[float | None, typer.Option("--x", help="Planned x position.")] = None,
+    y: Annotated[float | None, typer.Option("--y", help="Planned y position.")] = None,
+    width: Annotated[float | None, typer.Option("--width", help="Planned width.")] = None,
+    height: Annotated[float | None, typer.Option("--height", help="Planned height.")] = None,
+    prop: Annotated[
+        str,
+        typer.Option(
+            "--prop",
+            help="Safe component property name, or component type for --mock-change create.",
+        ),
+    ] = "",
+    value: Annotated[str | None, typer.Option("--value", help="Safe component property value.")] = None,
+    binding_kind: Annotated[str, typer.Option("--binding-kind", help="Binding kind to review/edit.")] = "",
+    binding_reference: Annotated[str, typer.Option("--binding-reference", help="Binding reference text.")] = "",
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Canvas Edit Mode plan."),
+    ] = False,
+) -> None:
+    """Plan a constrained Canvas edit without saving or executing bindings."""
+    try:
+        payload = build_edit_plan(
+            canvas,
+            mock_change=mock_change,
+            component_id=component,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            prop=prop,
+            value=value,
+            binding_kind=binding_kind,
+            binding_reference=binding_reference,
+        )
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"Canvas: {escape(str(payload['edit_model']['canvas']['id']))}")
+    console.print(f"Mock change: {escape(str(payload['mock_change']))}")
+    console.print(f"Saved: {escape(str(payload['saved']))}")
+    console.print(f"Side effects: {escape(str(payload['side_effects']))}")
+    _print_canvas_validation(payload["after_validation"])
 
 
 @canvas_app.command("runtime")

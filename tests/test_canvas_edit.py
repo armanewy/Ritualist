@@ -6,11 +6,13 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from ritualist.canvas import (
+    CANVAS_EDIT_PLAN_SCHEMA_VERSION,
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
     CanvasDocument,
     CanvasEditSession,
+    build_edit_plan,
     create_edit_session,
     editable_binding_kinds,
     load_canvas,
@@ -98,6 +100,17 @@ def test_edit_session_prop_validation() -> None:
             assert expected in str(exc)
         else:  # pragma: no cover - assertion clarity
             raise AssertionError(f"invalid props should fail validation: {props!r}")
+
+
+def test_resize_rejects_invalid_bounds() -> None:
+    session = CanvasEditSession(document=_canvas())
+
+    try:
+        session.resize_component("title", width=0, height=64)
+    except RitualistError as exc:
+        assert "greater than 0" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("invalid resize should fail validation")
 
 
 def test_edit_session_allows_declared_optional_props_without_schema() -> None:
@@ -384,6 +397,84 @@ def test_palette_exposes_property_editor_schema() -> None:
     assert "window.layout_button" not in palette_ids
 
 
+def test_edit_model_exposes_snap_grid_and_property_inspector() -> None:
+    session = CanvasEditSession(document=_canvas())
+    session.select_component("title")
+
+    payload = session.to_dict()
+    inspector = payload["property_inspector"]
+
+    assert payload["snap_grid"] == {"enabled": True, "size": 16, "unit": "px"}
+    assert inspector["component_id"] == "title"
+    assert inspector["component_type"] == "text.label"
+    assert [field["name"] for field in inspector["layout_properties"]] == [
+        "x",
+        "y",
+        "width",
+        "height",
+        "z",
+        "visible",
+        "locked",
+    ]
+    assert [field["name"] for field in inspector["content_properties"]] == ["text"]
+    assert [field["name"] for field in inspector["appearance_properties"]] == [
+        "size",
+        "color",
+        "align",
+    ]
+    assert all(binding["review_only"] is True for binding in inspector["behavior_bindings"])
+    assert all(binding["auto_runs"] is False for binding in inspector["behavior_bindings"])
+
+
+def test_edit_plan_applies_mock_change_without_saving_or_running() -> None:
+    payload = build_edit_plan(
+        _canvas(),
+        mock_change="move",
+        component_id="title",
+        x=48,
+        y=64,
+    )
+
+    assert payload["schema_version"] == CANVAS_EDIT_PLAN_SCHEMA_VERSION
+    assert payload["side_effects"] == "none"
+    assert payload["saved"] is False
+    assert payload["before_validation"]["valid"] is True
+    assert payload["after_validation"]["valid"] is True
+    assert payload["operation"]["type"] == "move_component"
+    assert payload["edit_model"]["dirty"] is True
+    assert payload["edit_model"]["canvas"]["components"][0]["x"] == 48
+    assert payload["edit_model"]["canvas"]["components"][0]["y"] == 64
+
+
+def test_edit_plan_coerces_safe_typed_property_values() -> None:
+    payload = build_edit_plan(
+        _canvas(),
+        mock_change="property",
+        component_id="title",
+        prop="size",
+        value="20",
+    )
+
+    props = payload["edit_model"]["canvas"]["components"][0]["props"]
+    assert props["size"] == 20
+    assert payload["operation"]["type"] == "edit_props"
+
+
+def test_edit_plan_rejects_unsafe_behavior_binding() -> None:
+    try:
+        build_edit_plan(
+            _canvas(),
+            mock_change="binding",
+            component_id="title",
+            binding_kind=CanvasBindingKind.APP_LAUNCHER.value,
+            binding_reference="launcher",
+        )
+    except RitualistError as exc:
+        assert "not editable" in str(exc) or "does not support" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("unsafe binding edit should be rejected")
+
+
 def test_canvas_edit_model_cli_json() -> None:
     result = CliRunner().invoke(app, ["canvas", "edit-model", "gaming_desktop", "--json"])
 
@@ -392,5 +483,35 @@ def test_canvas_edit_model_cli_json() -> None:
     assert data["schema_version"] == "ritualist.canvas.edit_model.v1"
     assert data["source"] in {"bundled", "user"}
     assert data["dirty"] is False
+    assert data["snap_grid"]["unit"] == "px"
     assert data["palette"]
     assert "recipe" in data["binding_kinds"]
+
+
+def test_canvas_edit_plan_cli_json() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "canvas",
+            "edit-plan",
+            "gaming_desktop",
+            "--mock-change",
+            "move",
+            "--component",
+            "diablo_night",
+            "--x",
+            "32",
+            "--y",
+            "48",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == CANVAS_EDIT_PLAN_SCHEMA_VERSION
+    assert data["mock_change"] == "move"
+    assert data["saved"] is False
+    assert data["side_effects"] == "none"
+    assert data["operation"]["type"] == "move_component"
+    assert data["edit_model"]["dirty"] is True

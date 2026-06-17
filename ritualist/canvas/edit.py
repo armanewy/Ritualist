@@ -24,7 +24,17 @@ from .storage import CanvasWriteResult, list_canvases, load_canvas, save_canvas
 from .storage import _bundled_canvas_paths
 
 CANVAS_EDIT_MODEL_SCHEMA_VERSION = "ritualist.canvas.edit_model.v1"
+CANVAS_EDIT_PLAN_SCHEMA_VERSION = "ritualist.canvas.edit_plan.v1"
 _HIDDEN_EDIT_PALETTE_TYPES = frozenset({"app.launcher", "window.layout_button"})
+_LAYOUT_PROPERTY_SCHEMA = (
+    {"name": "x", "label": "X", "type": "float", "required": True, "editor_hint": "layout"},
+    {"name": "y", "label": "Y", "type": "float", "required": True, "editor_hint": "layout"},
+    {"name": "width", "label": "Width", "type": "float", "required": True, "editor_hint": "layout"},
+    {"name": "height", "label": "Height", "type": "float", "required": True, "editor_hint": "layout"},
+    {"name": "z", "label": "Layer", "type": "int", "required": False, "editor_hint": "layout"},
+    {"name": "visible", "label": "Visible", "type": "bool", "required": False, "editor_hint": "layout"},
+    {"name": "locked", "label": "Locked", "type": "bool", "required": False, "editor_hint": "layout"},
+)
 
 
 class CanvasEditCommandType(StrEnum):
@@ -379,6 +389,53 @@ class CanvasEditSession:
         spec = self._component_type(type_id)
         return tuple(CanvasPropertyEdit.from_schema(schema) for schema in spec.prop_schemas)
 
+    def snap_grid(self) -> dict[str, Any]:
+        return {
+            "enabled": self.document.grid.enabled,
+            "size": self.document.grid.size,
+            "unit": "px",
+        }
+
+    def property_inspector_schema(self, component_id: str | None = None) -> dict[str, Any]:
+        component = self._find_component(component_id or self.selection.component_id or "")
+        if component is None:
+            return {
+                "component_id": "",
+                "component_type": "",
+                "layout_properties": list(_LAYOUT_PROPERTY_SCHEMA),
+                "content_properties": [],
+                "appearance_properties": [],
+                "behavior_bindings": [],
+            }
+        spec = self._component_type(component.type)
+        content: list[dict[str, Any]] = []
+        appearance: list[dict[str, Any]] = []
+        for schema in spec.prop_schemas:
+            field = CanvasPropertyEdit.from_schema(schema).to_dict()
+            if _prop_is_appearance(schema):
+                appearance.append(field)
+            else:
+                content.append(field)
+        return {
+            "component_id": component.id,
+            "component_type": component.type,
+            "layout_properties": list(_LAYOUT_PROPERTY_SCHEMA),
+            "content_properties": content,
+            "appearance_properties": appearance,
+            "behavior_bindings": [
+                {
+                    "kind": kind.value,
+                    "reference": component.binding.reference
+                    if component.binding is not None and component.binding.kind is kind
+                    else "",
+                    "editable": kind.value in editable_binding_kinds(),
+                    "review_only": True,
+                    "auto_runs": False,
+                }
+                for kind in spec.supported_bindings
+            ],
+        }
+
     def to_dict(self) -> dict[str, Any]:
         validation = validate_canvas_structure(self.document, registry=self.registry)
         return {
@@ -389,8 +446,10 @@ class CanvasEditSession:
             "save_path": str(self.default_save_path()),
             "dirty": self.dirty,
             "selection": self.selection.to_dict(),
+            "snap_grid": self.snap_grid(),
             "history": self.history.to_dict(),
             "palette": [entry.to_dict() for entry in self.palette()],
+            "property_inspector": self.property_inspector_schema(),
             "binding_kinds": list(editable_binding_kinds()),
             "validation": validation.to_dict(),
         }
@@ -477,6 +536,97 @@ def create_edit_session(canvas: str | Path | CanvasDocument) -> CanvasEditSessio
     return CanvasEditSession(document=load_canvas(path), source_path=path, source="path")
 
 
+def build_edit_plan(
+    canvas: str | Path | CanvasDocument,
+    *,
+    mock_change: str = "noop",
+    component_id: str = "",
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    prop: str = "",
+    value: Any | None = None,
+    binding_kind: str = "",
+    binding_reference: str = "",
+) -> dict[str, Any]:
+    """Apply a constrained in-memory edit plan without saving or running bindings."""
+
+    session = create_edit_session(canvas)
+    before = validate_canvas_structure(session.document, registry=session.registry)
+    change = mock_change.strip().casefold() or "noop"
+    selected = component_id.strip() or _default_component_id(session.document)
+    operation: CanvasEditCommand | None = None
+
+    if change == "noop":
+        if selected:
+            session.select_component(selected)
+            operation = session.history.commands[-1]
+    elif change == "move":
+        _require_plan_component(selected)
+        session.move_component(
+            selected,
+            x=x if x is not None else _require_component_for_plan(session, selected).x,
+            y=y if y is not None else _require_component_for_plan(session, selected).y,
+        )
+        operation = session.history.commands[-1]
+    elif change == "resize":
+        _require_plan_component(selected)
+        session.resize_component(
+            selected,
+            width=width if width is not None else _require_component_for_plan(session, selected).width,
+            height=height if height is not None else _require_component_for_plan(session, selected).height,
+        )
+        operation = session.history.commands[-1]
+    elif change == "property":
+        _require_plan_component(selected)
+        if not prop.strip():
+            raise RitualistError("edit-plan property change requires --prop")
+        name = prop.strip()
+        session.edit_props(selected, {name: _coerce_plan_prop_value(session, selected, name, value)})
+        operation = session.history.commands[-1]
+    elif change == "binding":
+        _require_plan_component(selected)
+        if not binding_kind.strip():
+            raise RitualistError("edit-plan binding change requires --binding-kind")
+        session.edit_binding(
+            selected,
+            CanvasComponentBinding(kind=CanvasBindingKind(binding_kind), id=binding_reference.strip() or None),
+        )
+        operation = session.history.commands[-1]
+    elif change == "duplicate":
+        _require_plan_component(selected)
+        session.duplicate_component(selected)
+        operation = session.history.commands[-1]
+    elif change == "delete":
+        _require_plan_component(selected)
+        session.delete_component(selected)
+        operation = session.history.commands[-1]
+    elif change == "create":
+        type_id = prop.strip() or "text.label"
+        session.create_component(
+            type_id,
+            x=x if x is not None else 0,
+            y=y if y is not None else 0,
+        )
+        operation = session.history.commands[-1]
+    else:
+        raise RitualistError(f"unsupported edit-plan mock change: {mock_change}")
+
+    after = validate_canvas_structure(session.document, registry=session.registry)
+    return {
+        "schema_version": CANVAS_EDIT_PLAN_SCHEMA_VERSION,
+        "mock_change": change,
+        "component_id": selected,
+        "saved": False,
+        "side_effects": "none",
+        "operation": operation.to_dict() if operation is not None else {},
+        "before_validation": before.to_dict(),
+        "after_validation": after.to_dict(),
+        "edit_model": session.to_dict(),
+    }
+
+
 def editable_binding_kinds() -> tuple[str, ...]:
     return (
         CanvasBindingKind.RECIPE.value,
@@ -543,6 +693,52 @@ def _allowed_prop_names(spec: CanvasComponentType) -> set[str]:
 
 def _blank(value: object) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _prop_is_appearance(schema: CanvasComponentPropSchema) -> bool:
+    hint = schema.editor_hint.casefold()
+    return schema.name in {"accent", "align", "color", "image", "orientation", "size", "style", "theme", "variant"} or hint in {
+        "alignment",
+        "color",
+        "font_size",
+        "image_asset",
+        "image_fit",
+    }
+
+
+def _default_component_id(document: CanvasDocument) -> str:
+    return document.components[0].id if document.components else ""
+
+
+def _require_plan_component(component_id: str) -> None:
+    if not component_id:
+        raise RitualistError("edit-plan mock change requires --component for an empty canvas")
+
+
+def _require_component_for_plan(session: CanvasEditSession, component_id: str) -> CanvasComponent:
+    return session._require_component(component_id)
+
+
+def _coerce_plan_prop_value(
+    session: CanvasEditSession,
+    component_id: str,
+    name: str,
+    value: object,
+) -> object:
+    component = _require_component_for_plan(session, component_id)
+    schemas = {schema.name: schema for schema in session.registry.get(component.type).prop_schemas}
+    schema = schemas.get(name)
+    if schema is None:
+        return value
+    if schema.type.value == "bool":
+        if isinstance(value, bool):
+            return value
+        return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
+    if schema.type.value == "int":
+        return int(str(value or "").strip())
+    if schema.type.value == "float":
+        return float(str(value or "").strip())
+    return "" if value is None else str(value)
 
 
 def _find_canvas_reference(path_or_id: str):

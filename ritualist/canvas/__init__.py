@@ -3,6 +3,7 @@ from __future__ import annotations
 from .controller import CanvasRuntimeController, dispatch_canvas_action
 from .edit import (
     CANVAS_EDIT_MODEL_SCHEMA_VERSION,
+    CANVAS_EDIT_PLAN_SCHEMA_VERSION,
     CanvasComponentPaletteEntry,
     CanvasEditCommand,
     CanvasEditCommandType,
@@ -10,6 +11,7 @@ from .edit import (
     CanvasEditSession,
     CanvasPropertyEdit,
     CanvasSelection,
+    build_edit_plan,
     create_edit_session,
     editable_binding_kinds,
 )
@@ -99,6 +101,7 @@ __all__ = [
     "CANVAS_RUNTIME_SCHEMA_VERSION",
     "CANVAS_VIEW_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
+    "CANVAS_EDIT_PLAN_SCHEMA_VERSION",
     "CANVAS_EDIT_UI_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_DIAGNOSTICS_SCHEMA_VERSION",
@@ -152,6 +155,7 @@ __all__ = [
     "CanvasWriteResult",
     "build_canvas_runtime_model",
     "build_canvas_view_model",
+    "build_edit_plan",
     "bundled_canvas_ids",
     "canvas_performance_diagnostics",
     "canvas_to_home_model",
