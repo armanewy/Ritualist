@@ -8,10 +8,12 @@ import pytest
 from typer.testing import CliRunner
 
 from ritualist.canvas import (
+    CANVAS_FORCE_WINDOWED_ENV,
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
     CanvasDocument,
+    CanvasInputPolicy,
     CanvasHostMode,
     CanvasTaskbarPolicy,
     CanvasRuntimeContext,
@@ -614,6 +616,34 @@ def test_canvas_use_cli_help() -> None:
     assert "desktop-work-area" in result.output
 
 
+def _expected_host_payload(
+    mode: str,
+    *,
+    requested_mode: str | None = None,
+    forced_windowed: bool = False,
+) -> dict[str, object]:
+    input_policy = "capture_all" if mode == "desktop_work_area" else "normal_window"
+    return {
+        "schema_version": "ritualist.canvas.host.v1",
+        "mode": mode,
+        "requested_mode": requested_mode or mode,
+        "taskbar_policy": "respect",
+        "implemented": True,
+        "taskbar_visible": True,
+        "forced_windowed": forced_windowed,
+        "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+        "input_policy": input_policy,
+        "blank_area_input": (
+            "captured_by_canvas_window"
+            if input_policy == "capture_all"
+            else "normal_window_behavior"
+        ),
+        "component_input": "clickable",
+        "edit_mode_input": "captures_canvas_for_layout_editing",
+        "click_through_implemented": False,
+    }
+
+
 def test_canvas_host_config_enables_desktop_work_area_without_taskbar_mutation() -> None:
     config = resolve_canvas_host_config(
         "desktop-work-area",
@@ -622,13 +652,23 @@ def test_canvas_host_config_enables_desktop_work_area_without_taskbar_mutation()
 
     assert config.mode is CanvasHostMode.DESKTOP_WORK_AREA
     assert config.taskbar_policy is CanvasTaskbarPolicy.RESPECT
-    assert config.to_dict() == {
-        "schema_version": "ritualist.canvas.host.v1",
-        "mode": "desktop_work_area",
-        "taskbar_policy": "respect",
-        "implemented": True,
-        "taskbar_visible": True,
-    }
+    assert config.input_policy is CanvasInputPolicy.CAPTURE_ALL
+    assert config.to_dict() == _expected_host_payload("desktop_work_area")
+
+
+def test_canvas_force_windowed_env_overrides_requested_desktop_host(monkeypatch) -> None:
+    monkeypatch.setenv(CANVAS_FORCE_WINDOWED_ENV, "1")
+
+    config = resolve_canvas_host_config("desktop-work-area")
+
+    assert config.mode is CanvasHostMode.WINDOWED
+    assert config.effective_requested_mode is CanvasHostMode.DESKTOP_WORK_AREA
+    assert default_canvas_for_host("", config) == "gaming_desktop"
+    assert config.to_dict() == _expected_host_payload(
+        "windowed",
+        requested_mode="desktop_work_area",
+        forced_windowed=True,
+    )
 
 
 def test_canvas_host_config_rejects_future_modes_until_implemented() -> None:
@@ -682,11 +722,29 @@ class _FakeRect:
 
 
 class _FakeScreen:
+    def name(self) -> str:
+        return "Primary Test Monitor"
+
     def availableGeometry(self) -> _FakeRect:
         return _FakeRect(0, 0, 1920, 1040)
 
     def geometry(self) -> _FakeRect:
         return _FakeRect(0, 0, 1920, 1080)
+
+    def devicePixelRatio(self) -> float:
+        return 1.5
+
+    def logicalDotsPerInchX(self) -> float:
+        return 144.0
+
+    def logicalDotsPerInchY(self) -> float:
+        return 144.0
+
+    def physicalDotsPerInchX(self) -> float:
+        return 110.0
+
+    def physicalDotsPerInchY(self) -> float:
+        return 110.0
 
 
 class _FakeApplication:
@@ -735,6 +793,22 @@ def test_apply_desktop_work_area_host_uses_available_geometry() -> None:
     assert payload["applied"] == "desktop_work_area"
     assert payload["work_area"] == {"x": 0, "y": 0, "width": 1920, "height": 1040}
     assert payload["screen_geometry"] == {"x": 0, "y": 0, "width": 1920, "height": 1080}
+    assert payload["monitor"] == {"selection": "primary", "name": "Primary Test Monitor"}
+    assert payload["dpi"] == {
+        "scale": 1.5,
+        "logical_x": 144.0,
+        "logical_y": 144.0,
+        "physical_x": 110.0,
+        "physical_y": 110.0,
+    }
+    assert payload["recovery"] == {
+        "visible_exit_control": True,
+        "keyboard_exit": "Escape",
+        "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+    }
+    assert payload["input_policy"] == "capture_all"
+    assert payload["blank_area_input"] == "captured_by_canvas_window"
+    assert payload["click_through_implemented"] is False
     assert payload["bounds_match_work_area"] is True
     assert payload["taskbar_visible"] is True
 
@@ -765,13 +839,7 @@ def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
             "gaming_desktop",
             False,
             3,
-            {
-                "schema_version": "ritualist.canvas.host.v1",
-                "mode": "windowed",
-                "taskbar_policy": "respect",
-                "implemented": True,
-                "taskbar_visible": True,
-            },
+            _expected_host_payload("windowed"),
         )
     ]
 
@@ -802,13 +870,7 @@ def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> No
             "gaming_desktop",
             True,
             12,
-            {
-                "schema_version": "ritualist.canvas.host.v1",
-                "mode": "windowed",
-                "taskbar_policy": "respect",
-                "implemented": True,
-                "taskbar_visible": True,
-            },
+            _expected_host_payload("windowed"),
         )
     ]
 
@@ -836,13 +898,7 @@ def test_canvas_use_cli_launches_desktop_work_area_with_minimal_default(monkeypa
             "minimal_desktop",
             False,
             24,
-            {
-                "schema_version": "ritualist.canvas.host.v1",
-                "mode": "desktop_work_area",
-                "taskbar_policy": "respect",
-                "implemented": True,
-                "taskbar_visible": True,
-            },
+            _expected_host_payload("desktop_work_area"),
         )
     ]
 

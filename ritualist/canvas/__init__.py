@@ -18,8 +18,10 @@ from .edit import (
 from .edit_ui import CANVAS_EDIT_UI_SCHEMA_VERSION, CanvasEditUiBridge
 from .home_adapter import canvas_to_home_model, recipe_card_component
 from .host import (
+    CANVAS_FORCE_WINDOWED_ENV,
     CANVAS_HOST_SCHEMA_VERSION,
     CanvasHostConfig,
+    CanvasInputPolicy,
     CanvasHostMode,
     CanvasTaskbarPolicy,
     default_canvas_for_host,
@@ -114,6 +116,7 @@ __all__ = [
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_PLAN_SCHEMA_VERSION",
     "CANVAS_EDIT_UI_SCHEMA_VERSION",
+    "CANVAS_FORCE_WINDOWED_ENV",
     "CANVAS_HOST_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_DIAGNOSTICS_SCHEMA_VERSION",
@@ -141,6 +144,7 @@ __all__ = [
     "CanvasEditUiBridge",
     "CanvasGrid",
     "CanvasHostConfig",
+    "CanvasInputPolicy",
     "CanvasHostMode",
     "CanvasImportedPolicy",
     "CanvasLayoutMode",

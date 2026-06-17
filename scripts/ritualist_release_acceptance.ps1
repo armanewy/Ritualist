@@ -455,7 +455,7 @@ function Test-BoundsMatch {
 }
 
 function Start-AcceptanceProcess {
-    param([string]$FilePath, [string[]]$Arguments = @())
+    param([string]$FilePath, [string[]]$Arguments = @(), [hashtable]$ExtraEnv = @{})
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $FilePath
     foreach ($argument in $Arguments) {
@@ -466,6 +466,9 @@ function Start-AcceptanceProcess {
     $startInfo.EnvironmentVariables["RITUALIST_E2E_ARTIFACT_DIR"] = $E2ERoot
     $startInfo.EnvironmentVariables["RITUALIST_E2E_APP_DATA_DIR"] = $script:FixtureAppData
     $startInfo.EnvironmentVariables["LOCALAPPDATA"] = $script:FixtureLocalAppData
+    foreach ($key in $ExtraEnv.Keys) {
+        $startInfo.EnvironmentVariables[$key] = [string]$ExtraEnv[$key]
+    }
     $process = [System.Diagnostics.Process]::Start($startInfo)
     $GeneratedProcesses.Add($process) | Out-Null
     return $process
@@ -961,6 +964,9 @@ function Capture-DesktopWorkAreaCanvasArtifact {
                 Select-Object -Last 1
         )
         $boundsMatch = Test-BoundsMatch $windowRow.bounds $screen.work_area
+        $exitInvoked = if ($window) { Invoke-NamedButton $window "Exit Desktop Canvas" 5 } else { $false }
+        Start-Sleep -Seconds 2
+        $exitClean = $process.HasExited
         Add-VisualArtifact -Id "desktop-work-area-canvas" -CanvasId "minimal_desktop" -State "desktop_work_area" -NonBlank (Test-ScreenshotNonBlank $screenshot) -Evidence @{
             screenshot = $screenshot
             frames = $frames
@@ -971,8 +977,49 @@ function Capture-DesktopWorkAreaCanvasArtifact {
             window_bounds = $windowRow.bounds
             bounds_match_work_area = $boundsMatch
             exit_control_present = [bool]$exitControl
+            exit_invoked = $exitInvoked
+            exit_clean = $exitClean
             host_ready = if ($hostReady.Count -gt 0) { $hostReady[-1] } else { $null }
+            input_policy = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.input_policy } else { $null }
+            click_through_implemented = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.click_through_implemented } else { $null }
+            monitor = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.monitor } else { $null }
+            dpi = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.dpi } else { $null }
+            recovery = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.recovery } else { $null }
             taskbar_policy = "respect"
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $process
+    }
+}
+
+function Capture-DesktopWorkAreaWindowedFallbackArtifact {
+    $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "minimal_desktop", "--host", "desktop-work-area") @{
+        RITUALIST_CANVAS_FORCE_WINDOWED = "1"
+    }
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $screenshot = Save-Screenshot "desktop-work-area-windowed-fallback"
+        $processTree = Save-ProcessTree "desktop-work-area-windowed-fallback" $process.Id
+        $windowTree = Save-WindowTree "desktop-work-area-windowed-fallback" $window
+        $zOrderPath = Save-ZOrderSnapshot "desktop-work-area-windowed-fallback"
+        $events = Get-E2EEvents
+        $hostReady = @(
+            $events |
+                Where-Object { $_.event -eq "canvas.host.ready" -and [int]$_.process_id -eq $process.Id } |
+                Select-Object -Last 1
+        )
+        Add-VisualArtifact -Id "desktop-work-area-windowed-fallback" -CanvasId "minimal_desktop" -State "forced_windowed" -NonBlank (Test-ScreenshotNonBlank $screenshot) -Evidence @{
+            screenshot = $screenshot
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrderPath
+            force_windowed_env = "RITUALIST_CANVAS_FORCE_WINDOWED"
+            host_ready = if ($hostReady.Count -gt 0) { $hostReady[-1] } else { $null }
+            forced_windowed = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.forced_windowed } else { $false }
+            requested_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.requested_mode } else { "" }
+            applied = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.applied } else { "" }
         }
     }
     finally {
@@ -1781,6 +1828,7 @@ try {
     Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
     Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "helpdesk-room"
     Capture-DesktopWorkAreaCanvasArtifact
+    Capture-DesktopWorkAreaWindowedFallbackArtifact
     Capture-CanvasEditModeVisualArtifact
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls

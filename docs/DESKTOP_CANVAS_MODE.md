@@ -256,9 +256,11 @@ Use Mode options:
 Edit Mode must capture input inside the Canvas because drag, resize, selection,
 grid, and property editing need predictable behavior.
 
-The first Desktop Work-Area Canvas MVP may start with normal window capture if
-component-only pass-through is not implemented yet, but it must document the
-limitation and must keep the visible exit control.
+The first Desktop Work-Area Canvas MVP uses `capture_all` for Use Mode. Blank
+canvas areas are captured by the Canvas window rather than passed through to the
+desktop. This is an explicit limitation, not a claim of click-through support.
+Components remain clickable, Edit Mode captures input for layout editing, and
+the visible exit control plus keyboard safe exit remain mandatory.
 
 ## Recovery Policy
 
@@ -270,9 +272,13 @@ Every non-windowed host must provide at least two recovery paths:
 Future recovery additions:
 
 - tray icon with "Exit Desktop Canvas"
-- config or environment safe mode that forces `windowed`
 - crash marker that relaunches in `windowed`
 - acceptance evidence for safe-mode fallback
+
+Implemented recovery additions:
+
+- `RITUALIST_CANVAS_FORCE_WINDOWED=1` forces Canvas launches back to
+  `windowed`, while recording the originally requested host in E2E evidence.
 
 Recovery must not rely on a user editing registry keys, killing Explorer, or
 knowing hidden command-line flags.
@@ -305,6 +311,8 @@ For `desktop_work_area`:
 - safe exit control is visible and works
 - keyboard safe exit works
 - fallback to `windowed` works
+- `RITUALIST_CANVAS_FORCE_WINDOWED=1` fallback evidence records requested and
+  applied host modes
 - confirmation dialog appears above fake Chrome/Battle.net foreground windows
 - run controls still work during active waits/runs
 - imported Canvas/theme packs still do not auto-run behavior

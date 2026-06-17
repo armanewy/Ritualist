@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from ritualist.errors import RitualistError
 
 CANVAS_HOST_SCHEMA_VERSION = "ritualist.canvas.host.v1"
+CANVAS_FORCE_WINDOWED_ENV = "RITUALIST_CANVAS_FORCE_WINDOWED"
 
 
 class CanvasHostMode(StrEnum):
@@ -22,6 +24,11 @@ class CanvasTaskbarPolicy(StrEnum):
     RESPECT = "respect"
 
 
+class CanvasInputPolicy(StrEnum):
+    NORMAL_WINDOW = "normal_window"
+    CAPTURE_ALL = "capture_all"
+
+
 DOCUMENTED_CANVAS_HOST_MODES = tuple(CanvasHostMode)
 IMPLEMENTED_CANVAS_HOST_MODES = frozenset(
     {CanvasHostMode.WINDOWED, CanvasHostMode.DESKTOP_WORK_AREA}
@@ -33,14 +40,38 @@ UNSUPPORTED_TASKBAR_POLICIES = frozenset({"hide", "auto_hide", "replace", "kiosk
 class CanvasHostConfig:
     mode: CanvasHostMode = CanvasHostMode.WINDOWED
     taskbar_policy: CanvasTaskbarPolicy = CanvasTaskbarPolicy.RESPECT
+    requested_mode: CanvasHostMode | None = None
+    forced_windowed: bool = False
+
+    @property
+    def effective_requested_mode(self) -> CanvasHostMode:
+        return self.requested_mode or self.mode
+
+    @property
+    def input_policy(self) -> CanvasInputPolicy:
+        if self.mode is CanvasHostMode.DESKTOP_WORK_AREA:
+            return CanvasInputPolicy.CAPTURE_ALL
+        return CanvasInputPolicy.NORMAL_WINDOW
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": CANVAS_HOST_SCHEMA_VERSION,
             "mode": self.mode.value,
+            "requested_mode": self.effective_requested_mode.value,
             "taskbar_policy": self.taskbar_policy.value,
             "implemented": self.mode in IMPLEMENTED_CANVAS_HOST_MODES,
             "taskbar_visible": self.taskbar_policy is CanvasTaskbarPolicy.RESPECT,
+            "forced_windowed": self.forced_windowed,
+            "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+            "input_policy": self.input_policy.value,
+            "blank_area_input": (
+                "captured_by_canvas_window"
+                if self.input_policy is CanvasInputPolicy.CAPTURE_ALL
+                else "normal_window_behavior"
+            ),
+            "component_input": "clickable",
+            "edit_mode_input": "captures_canvas_for_layout_editing",
+            "click_through_implemented": False,
         }
 
 
@@ -52,8 +83,12 @@ def resolve_canvas_host_config(
 ) -> CanvasHostConfig:
     """Normalize and validate a Canvas host launch request."""
 
+    requested_mode = normalize_canvas_host_mode(mode)
+    force_windowed = _force_windowed_enabled()
     config = CanvasHostConfig(
-        mode=normalize_canvas_host_mode(mode),
+        mode=CanvasHostMode.WINDOWED if force_windowed else requested_mode,
+        requested_mode=requested_mode,
+        forced_windowed=force_windowed,
         taskbar_policy=normalize_canvas_taskbar_policy(taskbar_policy),
     )
     if require_implemented:
@@ -122,3 +157,12 @@ def _normalize_token(value: str | None, *, default: str) -> str:
         return default
     normalized = text.replace("-", "_").replace(" ", "_")
     return "_".join(part for part in normalized.split("_") if part)
+
+
+def _force_windowed_enabled() -> bool:
+    return os.environ.get(CANVAS_FORCE_WINDOWED_ENV, "").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }

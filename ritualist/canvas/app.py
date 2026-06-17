@@ -24,7 +24,12 @@ from ritualist.watch_me import WatchMeService
 from .controller import CanvasRuntimeController
 from .edit import CanvasEditSession, create_edit_session
 from .edit_ui import CanvasEditUiBridge
-from .host import CanvasHostConfig, ensure_canvas_host_is_implemented, resolve_canvas_host_config
+from .host import (
+    CANVAS_FORCE_WINDOWED_ENV,
+    CanvasHostConfig,
+    ensure_canvas_host_is_implemented,
+    resolve_canvas_host_config,
+)
 from .models import CanvasBindingKind, CanvasDocument
 from .runtime import CanvasRuntimeContext
 from .storage import create_mock_canvas
@@ -699,6 +704,12 @@ def _apply_canvas_host(
     payload = host_config.to_dict()
     if host_config.mode.value != "desktop_work_area":
         payload["applied"] = "windowed"
+        payload["monitor"] = {"selection": "window_manager"}
+        payload["recovery"] = {
+            "visible_exit_control": False,
+            "keyboard_exit": "",
+            "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+        }
         return payload
 
     primary_screen = getattr(application, "primaryScreen")()
@@ -727,6 +738,22 @@ def _apply_canvas_host(
             "applied": "desktop_work_area",
             "work_area": _qt_rect_to_dict(work_area),
             "screen_geometry": _qt_rect_to_dict(screen_geometry),
+            "monitor": {
+                "selection": "primary",
+                "name": str(_call_optional(screen, "name", "")),
+            },
+            "dpi": {
+                "scale": _call_float(screen, "devicePixelRatio", 1.0),
+                "logical_x": _call_float(screen, "logicalDotsPerInchX", 96.0),
+                "logical_y": _call_float(screen, "logicalDotsPerInchY", 96.0),
+                "physical_x": _call_float(screen, "physicalDotsPerInchX", 96.0),
+                "physical_y": _call_float(screen, "physicalDotsPerInchY", 96.0),
+            },
+            "recovery": {
+                "visible_exit_control": True,
+                "keyboard_exit": "Escape",
+                "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
+            },
             "bounds_match_work_area": True,
             "taskbar_visible": True,
         }
@@ -741,6 +768,24 @@ def _qt_rect_to_dict(rect: object) -> dict[str, int]:
         "width": int(rect.width()),
         "height": int(rect.height()),
     }
+
+
+def _call_optional(obj: object, name: str, default: object) -> object:
+    value = getattr(obj, name, None)
+    if not callable(value):
+        return default
+    try:
+        return value()
+    except Exception:
+        return default
+
+
+def _call_float(obj: object, name: str, default: float) -> float:
+    value = _call_optional(obj, name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _component_reference(document: CanvasDocument, component_id: str) -> str:
