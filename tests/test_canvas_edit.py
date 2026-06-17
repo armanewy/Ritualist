@@ -278,6 +278,7 @@ def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypat
             CanvasReference("media_desktop", "Media Desktop", other_source, "bundled"),
         ],
     )
+    monkeypatch.setattr("ritualist.canvas.edit._bundled_canvas_paths", lambda: [source, other_source])
     session = create_edit_session("gaming_desktop")
     session.edit_props("title", {"text": "Edited locally"})
 
@@ -298,6 +299,44 @@ def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypat
         raise AssertionError("other bundled template overwrite should be rejected")
 
     assert load_canvas(other_source).components[0].props_dict()["text"] == "Media"
+
+
+def test_bundled_overwrite_guard_survives_user_canvas_shadow(tmp_path: Path, monkeypatch) -> None:
+    bundled = tmp_path / "bundled" / "same.yaml"
+    user = tmp_path / "user" / "same.yaml"
+    save_canvas(_canvas(), bundled)
+    save_canvas(
+        CanvasDocument(
+            id="same",
+            name="User Same",
+            components=(
+                CanvasComponent(
+                    id="user_label",
+                    type="text.label",
+                    width=200,
+                    height=64,
+                    props={"text": "User"},
+                ),
+            ),
+        ),
+        user,
+    )
+    monkeypatch.setattr(
+        "ritualist.canvas.edit.list_canvases",
+        lambda include_bundled=True: [CanvasReference("same", "User Same", user, "user")],
+    )
+    monkeypatch.setattr("ritualist.canvas.edit._bundled_canvas_paths", lambda: [bundled])
+    session = CanvasEditSession(document=_canvas(), source_path=bundled, source="bundled")
+    session.edit_props("title", {"text": "Changed"})
+
+    try:
+        session.save(destination=bundled)
+    except RitualistError as exc:
+        assert "bundled canvas templates" in str(exc)
+    else:  # pragma: no cover - assertion clarity
+        raise AssertionError("shadowed bundled template overwrite should be rejected")
+
+    assert load_canvas(bundled).components[0].props_dict()["text"] == "Hello"
 
 
 def test_invalid_canvas_cannot_save(tmp_path: Path, monkeypatch) -> None:

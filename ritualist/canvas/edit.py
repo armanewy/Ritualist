@@ -21,6 +21,7 @@ from .models import (
 )
 from .registry import CanvasComponentRegistry, create_component_registry, validate_canvas_structure
 from .storage import CanvasWriteResult, list_canvases, load_canvas, save_canvas
+from .storage import _bundled_canvas_paths
 
 CANVAS_EDIT_MODEL_SCHEMA_VERSION = "ritualist.canvas.edit_model.v1"
 _HIDDEN_EDIT_PALETTE_TYPES = frozenset({"app.launcher", "window.layout_button"})
@@ -556,13 +557,11 @@ def _is_bundled_canvas_path(path: Path) -> bool:
         resolved = path.resolve()
     except OSError:
         resolved = path
-    for reference in list_canvases(include_bundled=True):
-        if reference.source != "bundled":
-            continue
+    for bundled_path in _bundled_canvas_paths():
         try:
-            candidate = reference.path.resolve()
+            candidate = bundled_path.resolve()
         except OSError:
-            candidate = reference.path
+            candidate = bundled_path
         if resolved == candidate:
             return True
     return False
