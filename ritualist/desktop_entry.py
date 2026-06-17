@@ -11,9 +11,11 @@ from ritualist.errors import RitualistError
 def main(argv: Sequence[str] | None = None) -> int:
     """Launch the desktop entry point used by Windows app bundles."""
     try:
-        launch_mode = _launch_mode(sys.argv[1:] if argv is None else argv)
+        launch_mode, launch_value = _launch_mode(sys.argv[1:] if argv is None else argv)
         if launch_mode == "classic-gui":
             _run_gui()
+        elif launch_mode == "canvas":
+            _run_canvas(launch_value or "gaming_desktop")
         else:
             _run_home()
     except RitualistError as exc:
@@ -37,15 +39,26 @@ def _run_home() -> None:
     run_home(mock=False)
 
 
-def _launch_mode(argv: Sequence[str]) -> str:
+def _run_canvas(canvas: str) -> None:
+    from ritualist.canvas.app import run_canvas_use
+
+    run_canvas_use(canvas, mock=False)
+
+
+def _launch_mode(argv: Sequence[str]) -> tuple[str, str | None]:
     args = tuple(argv)
     if not args or args == ("--home",):
-        return "home"
+        return ("home", None)
     if args in (("--classic-gui",), ("--gui",)):
-        return "classic-gui"
+        return ("classic-gui", None)
+    if args in (("--canvas",), ("--canvas-use",)):
+        return ("canvas", "gaming_desktop")
+    if len(args) == 2 and args[0] in {"--canvas", "--canvas-use"}:
+        return ("canvas", args[1])
     raise RitualistError(
         "Unsupported desktop option. Use Ritualist.exe for Home or "
-        "Ritualist.exe --classic-gui for the classic GUI."
+        "Ritualist.exe --classic-gui for the classic GUI, or "
+        "Ritualist.exe --canvas gaming_desktop for Canvas Use Mode."
     )
 
 

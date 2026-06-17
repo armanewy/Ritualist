@@ -31,6 +31,26 @@ def test_desktop_entry_launches_classic_gui_with_option(monkeypatch):
     assert called == ["gui"]
 
 
+def test_desktop_entry_launches_canvas_with_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
+    monkeypatch.setattr(desktop_entry, "_run_canvas", lambda canvas: called.append(("canvas", canvas)))
+
+    assert desktop_entry.main(["--canvas"]) == 0
+    assert called == [("canvas", "gaming_desktop")]
+
+
+def test_desktop_entry_launches_named_canvas_with_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
+    monkeypatch.setattr(desktop_entry, "_run_canvas", lambda canvas: called.append(("canvas", canvas)))
+
+    assert desktop_entry.main(["--canvas-use", "media_desktop"]) == 0
+    assert called == [("canvas", "media_desktop")]
+
+
 def test_desktop_entry_reports_home_dependency_error(monkeypatch, capsys):
     messages = []
     logs = []
@@ -57,6 +77,7 @@ def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
     assert desktop_entry.main(["--unknown"]) == 1
     assert "Unsupported desktop option" in messages[0]
     assert "Ritualist.exe --classic-gui" in logs[0][0]
+    assert "Ritualist.exe --canvas gaming_desktop" in logs[0][0]
     assert "Unsupported desktop option" in capsys.readouterr().err
 
 

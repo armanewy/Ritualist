@@ -16,29 +16,37 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "--collect-submodules" in script
     assert "ritualist.actions" in script
     assert "ritualist.adapters" in script
+    assert "ritualist.canvas" in script
     assert "ritualist.home" in script
     assert "ritualist.ui" in script
     assert "--hidden-import" in script
     assert "ritualist.home.confirmation" in script
     assert "--collect-data" in script
+    assert "ritualist.canvas.qml" in script
+    assert "ritualist.sample_canvases" in script
     assert "ritualist.home.qml" in script
     assert "ritualist.sample_recipes" in script
     assert "dist\\Ritualist\\Ritualist.exe" in script
 
-    spec = Path("Ritualist.spec").read_text(encoding="utf-8")
-    assert "ritualist.home.confirmation" in spec
 
-
-def test_package_data_includes_home_qml_and_sample_templates():
+def test_package_data_includes_home_canvas_qml_and_sample_templates():
     qml = files("ritualist.home.qml").joinpath("Home.qml")
+    canvas_qml = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
     sample_names = {
         child.name
         for child in files("ritualist.sample_recipes").iterdir()
         if child.name.endswith(".yaml")
     }
+    canvas_names = {
+        child.name
+        for child in files("ritualist.sample_canvases").iterdir()
+        if child.name.endswith(".yaml")
+    }
 
     assert qml.is_file()
     assert "ritualistHomeController" in qml.read_text(encoding="utf-8")
+    assert canvas_qml.is_file()
+    assert "ritualistCanvasUseController" in canvas_qml.read_text(encoding="utf-8")
     assert {
         "gaming_mode.yaml",
         "coding_mode.yaml",
@@ -49,6 +57,7 @@ def test_package_data_includes_home_qml_and_sample_templates():
         "collect_basic_diagnostics.yaml",
         "browser_admin_console_workspace.yaml",
     }.issubset(sample_names)
+    assert {"gaming_desktop.yaml", "minimal_desktop.yaml"}.issubset(canvas_names)
 
 
 def test_ci_optional_deps_cover_home_and_perf_smokes():

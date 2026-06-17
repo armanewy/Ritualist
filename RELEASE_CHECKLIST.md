@@ -169,6 +169,73 @@ Manual Windows-only checks still required:
   Diablo IV selection, Play confirmation decline, stopped status, and next-launch
   interrupted repair after hard kill.
 
+## Canvas Use Mode Packaged Dogfood - 2026-06-17
+
+Validation commit: `2b87489` plus local packaged Canvas fixes.
+
+Repository and environment:
+
+- `git status`: clean before Prompt 1 changes.
+- `git pull --ff-only`: already up to date.
+- `python -m pip install -e ".[all,dev]"`: passed.
+- `python -m playwright install chromium`: passed.
+- `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
+  `628 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python -m ritualist canvas validate gaming_desktop`: passed.
+- `python -m ritualist canvas runtime gaming_desktop --json`: passed.
+- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed.
+- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed.
+
+Release-blocking packaged Canvas issue found and fixed:
+
+- The Windows build script collected Home QML and sample recipes, but not Canvas
+  QML, Canvas submodules, or bundled sample canvases. Packaged Canvas Use Mode
+  could not be treated as release-ready without those bundled resources.
+- Fix applied: `scripts\build_windows_app.ps1` now collects `ritualist.canvas`,
+  `ritualist.canvas.qml`, and `ritualist.sample_canvases`.
+- Fix applied: `Ritualist.exe --canvas [canvas-id-or-path]` and
+  `Ritualist.exe --canvas-use [canvas-id-or-path]` launch packaged Canvas Use
+  Mode. Home remains the default, and `--classic-gui` remains available.
+- Packaging tests now assert Canvas QML/sample-canvas collection and packaged
+  Canvas launch routing.
+
+Packaged build validation:
+
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`.
+- Verified packaged files exist:
+  - `dist\Ritualist\Ritualist.exe`
+  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
+  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
+  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
+- `Ritualist.exe --canvas gaming_desktop` with `QT_QPA_PLATFORM=offscreen`
+  stayed alive for 8 seconds, which confirms packaged Canvas Use Mode loads its
+  event loop and bundled QML path. The smoke process was then killed.
+
+Automated observations:
+
+- Canvas Use Mode launch path is packaged and smoke-tested.
+- Canvas runtime/action/performance JSON checks pass from the development
+  checkout.
+- PyInstaller still reports Conda-environment optional DLL warnings in
+  `build\Ritualist\warn-Ritualist.txt`. These warnings were already present in
+  earlier packaged Home builds and did not block the Canvas offscreen launch.
+
+Manual checks still required:
+
+- A human must still visually confirm the packaged Canvas surface is not blank
+  or white, `gaming_desktop` components render correctly, and there is no
+  obvious jitter.
+- A human must still run Doctor, Dry Run, and Run from the packaged Canvas
+  surface with real desktop input.
+- A human must still verify Pause/Resume/Stop during a real wait, target plan
+  preview from `target.card`, recent activity updates, Play confirmation trust,
+  declined confirmation stopping, and hard-kill interrupted recovery.
+- No v0.2 release tag should be created from this automated dogfood alone.
+
 ## Packaged App Smoke
 
 - [ ] Launch `dist\Ritualist\Ritualist.exe` and confirm Home opens.
