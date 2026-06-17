@@ -27,6 +27,7 @@ from .canvas import (
     create_edit_session,
     create_default_canvases,
     create_mock_canvas,
+    default_canvas_for_host,
     default_canvas_document,
     dispatch_canvas_action,
     list_canvases,
@@ -988,8 +989,8 @@ def canvas_use(
         typer.Option(
             "--host",
             help=(
-                "Canvas host mode. Currently only 'windowed' launches; "
-                "'desktop-work-area' is reserved for the next milestone."
+                "Canvas host mode. Use 'desktop-work-area' for an opt-in "
+                "work-area-sized desktop Canvas."
             ),
         ),
     ] = "windowed",
@@ -1007,7 +1008,7 @@ def canvas_use(
         from ritualist.canvas.app import run_canvas_use
 
         run_canvas_use(
-            canvas or "gaming_desktop",
+            default_canvas_for_host(canvas, host_config),
             mock=mock,
             mock_components=mock_components,
             host_config=host_config,

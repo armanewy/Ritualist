@@ -3,21 +3,36 @@ from __future__ import annotations
 import sys
 import traceback
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from ritualist.errors import RitualistError
 from ritualist.e2e import record_event
 
 
+@dataclass(frozen=True)
+class DesktopLaunch:
+    mode: str
+    canvas: str | None = None
+    host: str = "windowed"
+    taskbar_policy: str = "respect"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Launch the desktop entry point used by Windows app bundles."""
     try:
-        launch_mode, launch_value = _launch_mode(sys.argv[1:] if argv is None else argv)
-        record_event("desktop_entry.launch", mode=launch_mode, value=launch_value)
-        if launch_mode == "classic-gui":
+        launch = _launch_mode(sys.argv[1:] if argv is None else argv)
+        record_event(
+            "desktop_entry.launch",
+            mode=launch.mode,
+            value=launch.canvas,
+            host=launch.host,
+            taskbar_policy=launch.taskbar_policy,
+        )
+        if launch.mode == "classic-gui":
             _run_gui()
-        elif launch_mode == "canvas":
-            _run_canvas(launch_value or "gaming_desktop")
+        elif launch.mode == "canvas":
+            _run_canvas(launch.canvas, host=launch.host, taskbar_policy=launch.taskbar_policy)
         else:
             _run_home()
     except RitualistError as exc:
@@ -41,27 +56,59 @@ def _run_home() -> None:
     run_home(mock=False)
 
 
-def _run_canvas(canvas: str) -> None:
+def _run_canvas(canvas: str | None, *, host: str = "windowed", taskbar_policy: str = "respect") -> None:
+    from ritualist.canvas import default_canvas_for_host, resolve_canvas_host_config
     from ritualist.canvas.app import run_canvas_use
 
-    run_canvas_use(canvas, mock=False)
+    host_config = resolve_canvas_host_config(host, taskbar_policy=taskbar_policy)
+    run_canvas_use(default_canvas_for_host(canvas, host_config), mock=False, host_config=host_config)
 
 
-def _launch_mode(argv: Sequence[str]) -> tuple[str, str | None]:
+def _launch_mode(argv: Sequence[str]) -> DesktopLaunch:
     args = tuple(argv)
     if not args or args == ("--home",):
-        return ("home", None)
+        return DesktopLaunch("home")
     if args in (("--classic-gui",), ("--gui",)):
-        return ("classic-gui", None)
-    if args in (("--canvas",), ("--canvas-use",)):
-        return ("canvas", "gaming_desktop")
-    if len(args) == 2 and args[0] in {"--canvas", "--canvas-use"}:
-        return ("canvas", args[1])
+        return DesktopLaunch("classic-gui")
+    if args and args[0] in {"--canvas", "--canvas-use"}:
+        return _canvas_launch(args[1:])
     raise RitualistError(
         "Unsupported desktop option. Use Ritualist.exe for Home or "
         "Ritualist.exe --classic-gui for the classic GUI, or "
         "Ritualist.exe --canvas gaming_desktop for Canvas Use Mode."
     )
+
+
+def _canvas_launch(argv: Sequence[str]) -> DesktopLaunch:
+    canvas: str | None = None
+    host = "windowed"
+    taskbar_policy = "respect"
+    args = list(argv)
+    while args:
+        token = args.pop(0)
+        if token == "--host":
+            host = _pop_option_value("--host", args)
+        elif token.startswith("--host="):
+            host = token.split("=", 1)[1]
+        elif token == "--taskbar-policy":
+            taskbar_policy = _pop_option_value("--taskbar-policy", args)
+        elif token.startswith("--taskbar-policy="):
+            taskbar_policy = token.split("=", 1)[1]
+        elif token.startswith("-"):
+            raise RitualistError(f"Unsupported Canvas option for packaged app: {token}")
+        elif canvas is None:
+            canvas = token
+        else:
+            raise RitualistError(f"Unexpected extra Canvas argument for packaged app: {token}")
+    if canvas is None and host == "windowed":
+        canvas = "gaming_desktop"
+    return DesktopLaunch("canvas", canvas=canvas, host=host, taskbar_policy=taskbar_policy)
+
+
+def _pop_option_value(option: str, args: list[str]) -> str:
+    if not args:
+        raise RitualistError(f"{option} requires a value.")
+    return args.pop(0)
 
 
 def _report_startup_error(message: str, details: str | None = None) -> None:

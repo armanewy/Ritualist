@@ -19,8 +19,10 @@ from ritualist.canvas import (
     build_canvas_runtime_model,
     build_canvas_view_model,
     canvas_to_home_model,
+    default_canvas_for_host,
     resolve_canvas_host_config,
 )
+from ritualist.canvas.app import _apply_canvas_host
 from ritualist.cli import app
 from ritualist.canvas.controller import dispatch_canvas_action
 from ritualist.canvas.runtime import CanvasComponentActionResult
@@ -612,11 +614,10 @@ def test_canvas_use_cli_help() -> None:
     assert "desktop-work-area" in result.output
 
 
-def test_canvas_host_config_documents_desktop_work_area_without_enabling_it() -> None:
+def test_canvas_host_config_enables_desktop_work_area_without_taskbar_mutation() -> None:
     config = resolve_canvas_host_config(
         "desktop-work-area",
         taskbar_policy="respect",
-        require_implemented=False,
     )
 
     assert config.mode is CanvasHostMode.DESKTOP_WORK_AREA
@@ -625,19 +626,28 @@ def test_canvas_host_config_documents_desktop_work_area_without_enabling_it() ->
         "schema_version": "ritualist.canvas.host.v1",
         "mode": "desktop_work_area",
         "taskbar_policy": "respect",
-        "implemented": False,
+        "implemented": True,
         "taskbar_visible": True,
     }
 
 
-def test_canvas_host_config_only_allows_windowed_to_launch_for_now() -> None:
+def test_canvas_host_config_rejects_future_modes_until_implemented() -> None:
     config = resolve_canvas_host_config("windowed")
 
     assert config.mode is CanvasHostMode.WINDOWED
     assert config.to_dict()["implemented"] is True
 
     with pytest.raises(RitualistError, match="not implemented yet"):
-        resolve_canvas_host_config("desktop-work-area")
+        resolve_canvas_host_config("desktop-full-monitor-later")
+
+
+def test_canvas_host_default_canvas_uses_minimal_room_for_desktop_work_area() -> None:
+    windowed = resolve_canvas_host_config("windowed")
+    desktop_work_area = resolve_canvas_host_config("desktop-work-area")
+
+    assert default_canvas_for_host(None, windowed) == "gaming_desktop"
+    assert default_canvas_for_host("", desktop_work_area) == "minimal_desktop"
+    assert default_canvas_for_host("gaming_desktop", desktop_work_area) == "gaming_desktop"
 
 
 @pytest.mark.parametrize("policy", ["hide", "auto-hide", "replace", "kiosk"])
@@ -649,6 +659,84 @@ def test_canvas_taskbar_policy_rejects_shell_like_values(policy: str) -> None:
 def test_canvas_host_rejects_retired_overlay_name() -> None:
     with pytest.raises(RitualistError, match="desktop_overlay.*retired"):
         resolve_canvas_host_config("desktop-overlay", require_implemented=False)
+
+
+class _FakeRect:
+    def __init__(self, x: int, y: int, width: int, height: int) -> None:
+        self._x = x
+        self._y = y
+        self._width = width
+        self._height = height
+
+    def x(self) -> int:
+        return self._x
+
+    def y(self) -> int:
+        return self._y
+
+    def width(self) -> int:
+        return self._width
+
+    def height(self) -> int:
+        return self._height
+
+
+class _FakeScreen:
+    def availableGeometry(self) -> _FakeRect:
+        return _FakeRect(0, 0, 1920, 1040)
+
+    def geometry(self) -> _FakeRect:
+        return _FakeRect(0, 0, 1920, 1080)
+
+
+class _FakeApplication:
+    @staticmethod
+    def primaryScreen() -> _FakeScreen:
+        return _FakeScreen()
+
+
+class _FakeWindowType:
+    Window = 1
+    FramelessWindowHint = 2
+
+
+class _FakeQt:
+    WindowType = _FakeWindowType
+
+
+class _FakeWindow:
+    def __init__(self) -> None:
+        self.flags = None
+        self.geometry = None
+        self.shown = False
+
+    def screen(self) -> None:
+        return None
+
+    def setFlags(self, flags: int) -> None:
+        self.flags = flags
+
+    def setGeometry(self, geometry: _FakeRect) -> None:
+        self.geometry = geometry
+
+    def show(self) -> None:
+        self.shown = True
+
+
+def test_apply_desktop_work_area_host_uses_available_geometry() -> None:
+    window = _FakeWindow()
+    config = resolve_canvas_host_config("desktop-work-area")
+
+    payload = _apply_canvas_host(window, config, _FakeApplication, _FakeQt)
+
+    assert window.flags == 3
+    assert window.geometry is not None
+    assert window.shown is True
+    assert payload["applied"] == "desktop_work_area"
+    assert payload["work_area"] == {"x": 0, "y": 0, "width": 1920, "height": 1040}
+    assert payload["screen_geometry"] == {"x": 0, "y": 0, "width": 1920, "height": 1080}
+    assert payload["bounds_match_work_area"] is True
+    assert payload["taskbar_visible"] is True
 
 
 def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
@@ -725,13 +813,50 @@ def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> No
     ]
 
 
-def test_canvas_use_cli_rejects_unimplemented_desktop_host_before_launch(monkeypatch) -> None:
+def test_canvas_use_cli_launches_desktop_work_area_with_minimal_default(monkeypatch) -> None:
+    calls: list[tuple[str, bool, int, dict[str, object]]] = []
+
+    def fake_run_canvas_use(
+        canvas: str,
+        *,
+        mock: bool,
+        mock_components: int,
+        host_config: object,
+    ) -> int:
+        calls.append((canvas, mock, mock_components, host_config.to_dict()))
+        return 0
+
+    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+
+    result = CliRunner().invoke(app, ["canvas", "use", "--host", "desktop-work-area"])
+
+    assert result.exit_code == 0
+    assert calls == [
+        (
+            "minimal_desktop",
+            False,
+            24,
+            {
+                "schema_version": "ritualist.canvas.host.v1",
+                "mode": "desktop_work_area",
+                "taskbar_policy": "respect",
+                "implemented": True,
+                "taskbar_visible": True,
+            },
+        )
+    ]
+
+
+def test_canvas_use_cli_rejects_future_desktop_host_before_launch(monkeypatch) -> None:
     def fail_launch(*_args: object, **_kwargs: object) -> int:
-        raise AssertionError("unimplemented hosts must fail before launching Canvas")
+        raise AssertionError("future hosts must fail before launching Canvas")
 
     monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fail_launch)
 
-    result = CliRunner().invoke(app, ["canvas", "use", "gaming_desktop", "--host", "desktop-work-area"])
+    result = CliRunner().invoke(
+        app,
+        ["canvas", "use", "gaming_desktop", "--host", "desktop-full-monitor-later"],
+    )
 
     assert result.exit_code == 1
     assert "not implemented yet" in " ".join(result.output.split())

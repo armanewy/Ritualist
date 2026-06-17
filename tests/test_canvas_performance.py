@@ -215,6 +215,18 @@ def test_canvas_use_qml_wires_performance_and_typed_delegates() -> None:
         assert snippet in qml
 
 
+def test_canvas_use_qml_wires_desktop_work_area_exit_affordance() -> None:
+    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+
+    for snippet in (
+        "ritualistCanvasHost",
+        'hostSettings.mode === "desktop_work_area"',
+        'text: "Exit Desktop Canvas"',
+        'sequence: "Esc"',
+    ):
+        assert snippet in qml
+
+
 def test_canvas_use_qml_uses_paper_tokens_and_visible_state_roles() -> None:
     qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
 

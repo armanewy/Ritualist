@@ -13,9 +13,11 @@ ApplicationWindow {
     property var canvasPayload: typeof ritualistCanvasPayload === "undefined" ? ({}) : ritualistCanvasPayload
     property var editPayload: canvasController ? canvasController.editPayload : ritualistCanvasEditPayload
     property var performanceSettings: typeof ritualistCanvasPerformance === "undefined" ? ({}) : ritualistCanvasPerformance
+    property var hostSettings: typeof ritualistCanvasHost === "undefined" ? ({ mode: "windowed", taskbar_policy: "respect" }) : ritualistCanvasHost
     property bool e2eEnabled: typeof ritualistE2EEnabled === "undefined" ? false : ritualistE2EEnabled
     property bool editMode: canvasController ? canvasController.editMode : false
     property bool mockMode: typeof ritualistMockMode === "undefined" ? false : ritualistMockMode
+    property bool desktopWorkAreaHost: hostSettings.mode === "desktop_work_area"
     property bool animationsEnabled: performanceSettings.animations === undefined ? true : performanceSettings.animations
     property bool showPerformanceOverlay: performanceSettings.show_performance_overlay === true
     property int liveUpdateRateHz: Math.max(1, performanceSettings.live_update_rate_hz || 30)
@@ -542,6 +544,12 @@ ApplicationWindow {
 
     Component.onCompleted: root.requestPayloadUpdate(true)
 
+    Shortcut {
+        enabled: root.desktopWorkAreaHost
+        sequence: "Esc"
+        onActivated: root.close()
+    }
+
     Rectangle {
         anchors.fill: parent
         color: root.token("background", "#070c13")
@@ -576,6 +584,14 @@ ApplicationWindow {
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
+            }
+
+            PaperButton {
+                text: "Exit Desktop Canvas"
+                role: "danger"
+                visible: root.desktopWorkAreaHost
+                enabled: root.desktopWorkAreaHost
+                onClicked: root.close()
             }
 
             PaperButton {

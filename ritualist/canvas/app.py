@@ -69,7 +69,7 @@ def run_canvas_use(
     resolved_host_config = host_config or resolve_canvas_host_config()
     ensure_canvas_host_is_implemented(resolved_host_config)
     try:
-        from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+        from PySide6.QtCore import Property, QObject, QUrl, Qt, Signal, Slot
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtQml import QQmlApplicationEngine
         from PySide6.QtWidgets import QApplication
@@ -656,7 +656,9 @@ def run_canvas_use(
         engine.load(QUrl.fromLocalFile(str(qml_path)))
         if not engine.rootObjects():
             raise RitualistError(f"Canvas Use UI failed to load: {qml_path}")
-    record_event("canvas.host.ready", **host_payload)
+    root_window = engine.rootObjects()[0]
+    applied_host = _apply_canvas_host(root_window, resolved_host_config, QApplication, Qt)
+    record_event("canvas.host.ready", **applied_host)
     ready_payload = controller.payload
     ready_theme = {}
     if isinstance(ready_payload.get("canvas"), dict):
@@ -679,13 +681,66 @@ def run_canvas_use(
         theme_warning_count=len(ready_validation.get("warnings") or []),
         theme_accessibility_warning_count=int(ready_accessibility.get("warning_count") or 0),
         theme_accessibility_warnings=list(ready_accessibility.get("warnings") or []),
-        host=host_payload,
+        host=applied_host,
     )
     app.aboutToQuit.connect(controller.shutdown)
     try:
         return app.exec()
     finally:
         controller.shutdown()
+
+
+def _apply_canvas_host(
+    window: object,
+    host_config: CanvasHostConfig,
+    application: object,
+    qt: object,
+) -> dict[str, object]:
+    payload = host_config.to_dict()
+    if host_config.mode.value != "desktop_work_area":
+        payload["applied"] = "windowed"
+        return payload
+
+    primary_screen = getattr(application, "primaryScreen")()
+    screen_getter = getattr(window, "screen", None)
+    screen = screen_getter() if callable(screen_getter) else None
+    screen = screen or primary_screen
+    if screen is None:
+        raise RitualistError("Desktop Work-Area Canvas requires a Qt screen with available geometry.")
+
+    work_area = screen.availableGeometry()
+    screen_geometry = screen.geometry()
+    window_type = getattr(qt, "WindowType")
+    flags = window_type.Window | window_type.FramelessWindowHint
+    set_flags = getattr(window, "setFlags", None)
+    if callable(set_flags):
+        set_flags(flags)
+    set_geometry = getattr(window, "setGeometry", None)
+    if callable(set_geometry):
+        set_geometry(work_area)
+    show = getattr(window, "show", None)
+    if callable(show):
+        show()
+
+    payload.update(
+        {
+            "applied": "desktop_work_area",
+            "work_area": _qt_rect_to_dict(work_area),
+            "screen_geometry": _qt_rect_to_dict(screen_geometry),
+            "bounds_match_work_area": True,
+            "taskbar_visible": True,
+        }
+    )
+    return payload
+
+
+def _qt_rect_to_dict(rect: object) -> dict[str, int]:
+    return {
+        "x": int(rect.x()),
+        "y": int(rect.y()),
+        "width": int(rect.width()),
+        "height": int(rect.height()),
+    }
 
 
 def _component_reference(document: CanvasDocument, component_id: str) -> str:

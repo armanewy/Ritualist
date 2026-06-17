@@ -35,20 +35,53 @@ def test_desktop_entry_launches_canvas_with_option(monkeypatch):
     called = []
     monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
     monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
-    monkeypatch.setattr(desktop_entry, "_run_canvas", lambda canvas: called.append(("canvas", canvas)))
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_canvas",
+        lambda canvas, *, host, taskbar_policy: called.append((canvas, host, taskbar_policy)),
+    )
 
     assert desktop_entry.main(["--canvas"]) == 0
-    assert called == [("canvas", "gaming_desktop")]
+    assert called == [("gaming_desktop", "windowed", "respect")]
 
 
 def test_desktop_entry_launches_named_canvas_with_option(monkeypatch):
     called = []
     monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
     monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
-    monkeypatch.setattr(desktop_entry, "_run_canvas", lambda canvas: called.append(("canvas", canvas)))
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_canvas",
+        lambda canvas, *, host, taskbar_policy: called.append((canvas, host, taskbar_policy)),
+    )
 
     assert desktop_entry.main(["--canvas-use", "media_desktop"]) == 0
-    assert called == [("canvas", "media_desktop")]
+    assert called == [("media_desktop", "windowed", "respect")]
+
+
+def test_desktop_entry_launches_desktop_work_area_canvas_with_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_canvas",
+        lambda canvas, *, host, taskbar_policy: called.append((canvas, host, taskbar_policy)),
+    )
+
+    assert desktop_entry.main(["--canvas", "--host", "desktop-work-area"]) == 0
+    assert called == [(None, "desktop-work-area", "respect")]
+
+
+def test_desktop_entry_rejects_unknown_canvas_option(monkeypatch, capsys):
+    messages = []
+    logs = []
+    monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
+    monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
+
+    assert desktop_entry.main(["--canvas", "--fullscreen"]) == 1
+    assert "Unsupported Canvas option" in messages[0]
+    assert "--fullscreen" in capsys.readouterr().err
 
 
 def test_desktop_entry_reports_home_dependency_error(monkeypatch, capsys):

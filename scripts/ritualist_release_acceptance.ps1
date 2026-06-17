@@ -66,6 +66,14 @@ using System.Text;
 public static class RitualistAcceptanceWin32 {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     [DllImport("user32.dll")]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
@@ -80,6 +88,9 @@ public static class RitualistAcceptanceWin32 {
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -268,12 +279,23 @@ function Get-TopLevelWindows {
         }
         [uint32]$processId = 0
         [RitualistAcceptanceWin32]::GetWindowThreadProcessId($handle, [ref]$processId) | Out-Null
+        $rect = New-Object RitualistAcceptanceWin32+RECT
+        $bounds = $null
+        if ([RitualistAcceptanceWin32]::GetWindowRect($handle, [ref]$rect)) {
+            $bounds = [ordered]@{
+                x = [int]$rect.Left
+                y = [int]$rect.Top
+                width = [int]($rect.Right - $rect.Left)
+                height = [int]($rect.Bottom - $rect.Top)
+            }
+        }
         $rows += [ordered]@{
             z_index = $index
             hwnd = $handle.ToInt64()
             title = $title
             process_id = [int64]$processId
             is_foreground = ($handle -eq $foreground)
+            bounds = $bounds
         }
         $index += 1
     }
@@ -397,6 +419,39 @@ function Save-ProcessTree {
     $path = Join-Path $SnapshotRoot "$Name-process-tree.json"
     Write-JsonFile $path @($rows) 6 | Out-Null
     return $path
+}
+
+function Get-PrimaryScreenGeometry {
+    $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+    return [ordered]@{
+        bounds = [ordered]@{
+            x = [int]$screen.Bounds.X
+            y = [int]$screen.Bounds.Y
+            width = [int]$screen.Bounds.Width
+            height = [int]$screen.Bounds.Height
+        }
+        work_area = [ordered]@{
+            x = [int]$screen.WorkingArea.X
+            y = [int]$screen.WorkingArea.Y
+            width = [int]$screen.WorkingArea.Width
+            height = [int]$screen.WorkingArea.Height
+        }
+    }
+}
+
+function Test-BoundsMatch {
+    param([object]$Actual, [object]$Expected, [int]$Tolerance = 3)
+    if (-not $Actual -or -not $Expected) {
+        return $false
+    }
+    foreach ($key in @("x", "y", "width", "height")) {
+        $actualValue = if ($Actual -is [hashtable]) { $Actual[$key] } else { $Actual.$key }
+        $expectedValue = if ($Expected -is [hashtable]) { $Expected[$key] } else { $Expected.$key }
+        if ([Math]::Abs(([int]$actualValue) - ([int]$expectedValue)) -gt $Tolerance) {
+            return $false
+        }
+    }
+    return $true
 }
 
 function Start-AcceptanceProcess {
@@ -878,6 +933,46 @@ function Capture-CanvasVisualArtifact {
             process_tree = $processTree
             window_tree = $windowTree
             z_order = $zOrder
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $process
+    }
+}
+
+function Capture-DesktopWorkAreaCanvasArtifact {
+    $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "minimal_desktop", "--host", "desktop-work-area")
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $screenshot = Save-Screenshot "desktop-work-area-canvas"
+        $frames = Capture-ScreenFrames "desktop-work-area-canvas" 2
+        $processTree = Save-ProcessTree "desktop-work-area-canvas" $process.Id
+        $windowTree = Save-WindowTree "desktop-work-area-canvas" $window
+        $zOrderPath = Save-ZOrderSnapshot "desktop-work-area-canvas"
+        $zOrder = Get-Content -Path $zOrderPath -Raw | ConvertFrom-Json
+        $screen = Get-PrimaryScreenGeometry
+        $windowRow = @($zOrder | Where-Object { [int64]$_.process_id -eq [int64]$process.Id -and $_.title -eq "Ritualist Canvas" } | Select-Object -First 1)
+        $exitControl = Find-NamedElement $window "Exit Desktop Canvas"
+        $events = Get-E2EEvents
+        $hostReady = @(
+            $events |
+                Where-Object { $_.event -eq "canvas.host.ready" -and [int]$_.process_id -eq $process.Id } |
+                Select-Object -Last 1
+        )
+        $boundsMatch = Test-BoundsMatch $windowRow.bounds $screen.work_area
+        Add-VisualArtifact -Id "desktop-work-area-canvas" -CanvasId "minimal_desktop" -State "desktop_work_area" -NonBlank (Test-ScreenshotNonBlank $screenshot) -Evidence @{
+            screenshot = $screenshot
+            frames = $frames
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrderPath
+            screen_geometry = $screen
+            window_bounds = $windowRow.bounds
+            bounds_match_work_area = $boundsMatch
+            exit_control_present = [bool]$exitControl
+            host_ready = if ($hostReady.Count -gt 0) { $hostReady[-1] } else { $null }
+            taskbar_policy = "respect"
         }
     }
     finally {
@@ -1685,6 +1780,7 @@ try {
     Capture-CanvasVisualArtifact -CanvasId "minimal_desktop" -ArtifactId "minimal-room"
     Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
     Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "helpdesk-room"
+    Capture-DesktopWorkAreaCanvasArtifact
     Capture-CanvasEditModeVisualArtifact
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls

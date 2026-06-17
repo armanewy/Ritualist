@@ -99,6 +99,12 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         'ArtifactId "minimal-room"',
         'ArtifactId "gaming-room"',
         'ArtifactId "helpdesk-room"',
+        "Capture-DesktopWorkAreaCanvasArtifact",
+        "desktop-work-area-canvas",
+        "--host",
+        "desktop-work-area",
+        "bounds_match_work_area",
+        "Exit Desktop Canvas",
         '"edit-mode-builder"',
     ):
         assert expected in script

@@ -23,7 +23,9 @@ class CanvasTaskbarPolicy(StrEnum):
 
 
 DOCUMENTED_CANVAS_HOST_MODES = tuple(CanvasHostMode)
-IMPLEMENTED_CANVAS_HOST_MODES = frozenset({CanvasHostMode.WINDOWED})
+IMPLEMENTED_CANVAS_HOST_MODES = frozenset(
+    {CanvasHostMode.WINDOWED, CanvasHostMode.DESKTOP_WORK_AREA}
+)
 UNSUPPORTED_TASKBAR_POLICIES = frozenset({"hide", "auto_hide", "replace", "kiosk"})
 
 
@@ -67,6 +69,15 @@ def ensure_canvas_host_is_implemented(config: CanvasHostConfig) -> None:
             "Canvas host mode "
             f"'{config.mode.value}' is documented but not implemented yet; use 'windowed'."
         )
+
+
+def default_canvas_for_host(canvas: str | None, config: CanvasHostConfig) -> str:
+    requested = str(canvas or "").strip()
+    if requested:
+        return requested
+    if config.mode is CanvasHostMode.DESKTOP_WORK_AREA:
+        return "minimal_desktop"
+    return "gaming_desktop"
 
 
 def normalize_canvas_host_mode(mode: str | CanvasHostMode | None) -> CanvasHostMode:
