@@ -96,6 +96,36 @@ def canvases_path() -> Path:
     return app_data_path() / "canvases"
 
 
+def imported_canvas_packs_dir() -> Path:
+    path = imported_canvas_packs_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def imported_canvas_packs_path() -> Path:
+    return app_data_path() / "imported-canvas-packs"
+
+
+def themes_dir() -> Path:
+    path = themes_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def themes_path() -> Path:
+    return app_data_path() / "themes"
+
+
+def imported_theme_packs_dir() -> Path:
+    path = imported_theme_packs_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def imported_theme_packs_path() -> Path:
+    return app_data_path() / "imported-theme-packs"
+
+
 def browser_profiles_dir() -> Path:
     path = browser_profiles_path()
     path.mkdir(parents=True, exist_ok=True)
@@ -129,6 +159,9 @@ def ensure_app_dirs() -> dict[str, Path]:
         "logs": logs_dir(),
         "runs": runs_dir(),
         "canvases": canvases_dir(),
+        "imported_canvas_packs": imported_canvas_packs_dir(),
+        "themes": themes_dir(),
+        "imported_theme_packs": imported_theme_packs_dir(),
         "browser_profiles": browser_profiles_dir(),
         "watch_me": watch_me_dir(),
     }

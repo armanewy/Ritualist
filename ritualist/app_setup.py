@@ -14,9 +14,12 @@ from .paths import (
     config_file_path,
     config_path,
     imported_packs_path,
+    imported_canvas_packs_path,
+    imported_theme_packs_path,
     logs_path,
     recipes_path,
     runs_path,
+    themes_path,
     watch_me_path,
 )
 
@@ -66,6 +69,9 @@ def _planned_paths() -> dict[str, Path]:
         "config": config_path(),
         "recipes": recipes_path(),
         "imported_packs": imported_packs_path(),
+        "imported_canvas_packs": imported_canvas_packs_path(),
+        "themes": themes_path(),
+        "imported_theme_packs": imported_theme_packs_path(),
         "logs": logs_path(),
         "runs": runs_path(),
         "watch_me": watch_me_path(),

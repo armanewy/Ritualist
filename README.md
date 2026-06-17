@@ -368,6 +368,10 @@ Use `ritualist paths` to inspect local directories. Ritualist creates:
 - `config`
 - `recipes`
 - `imported-packs`
+- `canvases`
+- `imported-canvas-packs`
+- `themes`
+- `imported-theme-packs`
 - `logs`
 - `runs`
 - `browser-profiles`

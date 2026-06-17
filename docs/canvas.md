@@ -320,16 +320,22 @@ Future stages can be:
 
 ## Pack Domains
 
-Future package types should remain separate trust domains:
+Ritualist keeps package types in separate local trust domains:
 
 - `.ritualistpack`: behavior, recipes, intents.
-- `.ritualistcanvas`: visual layout, components, theme references.
-- `.ritualisttheme`: colors/assets only.
+- `.ritualistcanvas`: visual layout, display-safe components, and local assets.
+- `.ritualisttheme`: colors and local visual assets only.
 - `.ritualistsuite`: future combined behavior + canvas + assets.
 
-Canvas Foundation v1 implements local canvas documents only. It does not add
-sharing, sync, marketplace behavior, or trusted approvals. Canvas pack metadata
-must not carry remembered approvals or local target memory.
+Canvas and theme packs are local archives. Import stores them in quarantine,
+disabled by default, and does not run rituals or activate components. Canvas
+pack validation rejects arbitrary component code, auto-run fields, remote image
+URLs, executable-like assets, and action-triggering component types. Theme packs
+cannot contain recipes, actions, intents, components, or remembered approvals.
+
+Suite packs are design-only in this phase. There is no network sharing, sync,
+marketplace behavior, auto-install, or trusted approval propagation. Canvas pack
+metadata must not carry remembered approvals or local target memory.
 
 ## Performance Rules
 

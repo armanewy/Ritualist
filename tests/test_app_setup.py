@@ -15,6 +15,9 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "config": app_data / "config",
         "recipes": recipe_dir,
         "imported_packs": app_data / "imported-packs",
+        "imported_canvas_packs": app_data / "imported-canvas-packs",
+        "themes": app_data / "themes",
+        "imported_theme_packs": app_data / "imported-theme-packs",
         "logs": app_data / "logs",
         "runs": app_data / "runs",
         "watch_me": app_data / "watch-me",
@@ -26,6 +29,15 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "ritualist.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
+    )
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_canvas_packs_path",
+        lambda: created_dirs["imported_canvas_packs"],
+    )
+    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_theme_packs_path",
+        lambda: created_dirs["imported_theme_packs"],
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
@@ -99,6 +111,9 @@ steps:
         "config": tmp_path / "config",
         "recipes": recipe_dir,
         "imported_packs": tmp_path / "imported-packs",
+        "imported_canvas_packs": tmp_path / "imported-canvas-packs",
+        "themes": tmp_path / "themes",
+        "imported_theme_packs": tmp_path / "imported-theme-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
         "watch_me": tmp_path / "watch-me",
@@ -111,6 +126,15 @@ steps:
     monkeypatch.setattr(
         "ritualist.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
+    )
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_canvas_packs_path",
+        lambda: created_dirs["imported_canvas_packs"],
+    )
+    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_theme_packs_path",
+        lambda: created_dirs["imported_theme_packs"],
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
@@ -152,6 +176,9 @@ def test_initialize_app_reports_noop_when_up_to_date(tmp_path, monkeypatch):
         "config": tmp_path / "config",
         "recipes": recipe_dir,
         "imported_packs": tmp_path / "imported-packs",
+        "imported_canvas_packs": tmp_path / "imported-canvas-packs",
+        "themes": tmp_path / "themes",
+        "imported_theme_packs": tmp_path / "imported-theme-packs",
         "logs": tmp_path / "logs",
         "runs": tmp_path / "runs",
         "watch_me": tmp_path / "watch-me",
@@ -181,6 +208,15 @@ steps:
     monkeypatch.setattr(
         "ritualist.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
+    )
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_canvas_packs_path",
+        lambda: created_dirs["imported_canvas_packs"],
+    )
+    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr(
+        "ritualist.app_setup.imported_theme_packs_path",
+        lambda: created_dirs["imported_theme_packs"],
     )
     monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
     monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])

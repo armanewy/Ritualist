@@ -34,6 +34,14 @@ from .canvas import (
     validate_canvas_document,
     validate_canvas_structure,
 )
+from .canvas_packs import (
+    ImportedVisualPackRecord,
+    VisualPackResult,
+    export_canvas_pack,
+    export_theme_pack,
+    import_canvas_pack,
+    import_theme_pack,
+)
 from .doctor import build_doctor_report
 from .errors import RitualistError
 from .executor import WorkflowExecutor
@@ -57,13 +65,17 @@ from .perf import PerformanceReport, measure_operation
 from .paths import (
     app_data_dir,
     browser_profiles_dir,
+    canvases_dir,
     config_dir,
     config_file,
+    imported_canvas_packs_dir,
     imported_packs_dir,
     imported_packs_path,
+    imported_theme_packs_dir,
     logs_dir,
     recipes_dir,
     runs_dir,
+    themes_dir,
 )
 from .primitives import PrimitiveSpec, create_primitive_registry
 from .primitive_runtime import run_read_only_primitive
@@ -104,6 +116,8 @@ diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
+canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
+canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
 watch_app = typer.Typer(help="Explicitly observe a setup session and create a disabled draft.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
@@ -114,6 +128,8 @@ app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(watch_app, name="watch-me")
+canvas_app.add_typer(canvas_pack_app, name="pack")
+canvas_app.add_typer(canvas_theme_app, name="theme")
 console = Console()
 
 
@@ -160,6 +176,10 @@ def paths() -> None:
             "config_file": config_file(),
             "recipes": recipes_dir(),
             "imported_packs": imported_packs_dir(),
+            "canvases": canvases_dir(),
+            "imported_canvas_packs": imported_canvas_packs_dir(),
+            "themes": themes_dir(),
+            "imported_theme_packs": imported_theme_packs_dir(),
             "logs": logs_dir(),
             "runs": runs_dir(),
             "browser_profiles": browser_profiles_dir(),
@@ -817,6 +837,90 @@ def canvas_use(
     except RitualistError as exc:
         console.print(f"[red]Error:[/] {escape(str(exc))}")
         raise typer.Exit(1) from exc
+
+
+@canvas_pack_app.command("export")
+def canvas_pack_export(
+    canvas: Annotated[str, typer.Argument(help="Canvas id or YAML path.")],
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Output .ritualistcanvas archive path."),
+    ],
+    readme: Annotated[
+        Path | None,
+        typer.Option("--readme", help="Optional UTF-8 README file to include as README.md."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable export result."),
+    ] = False,
+) -> None:
+    """Export a visual Canvas pack without recipes or execution state."""
+    try:
+        result = export_canvas_pack(canvas, out, readme_path=readme)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_visual_pack_result(result, json_output=json_output)
+
+
+@canvas_pack_app.command("import")
+def canvas_pack_import(
+    pack: Annotated[Path, typer.Argument(help="Path to a .ritualistcanvas archive.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable import record."),
+    ] = False,
+) -> None:
+    """Import a local Canvas pack into disabled quarantine storage."""
+    try:
+        record = import_canvas_pack(pack)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_visual_pack_import(record, json_output=json_output)
+
+
+@canvas_theme_app.command("export")
+def canvas_theme_export(
+    theme: Annotated[str, typer.Argument(help="Theme id or YAML path; use 'default' for the built-in theme.")],
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Output .ritualisttheme archive path."),
+    ],
+    readme: Annotated[
+        Path | None,
+        typer.Option("--readme", help="Optional UTF-8 README file to include as README.md."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable export result."),
+    ] = False,
+) -> None:
+    """Export a visual theme pack; themes cannot contain actions or recipes."""
+    try:
+        result = export_theme_pack(theme, out, readme_path=readme)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_visual_pack_result(result, json_output=json_output)
+
+
+@canvas_theme_app.command("import")
+def canvas_theme_import(
+    pack: Annotated[Path, typer.Argument(help="Path to a .ritualisttheme archive.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable import record."),
+    ] = False,
+) -> None:
+    """Import a local theme pack into disabled quarantine storage."""
+    try:
+        record = import_theme_pack(pack)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_visual_pack_import(record, json_output=json_output)
 
 
 @watch_app.command("start")
@@ -2206,6 +2310,33 @@ def _print_watch_me_draft(draft: WatchMeDraft, *, json_output: bool) -> None:
         for item in draft.todo:
             console.print(f"- {escape(item)}")
     console.print("Run Doctor and dry-run before saving or running this draft.")
+
+
+def _print_visual_pack_result(result: VisualPackResult, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=result.to_dict())
+        return
+    console.print(f"[green]Exported {escape(result.pack_type)} pack:[/] {escape(str(result.output_path))}")
+    console.print(f"pack: {escape(result.pack_id)}")
+    console.print("contents:")
+    for entry in result.entries:
+        console.print(f"- {escape(entry)}")
+
+
+def _print_visual_pack_import(record: ImportedVisualPackRecord, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=record.to_dict())
+        return
+    console.print(
+        f"[green]Imported {escape(record.pack_type)} pack {escape(record.import_id)} into quarantine; it is disabled.[/]"
+    )
+    table = Table(title=f"Visual Pack: {escape(record.import_id)}")
+    table.add_column("Field")
+    table.add_column("Value")
+    for key, value in record.to_dict().items():
+        table.add_row(escape(str(key)), escape(str(value)))
+    console.print(table)
+    console.print("Review the quarantined visual pack before copying it into active canvases or themes.")
 
 
 def _print_import_record(record: ImportedPackRecord) -> None:
