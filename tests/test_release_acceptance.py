@@ -76,9 +76,18 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "accessibility_warning_count",
         "visual_artifacts",
         "Capture-CanvasVisualArtifact",
+        "Capture-CanvasEditModeVisualArtifact",
+        "Find-NamedElement",
+        "edit_mode_builder_visible",
+        "edit-unverified",
+        "review_status",
+        "expected_controls",
+        "missing_controls",
+        "control_basis",
         'ArtifactId "minimal-room"',
         'ArtifactId "gaming-room"',
         'ArtifactId "helpdesk-room"',
+        '"edit-mode-builder"',
     ):
         assert expected in script
 

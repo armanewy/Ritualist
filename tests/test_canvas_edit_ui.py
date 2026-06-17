@@ -101,10 +101,30 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
 
     assert "setEditMode" in qml
+    assert "Edit Room" in qml
+    assert "Done" in qml
+    assert "Cancel" in qml
+    assert "Add components" in qml
+    assert "Properties" in qml
+    assert "Layout" in qml
+    assert "Content" in qml
+    assert "Appearance" in qml
+    assert "Behavior binding" in qml
+    assert "Save Room edits?" in qml
+    assert "Discard Room edits?" in qml
+    assert "editSnapGrid" in qml
+    assert "property_inspector" in qml
+    assert "component PaperTextField: TextField" in qml
+    assert "component PaperComboBox: ComboBox" in qml
     assert "Switch to Use Mode before running Canvas actions" in qml or "root.editMode" in qml
     assert "Apply Binding" in qml
-    assert "saveCanvas" in qml
+    assert "if (root.canvasController.saveCanvas())" in qml
     assert "dispatch(componentId, actionId)" in qml
+
+    app = Path("ritualist/canvas/app.py").read_text(encoding="utf-8")
+    assert "@Slot(result=bool)" in app
+    assert "def saveCanvas(self) -> bool:" in app
+    assert "return True" in app
 
 
 def test_canvas_use_qml_contains_low_spec_performance_controls() -> None:

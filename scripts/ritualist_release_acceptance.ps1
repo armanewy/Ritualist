@@ -280,6 +280,18 @@ function Find-Button {
     return $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
+function Find-NamedElement {
+    param([object]$Window, [string]$Name)
+    if (-not $Window) {
+        return $null
+    }
+    $condition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::NameProperty,
+        $Name
+    )
+    return $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
 function Invoke-NamedButton {
     param([object]$Window, [string]$Name, [int]$TimeoutSeconds = 15)
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -771,6 +783,70 @@ function Capture-CanvasVisualArtifact {
             process_tree = $processTree
             window_tree = $windowTree
             z_order = $zOrder
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $process
+    }
+}
+
+function Capture-CanvasEditModeVisualArtifact {
+    $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "gaming_desktop")
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $editInvoked = if ($window) { Invoke-NamedButton $window "Edit Room" 10 } else { $false }
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $editWindow = Get-WindowByName "Ritualist Canvas" 5
+        $screenshot = Save-Screenshot "edit-mode-builder"
+        $frames = Capture-ScreenFrames "edit-mode-builder" 2
+        $processTree = Save-ProcessTree "edit-mode-builder" $process.Id
+        $windowTree = Save-WindowTree "edit-mode-builder" $editWindow
+        $zOrder = Save-ZOrderSnapshot "edit-mode-builder"
+        $nonBlank = Test-ScreenshotNonBlank $screenshot
+        $expectedEditControls = @("Done", "Cancel", "Ritual Card", "Save", "Undo")
+        $foundEditControls = @($expectedEditControls | Where-Object { Find-NamedElement $editWindow $_ })
+        $missingEditControls = @($expectedEditControls | Where-Object { $foundEditControls -notcontains $_ })
+        $state = "edit-unverified"
+        $status = "NEEDS_HUMAN_REVIEW"
+        $message = "Edit Mode screenshot captured, but the Edit Room control was not invoked through UIA."
+        if ($editInvoked -and $nonBlank -and $missingEditControls.Count -eq 0) {
+            $state = "edit"
+            $status = "PASS"
+            $message = "Packaged Canvas Edit Mode opened with nonblank visual evidence and expected builder controls."
+        }
+        elseif (-not $nonBlank) {
+            $status = "FAIL"
+            $message = "Edit Mode artifact screenshot was blank."
+        }
+        elseif ($editInvoked) {
+            $message = "Edit Mode screenshot captured, but builder-specific UIA controls were missing: $($missingEditControls -join ', ')."
+        }
+        Add-VisualArtifact -Id "edit-mode-builder" -CanvasId "gaming_desktop" -State $state -NonBlank $nonBlank -Evidence @{
+            screenshot = $screenshot
+            frames = $frames
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrder
+            edit_invoked = $editInvoked
+            expected_controls = $expectedEditControls
+            found_controls = $foundEditControls
+            missing_controls = $missingEditControls
+            control_basis = "UIA-visible Edit Mode controls: top bar, palette, and properties panel action buttons."
+            review_status = $status
+        }
+        Set-Check "edit_mode_builder_visible" $status $message @{
+            screenshot = $screenshot
+            frames = $frames
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrder
+            edit_invoked = $editInvoked
+            non_blank = $nonBlank
+            expected_controls = $expectedEditControls
+            found_controls = $foundEditControls
+            missing_controls = $missingEditControls
+            control_basis = "UIA-visible Edit Mode controls: top bar, palette, and properties panel action buttons."
         }
     }
     finally {
@@ -1374,6 +1450,7 @@ try {
     Capture-CanvasVisualArtifact -CanvasId "minimal_desktop" -ArtifactId "minimal-room"
     Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
     Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "helpdesk-room"
+    Capture-CanvasEditModeVisualArtifact
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls
     Invoke-CanvasRunDecline

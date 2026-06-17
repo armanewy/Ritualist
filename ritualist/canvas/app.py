@@ -285,26 +285,27 @@ def run_canvas_use(
                 return
             self._apply_edit(self._edit_bridge.discard)
 
-        @Slot()
-        def saveCanvas(self) -> None:
+        @Slot(result=bool)
+        def saveCanvas(self) -> bool:
             if not self._edit_mode:
-                return
+                return False
             if self._mock:
                 self._last_event_label = "Mock Canvas edits are not saved"
                 self.metricsChanged.emit()
-                return
+                return False
             try:
                 result = self._edit_bridge.save()
             except Exception as exc:  # noqa: BLE001 - surface validation errors in the UI.
                 self._last_event_label = f"Save failed: {exc}"
                 self.metricsChanged.emit()
                 self.editPayloadChanged.emit()
-                return
+                return False
             self._document = self._edit_bridge.document
             self._last_event_label = result.message
             self.metricsChanged.emit()
             self.editPayloadChanged.emit()
             self.payloadChanged.emit()
+            return True
 
         @Slot()
         def pauseCurrentRun(self) -> None:

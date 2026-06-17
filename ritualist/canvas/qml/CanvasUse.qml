@@ -35,6 +35,7 @@ ApplicationWindow {
     property bool runtimeActive: canvasController ? canvasController.runtimeActive : false
     property bool runtimePaused: canvasController ? canvasController.runtimePaused : false
     property string footerText: canvasController ? canvasController.lastEventLabel : "Canvas ready"
+    property string pendingEditDecision: ""
     property int spaceSm: Number(token("spacing_sm", 6))
     property int spaceMd: Number(token("spacing_md", 12))
     property int spaceLg: Number(token("spacing_lg", 18))
@@ -315,6 +316,74 @@ ApplicationWindow {
         return selected.supported_bindings || []
     }
 
+    function editInspector() {
+        if (!editPayload || !editPayload.property_inspector) {
+            return {}
+        }
+        return editPayload.property_inspector
+    }
+
+    function layoutPropertySchema() {
+        if (selectedComponentId().length === 0) {
+            return []
+        }
+        return editInspector().layout_properties || []
+    }
+
+    function contentPropertySchema() {
+        if (selectedComponentId().length === 0) {
+            return []
+        }
+        return editInspector().content_properties || selectedPropertySchema()
+    }
+
+    function appearancePropertySchema() {
+        if (selectedComponentId().length === 0) {
+            return []
+        }
+        return editInspector().appearance_properties || []
+    }
+
+    function editSnapGrid() {
+        if (!editPayload || !editPayload.snap_grid) {
+            return { enabled: true, size: 16, unit: "px" }
+        }
+        return editPayload.snap_grid
+    }
+
+    function requestEditDecision(decision) {
+        if (!root.canvasController) {
+            return
+        }
+        if (decision === "save" && (!root.editPayload || !root.editPayload.dirty)) {
+            root.canvasController.setEditMode(false)
+            return
+        }
+        if (decision === "discard" && (!root.editPayload || !root.editPayload.dirty)) {
+            root.canvasController.setEditMode(false)
+            return
+        }
+        root.pendingEditDecision = decision
+    }
+
+    function confirmEditDecision() {
+        if (!root.canvasController) {
+            root.pendingEditDecision = ""
+            return
+        }
+        if (root.pendingEditDecision === "save") {
+            if (root.canvasController.saveCanvas()) {
+                root.canvasController.setEditMode(false)
+                root.pendingEditDecision = ""
+            }
+            return
+        } else if (root.pendingEditDecision === "discard") {
+            root.canvasController.discardEdit()
+            root.canvasController.setEditMode(false)
+        }
+        root.pendingEditDecision = ""
+    }
+
     component PaperButton: Button {
         id: control
         property string role: "neutral"
@@ -344,6 +413,47 @@ ApplicationWindow {
             border.color: root.buttonBorder(control.role, control.enabled, control.activeFocus)
             border.width: control.activeFocus ? 2 : 1
             opacity: control.enabled ? 1.0 : 0.56
+        }
+    }
+
+    component PaperTextField: TextField {
+        id: field
+        implicitHeight: 34
+        color: root.token("foreground", "#f4f7fb")
+        placeholderTextColor: root.token("muted", "#91a2b8")
+        selectedTextColor: root.token("background", "#070c13")
+        selectionColor: root.token("accent", "#3dd6a5")
+        font.family: root.token("font_family", "Segoe UI")
+        font.pixelSize: root.token("font_size_body", 13)
+        leftPadding: root.spaceSm
+        rightPadding: root.spaceSm
+        background: Rectangle {
+            radius: root.radiusSm
+            color: root.token("panel_alt", "#101720")
+            border.color: field.activeFocus ? root.token("focus_ring", "#7fb8ff") : root.token("border", "#203044")
+            border.width: field.activeFocus ? 2 : 1
+        }
+    }
+
+    component PaperComboBox: ComboBox {
+        id: combo
+        implicitHeight: 34
+        font.family: root.token("font_family", "Segoe UI")
+        font.pixelSize: root.token("font_size_body", 13)
+        contentItem: Text {
+            text: combo.displayText
+            color: combo.enabled ? root.token("foreground", "#f4f7fb") : root.token("muted", "#91a2b8")
+            font: combo.font
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            leftPadding: root.spaceSm
+            rightPadding: root.spaceLg
+        }
+        background: Rectangle {
+            radius: root.radiusSm
+            color: root.token("panel_alt", "#101720")
+            border.color: combo.activeFocus ? root.token("focus_ring", "#7fb8ff") : root.token("border", "#203044")
+            border.width: combo.activeFocus ? 2 : 1
         }
     }
 
@@ -453,9 +563,24 @@ ApplicationWindow {
             }
 
             PaperButton {
-                text: root.editMode ? "Use Mode" : "Edit Mode"
+                text: root.editMode ? "Done" : "Edit Room"
+                role: root.editMode ? "primary" : "neutral"
                 enabled: root.canvasController && !root.runtimeActive
-                onClicked: root.canvasController.setEditMode(!root.editMode)
+                onClicked: {
+                    if (root.editMode) {
+                        root.requestEditDecision("save")
+                    } else {
+                        root.canvasController.setEditMode(true)
+                    }
+                }
+            }
+
+            PaperButton {
+                text: "Cancel"
+                role: "danger"
+                visible: root.editMode
+                enabled: root.canvasController && !root.runtimeActive
+                onClicked: root.requestEditDecision("discard")
             }
 
             PaperButton {
@@ -504,6 +629,41 @@ ApplicationWindow {
                 role: "danger"
                 enabled: root.canvasController && (root.canvasController.watchMeRecording || root.canvasController.watchMeDraftAvailable || root.canvasController.watchMeDraftSummary.length > 0)
                 onClicked: root.canvasController.discardWatchMe()
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            height: root.pendingEditDecision.length > 0 ? 56 : 0
+            radius: root.radiusLg
+            color: root.pendingEditDecision === "discard" ? root.token("danger_panel", "#28151c") : root.token("focus_panel", "#132235")
+            border.color: root.pendingEditDecision === "discard" ? root.token("danger", "#ff6b7a") : root.token("accent", "#3dd6a5")
+            visible: root.pendingEditDecision.length > 0
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: root.spaceMd
+                spacing: root.spaceMd
+
+                Text {
+                    text: root.pendingEditDecision === "discard" ? "Discard Room edits?" : "Save Room edits?"
+                    color: root.token("foreground", "#f4f7fb")
+                    font.pixelSize: root.token("font_size_body", 13)
+                    font.weight: Font.DemiBold
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+
+                PaperButton {
+                    text: "Confirm"
+                    role: root.pendingEditDecision === "discard" ? "danger" : "primary"
+                    onClicked: root.confirmEditDecision()
+                }
+
+                PaperButton {
+                    text: "Keep Editing"
+                    onClicked: root.pendingEditDecision = ""
+                }
             }
         }
 
@@ -571,6 +731,52 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: root.spaceMd
 
+            Rectangle {
+                Layout.preferredWidth: root.editMode ? 248 : 0
+                Layout.fillHeight: true
+                visible: root.editMode
+                color: root.token("panel", "#0e151f")
+                border.color: root.token("border", "#203044")
+                border.width: 1
+                radius: root.radiusLg
+
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceMd
+
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: root.spaceMd
+
+                        Text {
+                            text: "Add components"
+                            color: root.token("foreground", "#f4f7fb")
+                            font.pixelSize: 18
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: "Safe Room components only"
+                            color: root.token("muted", "#91a2b8")
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        Repeater {
+                            model: root.paletteEntries()
+
+                            PaperButton {
+                                text: modelData.display_name
+                                Layout.fillWidth: true
+                                onClicked: root.canvasController.addComponent(modelData.type_id)
+                            }
+                        }
+                    }
+                }
+            }
+
             Flickable {
                 id: scroll
                 Layout.fillWidth: true
@@ -586,6 +792,32 @@ ApplicationWindow {
                     border.color: root.editMode ? root.token("accent", "#3dd6a5") : root.token("border", "#1d2a3a")
                     border.width: root.editMode ? 2 : 1
                     radius: root.radiusLg
+
+                    Repeater {
+                        model: root.editMode && root.editSnapGrid().enabled ? Math.floor(parent.width / Math.max(1, root.editSnapGrid().size)) : 0
+
+                        Rectangle {
+                            x: index * Math.max(1, root.editSnapGrid().size)
+                            y: 0
+                            width: 1
+                            height: parent.height
+                            color: root.token("border", "#203044")
+                            opacity: 0.18
+                        }
+                    }
+
+                    Repeater {
+                        model: root.editMode && root.editSnapGrid().enabled ? Math.floor(parent.height / Math.max(1, root.editSnapGrid().size)) : 0
+
+                        Rectangle {
+                            x: 0
+                            y: index * Math.max(1, root.editSnapGrid().size)
+                            width: parent.width
+                            height: 1
+                            color: root.token("border", "#203044")
+                            opacity: 0.18
+                        }
+                    }
 
                     Repeater {
                         model: root.components()
@@ -703,7 +935,7 @@ ApplicationWindow {
                         spacing: 10
 
                         Text {
-                            text: "Edit Mode"
+                            text: "Properties"
                             color: root.token("foreground", "#f4f7fb")
                             font.pixelSize: 20
                             font.bold: true
@@ -719,29 +951,6 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             PaperButton { text: "Undo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_undo; onClicked: root.canvasController.undoEdit() }
                             PaperButton { text: "Redo"; enabled: root.canvasController && root.editPayload && root.editPayload.history && root.editPayload.history.can_redo; onClicked: root.canvasController.redoEdit() }
-                        }
-
-                        Text {
-                            text: "Palette"
-                            color: root.token("muted", "#91a2b8")
-                            font.pixelSize: 13
-                            font.bold: true
-                        }
-
-                        Repeater {
-                            model: root.paletteEntries()
-
-                            PaperButton {
-                                text: modelData.display_name
-                                Layout.fillWidth: true
-                                onClicked: root.canvasController.addComponent(modelData.type_id)
-                            }
-                        }
-
-                        Rectangle {
-                            height: 1
-                            color: root.token("border", "#203044")
-                            Layout.fillWidth: true
                         }
 
                         Text {
@@ -761,7 +970,7 @@ ApplicationWindow {
                         }
 
                         Text {
-                            text: "Properties"
+                            text: "Layout"
                             color: root.token("muted", "#91a2b8")
                             font.pixelSize: 13
                             font.bold: true
@@ -769,7 +978,7 @@ ApplicationWindow {
                         }
 
                         Repeater {
-                            model: root.selectedPropertySchema()
+                            model: root.layoutPropertySchema()
 
                             ColumnLayout {
                                 Layout.fillWidth: true
@@ -781,17 +990,54 @@ ApplicationWindow {
                                     font.pixelSize: 11
                                 }
 
-                                ComboBox {
+                                PaperComboBox {
                                     Layout.fillWidth: true
-                                    visible: modelData.allowed_values && modelData.allowed_values.length > 0
+                                    visible: (modelData.allowed_values || []).length > 0
                                     model: modelData.allowed_values || []
                                     currentIndex: Math.max(0, (modelData.allowed_values || []).indexOf(String(root.selectedProps()[modelData.name] || modelData.default || "")))
                                     onActivated: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, currentText)
                                 }
 
-                                TextField {
+                                PaperTextField {
                                     Layout.fillWidth: true
-                                    visible: !(modelData.allowed_values && modelData.allowed_values.length > 0)
+                                    text: String(root.selectedComponent()[modelData.name] === undefined || root.selectedComponent()[modelData.name] === null ? "" : root.selectedComponent()[modelData.name])
+                                    readOnly: true
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Content"
+                            color: root.token("muted", "#91a2b8")
+                            font.pixelSize: 13
+                            font.bold: true
+                            visible: root.selectedComponentId().length > 0
+                        }
+
+                        Repeater {
+                            model: root.contentPropertySchema()
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Text {
+                                    text: modelData.label
+                                    color: root.token("muted", "#91a2b8")
+                                    font.pixelSize: 11
+                                }
+
+                                PaperComboBox {
+                                    Layout.fillWidth: true
+                                    visible: (modelData.allowed_values || []).length > 0
+                                    model: modelData.allowed_values || []
+                                    currentIndex: Math.max(0, (modelData.allowed_values || []).indexOf(String(root.selectedProps()[modelData.name] || modelData.default || "")))
+                                    onActivated: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, currentText)
+                                }
+
+                                PaperTextField {
+                                    Layout.fillWidth: true
+                                    visible: (modelData.allowed_values || []).length === 0
                                     text: String(root.selectedProps()[modelData.name] === undefined || root.selectedProps()[modelData.name] === null ? (modelData.default || "") : root.selectedProps()[modelData.name])
                                     onEditingFinished: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, text)
                                 }
@@ -799,14 +1045,52 @@ ApplicationWindow {
                         }
 
                         Text {
-                            text: "Binding"
+                            text: "Appearance"
+                            color: root.token("muted", "#91a2b8")
+                            font.pixelSize: 13
+                            font.bold: true
+                            visible: root.selectedComponentId().length > 0 && root.appearancePropertySchema().length > 0
+                        }
+
+                        Repeater {
+                            model: root.appearancePropertySchema()
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Text {
+                                    text: modelData.label
+                                    color: root.token("muted", "#91a2b8")
+                                    font.pixelSize: 11
+                                }
+
+                                PaperComboBox {
+                                    Layout.fillWidth: true
+                                    visible: (modelData.allowed_values || []).length > 0
+                                    model: modelData.allowed_values || []
+                                    currentIndex: Math.max(0, (modelData.allowed_values || []).indexOf(String(root.selectedProps()[modelData.name] || modelData.default || "")))
+                                    onActivated: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, currentText)
+                                }
+
+                                PaperTextField {
+                                    Layout.fillWidth: true
+                                    visible: (modelData.allowed_values || []).length === 0
+                                    text: String(root.selectedProps()[modelData.name] === undefined || root.selectedProps()[modelData.name] === null ? (modelData.default || "") : root.selectedProps()[modelData.name])
+                                    onEditingFinished: root.canvasController.editComponentProperty(root.selectedComponentId(), modelData.name, text)
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Behavior binding"
                             color: root.token("muted", "#91a2b8")
                             font.pixelSize: 13
                             font.bold: true
                             visible: root.selectedComponentId().length > 0
                         }
 
-                        ComboBox {
+                        PaperComboBox {
                             id: bindingKind
                             Layout.fillWidth: true
                             visible: root.selectedComponentId().length > 0
@@ -814,7 +1098,7 @@ ApplicationWindow {
                             currentIndex: Math.max(0, root.selectedSupportedBindings().indexOf(root.selectedBinding().kind || "static"))
                         }
 
-                        TextField {
+                        PaperTextField {
                             id: bindingReference
                             Layout.fillWidth: true
                             visible: root.selectedComponentId().length > 0
