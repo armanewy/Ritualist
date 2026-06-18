@@ -1,7 +1,7 @@
 schema: ritualist.canvas.v1
 id: project_room
 name: Project Room
-description: Project setup Room with plan previews, launch placeholders, and recent runs.
+description: Project setup Room with a Coding Mode hero loop, runtime state, recent activity, and reviewed local shortcuts.
 mode: desktop_canvas
 resolution_policy: responsive
 theme:
@@ -17,7 +17,7 @@ components:
   - id: title
     type: text.label
     x: 56
-    y: 48
+    y: 40
     width: 420
     height: 64
     z: 1
@@ -26,88 +26,144 @@ components:
       size: 28
   - id: project_clock
     type: clock
-    x: 812
-    y: 48
-    width: 180
-    height: 80
+    x: 1032
+    y: 40
+    width: 160
+    height: 72
     z: 2
     props:
       format: short
   - id: categories
     type: category.dock
     x: 56
-    y: 144
+    y: 128
     width: 200
-    height: 360
+    height: 392
     z: 3
     props:
       categories:
-        - Plan
-        - Launch
-        - Status
-  - id: workspace_plan
+        - Setup
+        - Shortcuts
+        - Runtime
+        - Reference
+  - id: coding_mode_card
     type: ritual.card
     x: 288
-    y: 144
-    width: 320
-    height: 180
+    y: 128
+    width: 520
+    height: 220
     z: 10
     props:
-      title: Prepare Workspace
-      subtitle: Preview a local project setup plan
-      primary_action: preview_plan
+      title: Coding Mode
+      subtitle: Confirm, open the editor, optional terminal, docs, and tracker
+      recipe_id: coding_mode
+      primary_action: run
     binding:
-      kind: intent
-      intent_id: workspace.prepare:basic
-  - id: diagnostics_plan
-    type: ritual.card
-    x: 640
-    y: 144
-    width: 320
-    height: 180
+      kind: recipe
+      recipe_id: coding_mode
+  - id: coding_status
+    type: ritual.status
+    x: 288
+    y: 376
+    width: 520
+    height: 112
     z: 11
     props:
-      title: Project Diagnostics
-      subtitle: Preview redacted local diagnostics
-      primary_action: preview_plan
+      title: Coding Mode Status
+      recipe_id: coding_mode
     binding:
-      kind: intent
-      intent_id: diagnostics.collect:minimal
-  - id: editor_launcher
-    type: app.launcher
-    x: 288
-    y: 352
-    width: 220
-    height: 96
+      kind: recipe
+      recipe_id: coding_mode
+  - id: coding_controller
+    type: ritual.controller
+    x: 832
+    y: 376
+    width: 360
+    height: 112
     z: 12
     props:
-      title: Editor
-      app_id: project_editor
+      recipe_id: coding_mode
+      controls:
+        - pause
+        - resume
+        - stop
     binding:
-      kind: app.launcher
-      id: project_editor
-  - id: folder_launcher
-    type: app.launcher
-    x: 532
-    y: 352
-    width: 220
+      kind: recipe
+      recipe_id: coding_mode
+  - id: project_folder
+    type: shortcut.folder
+    x: 832
+    y: 128
+    width: 240
     height: 96
     z: 13
     props:
       title: Project Folder
-      app_id: project_folder
+      path: '~/Documents/Project'
     binding:
-      kind: app.launcher
-      id: project_folder
-  - id: recent_runs
-    type: recent.activity
-    x: 776
-    y: 352
-    width: 360
-    height: 184
+      kind: shortcut.folder
+      path: '~/Documents/Project'
+  - id: editor_shortcut
+    type: shortcut.app
+    x: 1096
+    y: 128
+    width: 240
+    height: 96
     z: 14
     props:
-      title: Recent runs
+      title: Editor
+      path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+    binding:
+      kind: shortcut.app
+      path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+  - id: terminal_shortcut
+    type: shortcut.app
+    x: 832
+    y: 248
+    width: 240
+    height: 96
+    z: 15
+    props:
+      title: Terminal
+      path: 'C:\Program Files\Windows Terminal\wt.exe'
+    binding:
+      kind: shortcut.app
+      path: 'C:\Program Files\Windows Terminal\wt.exe'
+  - id: docs_shortcut
+    type: shortcut.url
+    x: 1096
+    y: 248
+    width: 240
+    height: 96
+    z: 16
+    props:
+      title: Docs
+      url: "https://docs.python.org/3/"
+    binding:
+      kind: shortcut.url
+      url: "https://docs.python.org/3/"
+  - id: tracker_shortcut
+    type: shortcut.url
+    x: 288
+    y: 520
+    width: 240
+    height: 96
+    z: 17
+    props:
+      title: Tracker
+      url: "https://example.invalid/issues"
+    binding:
+      kind: shortcut.url
+      url: "https://example.invalid/issues"
+  - id: recent_activity
+    type: recent.activity
+    x: 560
+    y: 520
+    width: 632
+    height: 168
+    z: 18
+    props:
+      title: Recent activity
       limit: 6
     binding:
       kind: recent_runs

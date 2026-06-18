@@ -3,7 +3,7 @@ id: meeting_audio_troubleshooting
 name: Meeting Audio Troubleshooting
 description: Open meeting audio troubleshooting references and the local meeting app without joining audio or video automatically.
 home:
-  category: Helpdesk
+  category: Support Desk
   card:
     title: Meeting Audio Troubleshooting
     subtitle: Checklist + status + meeting app
@@ -58,6 +58,7 @@ steps:
     action: app.launch
     command: "{{ meeting_app_path }}"
     optional: true
+    requires_confirmation: true
 
   - name: Wait for manual audio test
     action: wait.for_user

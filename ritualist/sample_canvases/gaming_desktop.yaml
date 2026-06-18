@@ -8,8 +8,8 @@ theme:
   id: ritualist_default
   name: Ritualist Default
 background:
-  type: gradient
-  value: midnight_violet
+  type: system_wallpaper
+  value: ""
 grid:
   enabled: true
   size: 16

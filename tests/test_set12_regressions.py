@@ -56,7 +56,7 @@ def test_bundled_gaming_mode_validates_and_dry_runs_without_adapters(tmp_path, m
     assert fakes.desktop.calls == []
     assert writers and writers[0].run_dir is not None
     steps = _read_steps(writers[0].run_dir)
-    assert len(steps) == 7
+    assert len(steps) == 6
     assert {step["status"] for step in steps} == {"dry-run"}
 
 
@@ -208,7 +208,7 @@ def test_bundled_gaming_mode_keep_open_survives_declined_play_confirmation(
     assert keep_alive_calls == [True]
     assert fakes.browser.calls[0][0] == "open_url"
     assert fakes.browser.calls[0][2]["keep_open"] is True
-    assert [call[2]["text"] for call in fakes.desktop.calls] == ["Diablo IV"]
+    assert fakes.desktop.calls == []
     assert "Target: Play" in result.output
     assert "Confirmation declined; no confirmed risky action was performed." in result.output
 

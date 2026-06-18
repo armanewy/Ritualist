@@ -1,11 +1,11 @@
 version: "0.1"
 id: support_triage_workspace
-name: Support Triage Workspace
+name: Support Triage
 description: Open a support triage workspace for reviewing queues, known issues, and local notes without changing customer systems.
 home:
-  category: Helpdesk
+  category: Support Desk
   card:
-    title: Support Triage Workspace
+    title: Support Triage
     subtitle: Queue + KB + status + notes
     image: ""
     accent: "#3d8b6f"
@@ -67,6 +67,7 @@ steps:
     args:
       - "{{ triage_notes_path }}"
     optional: true
+    requires_confirmation: true
 
   - name: Wait for triage review
     action: wait.for_user

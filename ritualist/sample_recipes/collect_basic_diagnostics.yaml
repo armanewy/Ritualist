@@ -3,7 +3,7 @@ id: collect_basic_diagnostics
 name: Collect Basic Diagnostics
 description: Open safe local and browser-based diagnostic references for manual collection without running scripts.
 home:
-  category: Helpdesk
+  category: Support Desk
   card:
     title: Collect Basic Diagnostics
     subtitle: System info + status + notes

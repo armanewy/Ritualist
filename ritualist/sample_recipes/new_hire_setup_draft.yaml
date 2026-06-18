@@ -1,0 +1,75 @@
+version: "0.1"
+id: new_hire_setup_draft
+name: New Hire Setup Draft
+description: Draft review workflow for approved onboarding portals, local notes, and app list planning. Ritualist opens references and records a redacted note only.
+home:
+  category: Support Desk
+  card:
+    title: New Hire Setup
+    subtitle: Draft checklist + approved portals + local notes
+    image: ""
+    accent: "#8b7a42"
+variables:
+  onboarding_runbook_url: "https://support.example.invalid/new-hire-runbook"
+  onboarding_portal_url: "https://support.example.invalid/onboarding-portal"
+  app_list_url: "https://support.example.invalid/approved-app-list"
+  local_notes_guide_url: "https://support.example.invalid/local-notes"
+environment:
+  required_capabilities:
+    - browser_control
+    - playwright
+  variable_hints:
+    onboarding_runbook_url: Set this to the approved new hire runbook URL.
+    onboarding_portal_url: Set this to the approved onboarding portal URL.
+    app_list_url: Set this to the approved app list URL.
+    local_notes_guide_url: Set this to the approved local notes guide URL.
+steps:
+  - name: Confirm new hire setup draft
+    action: confirm.ask
+    prompt: Open approved new hire setup references for draft review only?
+
+  - name: Open onboarding runbook
+    action: browser.open
+    url: "{{ onboarding_runbook_url }}"
+    browser: chrome
+    profile: new_hire_setup
+    keep_open: true
+
+  - name: Open approved onboarding portal
+    action: browser.open
+    url: "{{ onboarding_portal_url }}"
+    browser: chrome
+    profile: new_hire_setup
+    keep_open: true
+    requires_confirmation: true
+
+  - name: Open approved app list
+    action: browser.open
+    url: "{{ app_list_url }}"
+    browser: chrome
+    profile: new_hire_setup
+    keep_open: true
+
+  - name: Open local notes guide
+    action: browser.open
+    url: "{{ local_notes_guide_url }}"
+    browser: chrome
+    profile: new_hire_setup
+    keep_open: true
+
+  - name: Complete new hire draft checklist
+    action: human.checklist
+    prompt: Complete the new hire setup draft review checklist.
+    items:
+      - Confirm the request, approval, start date, and manager are present.
+      - Review approved portals without creating accounts or changing directory records.
+      - Review the app list without installing software or changing device assignments.
+      - Record local notes manually using the approved case notes process.
+
+  - name: Wait for draft review
+    action: wait.for_user
+    prompt: Continue after the draft onboarding checklist and app list review are complete.
+
+  - name: Record new hire draft note
+    action: note.add
+    text: New hire setup draft review completed without account, directory, software, or device changes.

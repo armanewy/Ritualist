@@ -1,16 +1,17 @@
 version: "0.1"
 id: coding_mode
 name: Coding Mode
-description: Open a local editor workspace and reference pages without running project commands.
+description: Open a local coding workspace and reference pages without running project commands.
 home:
   category: Coding
   card:
     title: Coding Mode
-    subtitle: Editor + docs + tracker
+    subtitle: Editor + terminal + docs
     image: ""
     accent: "#4f8cff"
 variables:
   editor_path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+  terminal_path: 'C:\Program Files\Windows Terminal\wt.exe'
   project_path: '%USERPROFILE%\Documents\Project'
   docs_url: "https://docs.python.org/3/"
   tracker_url: "https://example.invalid/issues"
@@ -25,9 +26,10 @@ environment:
     - title_contains: "{{ editor_window }}"
   variable_hints:
     editor_path: Set this to the local editor executable.
+    terminal_path: Set this to an optional local terminal executable.
     project_path: Set this to the local project directory.
     docs_url: Set this to the reference documentation URL.
-    tracker_url: Set this to the issue tracker or planning board URL.
+    tracker_url: Set this to an optional issue tracker or planning board URL.
     editor_window: Set this to visible editor window title text.
 preflight:
   - name: Editor path is configured
@@ -41,13 +43,22 @@ preflight:
 steps:
   - name: Confirm coding workspace
     action: confirm.ask
-    prompt: Open the configured editor, project, documentation, and tracker URLs?
+    prompt: Open the configured editor, optional terminal, documentation, and optional tracker without running project commands?
 
   - name: Open project in editor
     action: app.launch
     command: "{{ editor_path }}"
     args:
       - "{{ project_path }}"
+
+  - name: Launch optional terminal
+    action: app.launch
+    command: "{{ terminal_path }}"
+    cwd: "{{ project_path }}"
+    optional: true
+    when:
+      type: file.exists
+      path: "{{ terminal_path }}"
 
   - name: Open documentation
     action: browser.open
@@ -62,10 +73,11 @@ steps:
     browser: chrome
     profile: coding_mode
     keep_open: true
+    optional: true
 
-  - name: Wait for local review
+  - name: Wait for manual readiness
     action: wait.for_user
-    prompt: Confirm the editor and reference pages are ready.
+    prompt: Continue after the editor, optional terminal, documentation, and tracker are ready for manual work.
 
 verify:
   - name: Project path remains available

@@ -63,14 +63,6 @@ steps:
     title_contains: "{{ battle_net_window }}"
     timeout_seconds: 30
 
-  - name: Select Diablo IV
-    action: desktop.click_text
-    text: Diablo IV
-    window_title_contains: "{{ battle_net_window }}"
-    exact: false
-    optional: true
-    timeout_seconds: 20
-
   - name: Ask before clicking Play
     action: desktop.click_text
     text: Play
