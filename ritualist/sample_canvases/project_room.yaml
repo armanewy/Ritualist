@@ -26,19 +26,19 @@ components:
       size: 28
   - id: project_clock
     type: clock
-    x: 1032
+    x: 840
     y: 40
-    width: 160
+    width: 140
     height: 72
     z: 2
     props:
       format: short
   - id: categories
     type: category.dock
-    x: 56
-    y: 128
-    width: 200
-    height: 392
+    x: 624
+    y: 552
+    width: 180
+    height: 160
     z: 3
     props:
       categories:
@@ -48,9 +48,9 @@ components:
         - Reference
   - id: coding_mode_card
     type: ritual.card
-    x: 288
-    y: 128
-    width: 520
+    x: 56
+    y: 136
+    width: 540
     height: 220
     z: 10
     props:
@@ -63,10 +63,10 @@ components:
       recipe_id: coding_mode
   - id: coding_status
     type: ritual.status
-    x: 288
-    y: 376
-    width: 520
-    height: 112
+    x: 56
+    y: 384
+    width: 540
+    height: 128
     z: 11
     props:
       title: Coding Mode Status
@@ -76,10 +76,10 @@ components:
       recipe_id: coding_mode
   - id: coding_controller
     type: ritual.controller
-    x: 832
-    y: 376
+    x: 624
+    y: 424
     width: 360
-    height: 112
+    height: 128
     z: 12
     props:
       recipe_id: coding_mode
@@ -92,10 +92,10 @@ components:
       recipe_id: coding_mode
   - id: project_folder
     type: shortcut.folder
-    x: 832
-    y: 128
-    width: 240
-    height: 96
+    x: 624
+    y: 136
+    width: 172
+    height: 80
     z: 13
     props:
       title: Project Folder
@@ -105,10 +105,10 @@ components:
       path: '~/Documents/Project'
   - id: editor_shortcut
     type: shortcut.app
-    x: 1096
-    y: 128
-    width: 240
-    height: 96
+    x: 812
+    y: 136
+    width: 172
+    height: 80
     z: 14
     props:
       title: Editor
@@ -118,10 +118,10 @@ components:
       path: 'C:\Program Files\Microsoft VS Code\Code.exe'
   - id: terminal_shortcut
     type: shortcut.app
-    x: 832
-    y: 248
-    width: 240
-    height: 96
+    x: 624
+    y: 232
+    width: 172
+    height: 80
     z: 15
     props:
       title: Terminal
@@ -131,10 +131,10 @@ components:
       path: 'C:\Program Files\Windows Terminal\wt.exe'
   - id: docs_shortcut
     type: shortcut.url
-    x: 1096
-    y: 248
-    width: 240
-    height: 96
+    x: 812
+    y: 232
+    width: 172
+    height: 80
     z: 16
     props:
       title: Docs
@@ -144,10 +144,10 @@ components:
       url: "https://docs.python.org/3/"
   - id: tracker_shortcut
     type: shortcut.url
-    x: 288
-    y: 520
-    width: 240
-    height: 96
+    x: 812
+    y: 328
+    width: 172
+    height: 80
     z: 17
     props:
       title: Tracker
@@ -157,9 +157,9 @@ components:
       url: "https://example.invalid/issues"
   - id: recent_activity
     type: recent.activity
-    x: 560
+    x: 56
     y: 520
-    width: 632
+    width: 540
     height: 168
     z: 18
     props:

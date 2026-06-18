@@ -1288,6 +1288,7 @@ ApplicationWindow {
                                 componentShell.supportingRestSurface
                             )
                             border.width: selected ? 3 : 1
+                            clip: true
                             opacity: componentShell.receded ? 0.46 : (root.actionBusy && !selected ? 0.92 : 1.0)
 
                             Behavior on opacity {
@@ -1770,6 +1771,12 @@ ApplicationWindow {
         ColumnLayout {
             property var componentData: ({})
             property string visualState: root.activeState(componentData)
+            property bool supportingRest: root.componentIsSupportingRestSurface(componentData) ||
+                                          (root.quietInstrumentEngaged() && componentData.type !== "ritual.card")
+            property bool compactRestCard: componentData.type === "ritual.card" &&
+                                           componentData.height < 220 &&
+                                           (visualState === "ready" || visualState === "idle" ||
+                                            visualState === "success" || visualState === "stopped")
 
             spacing: root.spaceSm
 
@@ -1812,7 +1819,7 @@ ApplicationWindow {
             Rectangle {
                 id: readyPanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: 58
+                Layout.preferredHeight: compactRestCard ? 46 : (supportingRest ? 50 : 58)
                 radius: root.radiusMd
                 color: root.token("panel_alt", "#101720")
                 border.color: root.token("border", "#203044")
@@ -2047,9 +2054,10 @@ ApplicationWindow {
                 font.family: root.token("font_family", "Segoe UI")
                 font.pixelSize: root.token("font_size_body", 13)
                 wrapMode: Text.WordWrap
-                maximumLineCount: 3
+                maximumLineCount: compactRestCard ? 1 : 3
                 elide: Text.ElideRight
-                visible: text.length > 0 && visualState !== "running" && visualState !== "waiting" && visualState !== "confirming"
+                visible: text.length > 0 && !supportingRest &&
+                         visualState !== "running" && visualState !== "waiting" && visualState !== "confirming"
                 Layout.fillWidth: true
             }
 
@@ -2058,9 +2066,9 @@ ApplicationWindow {
                 color: root.token("warning", "#f5c45b")
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
-                maximumLineCount: 3
+                maximumLineCount: compactRestCard ? 1 : 3
                 elide: Text.ElideRight
-                visible: text.length > 0
+                visible: text.length > 0 && !supportingRest && !compactRestCard
                 Layout.fillWidth: true
             }
 
@@ -2071,7 +2079,8 @@ ApplicationWindow {
                 radius: root.radiusMd
                 color: root.token("panel_alt", "#101720")
                 border.color: root.token("border", "#203044")
-                visible: root.lastRun(componentData).state && root.lastRun(componentData).state !== "none" && visualState !== "interrupted"
+                visible: root.lastRun(componentData).state && root.lastRun(componentData).state !== "none" &&
+                         visualState !== "interrupted" && !supportingRest && !compactRestCard
 
                 ColumnLayout {
                     anchors.fill: parent

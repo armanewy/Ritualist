@@ -121,6 +121,32 @@ def test_canvas_use_qml_uses_ambient_rest_chrome_without_changing_actions() -> N
     assert "actionId" not in ambient_section
 
 
+def test_canvas_use_qml_compacts_supporting_surfaces_without_new_actions() -> None:
+    qml = _qml()
+
+    for snippet in (
+        "property bool supportingRest: root.componentIsSupportingRestSurface(componentData)",
+        "property bool compactRestCard: componentData.type === \"ritual.card\"",
+        "componentData.height < 220",
+        "Layout.preferredHeight: compactRestCard ? 46 : (supportingRest ? 50 : 58)",
+        "visible: text.length > 0 && !supportingRest && !compactRestCard",
+        "visualState !== \"interrupted\" && !supportingRest && !compactRestCard",
+    ):
+        assert snippet in qml
+
+    compact_section = qml[qml.index("property bool supportingRest") : qml.index("id: shortcutDelegate")]
+    assert "root.dispatch" in compact_section
+    assert '"inspect_run"' not in compact_section
+    assert '"start_fresh"' not in compact_section
+
+
+def test_canvas_use_qml_clips_component_content_to_frame() -> None:
+    qml = _qml()
+
+    frame_section = qml[qml.index("id: componentFrame") : qml.index("id: componentContentLoader")]
+    assert "clip: true" in frame_section
+
+
 def test_canvas_use_qml_uses_existing_ritual_actions_with_state_specific_labels() -> None:
     qml = _qml()
 

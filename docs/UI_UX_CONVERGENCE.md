@@ -126,3 +126,16 @@ The third implementation milestone is shared rest-state chrome:
   clear;
 - do not change component IDs, action IDs, bindings, or packaged acceptance
   expectations.
+
+## Fourth Milestone
+
+The fourth implementation milestone is bundled Room composition:
+
+- make the starter Gaming, Project, and Support Desk Rooms read as activity
+  environments within the first packaged viewport;
+- preserve existing component IDs, action IDs, bindings, and recipe/target
+  references;
+- make Gaming quiet-instrument first, Project shortcut/preflight first, and
+  Support Desk ledger/runbook first;
+- keep the change data-only: no runtime behavior, automation surface, import,
+  suggestion, or confirmation semantics change.

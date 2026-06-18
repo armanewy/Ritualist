@@ -36,10 +36,10 @@ components:
       size: 14
   - id: doctor_badge
     type: doctor.badge
-    x: 760
-    y: 152
-    width: 216
-    height: 96
+    x: 48
+    y: 548
+    width: 180
+    height: 144
     z: 3
     props:
       title: Doctor
@@ -50,9 +50,9 @@ components:
   - id: support_triage_card
     type: ritual.card
     x: 48
-    y: 152
-    width: 320
-    height: 168
+    y: 144
+    width: 520
+    height: 200
     z: 10
     props:
       title: Support Triage
@@ -65,10 +65,10 @@ components:
       recipe_id: support_triage_workspace
   - id: diagnostics_card
     type: ritual.card
-    x: 392
-    y: 152
-    width: 320
-    height: 168
+    x: 600
+    y: 144
+    width: 360
+    height: 172
     z: 10
     props:
       title: Collect Basic Diagnostics
@@ -81,10 +81,10 @@ components:
       recipe_id: collect_basic_diagnostics
   - id: meeting_audio_card
     type: ritual.card
-    x: 48
-    y: 344
-    width: 320
-    height: 168
+    x: 600
+    y: 332
+    width: 360
+    height: 172
     z: 10
     props:
       title: Meeting Audio Troubleshooting
@@ -97,10 +97,10 @@ components:
       recipe_id: meeting_audio_troubleshooting
   - id: vpn_repair_card
     type: ritual.card
-    x: 392
-    y: 344
-    width: 320
-    height: 168
+    x: 48
+    y: 360
+    width: 248
+    height: 172
     z: 10
     props:
       title: VPN Repair
@@ -113,10 +113,10 @@ components:
       recipe_id: vpn_repair_placeholder
   - id: new_hire_setup_card
     type: ritual.card
-    x: 48
-    y: 536
-    width: 664
-    height: 168
+    x: 320
+    y: 360
+    width: 248
+    height: 172
     z: 10
     props:
       title: New Hire Setup
@@ -129,10 +129,10 @@ components:
       recipe_id: new_hire_setup_draft
   - id: run_status
     type: ritual.status
-    x: 1000
-    y: 152
-    width: 232
-    height: 96
+    x: 248
+    y: 548
+    width: 260
+    height: 144
     z: 11
     props:
       title: Current Ritual
@@ -142,10 +142,10 @@ components:
       recipe_id: support_triage_workspace
   - id: run_controller
     type: ritual.controller
-    x: 760
-    y: 272
-    width: 472
-    height: 112
+    x: 528
+    y: 548
+    width: 432
+    height: 144
     z: 12
     props:
       recipe_id: support_triage_workspace
@@ -159,22 +159,22 @@ components:
       id: support_triage_workspace
   - id: recent_runs
     type: recent.activity
-    x: 760
-    y: 408
-    width: 472
-    height: 200
+    x: 48
+    y: 700
+    width: 520
+    height: 120
     z: 11
     props:
       title: Recent Activity / Open Logs
-      limit: 10
+      limit: 2
     binding:
       kind: recent_runs
       id: local
   - id: evidence_note
     type: text.label
-    x: 760
-    y: 632
-    width: 472
+    x: 600
+    y: 700
+    width: 360
     height: 72
     z: 1
     props:
