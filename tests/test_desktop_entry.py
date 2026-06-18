@@ -73,6 +73,45 @@ def test_desktop_entry_launches_desktop_work_area_canvas_with_option(monkeypatch
     assert called == [(None, "desktop-work-area", "respect")]
 
 
+def test_desktop_entry_launches_room_by_alias_without_running_ritual(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_canvas",
+        lambda canvas, *, host, taskbar_policy: called.append((canvas, host, taskbar_policy)),
+    )
+
+    assert desktop_entry.main(["--room", "gaming", "--host", "desktop-work-area"]) == 0
+    assert called == [("gaming_desktop", "desktop-work-area", "respect")]
+
+
+def test_desktop_entry_launches_room_in_window_by_default(monkeypatch):
+    called = []
+    monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
+    monkeypatch.setattr(desktop_entry, "_run_gui", lambda: called.append(("gui", "")))
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_canvas",
+        lambda canvas, *, host, taskbar_policy: called.append((canvas, host, taskbar_policy)),
+    )
+
+    assert desktop_entry.main(["--room=project"]) == 0
+    assert called == [("project_room", "windowed", "respect")]
+
+
+def test_desktop_entry_rejects_unknown_room(monkeypatch, capsys):
+    messages = []
+    logs = []
+    monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
+    monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
+
+    assert desktop_entry.main(["--room", "minimal"]) == 1
+    assert "room not found" in messages[0]
+    assert "room not found" in capsys.readouterr().err
+
+
 def test_desktop_entry_rejects_unknown_canvas_option(monkeypatch, capsys):
     messages = []
     logs = []
@@ -110,6 +149,7 @@ def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
     assert desktop_entry.main(["--unknown"]) == 1
     assert "Unsupported desktop option" in messages[0]
     assert "Ritualist.exe --classic-gui" in logs[0][0]
+    assert "Ritualist.exe --room gaming --host desktop-work-area" in logs[0][0]
     assert "Ritualist.exe --canvas gaming_desktop" in logs[0][0]
     assert "Unsupported desktop option" in capsys.readouterr().err
 

@@ -223,7 +223,251 @@ ApplicationWindow {
         return root.token("border", "#203044")
     }
 
+    function isRitualComponent(typeName) {
+        return typeName === "ritual.card" || typeName === "ritual.status" ||
+               typeName === "ritual.controller" || typeName === "doctor.badge"
+    }
+
+    function isShortcutComponent(typeName) {
+        return typeName === "shortcut.folder" || typeName === "shortcut.app" ||
+               typeName === "shortcut.url" || typeName === "app.launcher"
+    }
+
+    function ritualState(component) {
+        var data = component.data || {}
+        return data.ritual_state || {}
+    }
+
+    function activeRun(component) {
+        return root.ritualState(component).active_run || {}
+    }
+
+    function lastRun(component) {
+        return root.ritualState(component).last_run || {}
+    }
+
+    function recoveryState(component) {
+        return root.ritualState(component).recovery || {}
+    }
+
+    function doctorState(component) {
+        return root.ritualState(component).doctor || {}
+    }
+
+    function dryRunState(component) {
+        return root.ritualState(component).dry_run || {}
+    }
+
+    function activeState(component) {
+        var active = root.activeRun(component)
+        var state = String(active.state || component.state || component.status || "idle")
+        var recovery = root.recoveryState(component)
+        var last = root.lastRun(component)
+        if (recovery.interrupted || last.state === "interrupted") {
+            return "interrupted"
+        }
+        return state
+    }
+
+    function runStateLabel(state) {
+        if (state === "running") {
+            return "Running"
+        }
+        if (state === "waiting") {
+            return "Waiting"
+        }
+        if (state === "confirming" || state === "confirmation") {
+            return "Confirming"
+        }
+        if (state === "paused") {
+            return "Paused"
+        }
+        if (state === "failed") {
+            return "Failed"
+        }
+        if (state === "interrupted") {
+            return "Interrupted"
+        }
+        if (state === "success") {
+            return "Complete"
+        }
+        if (state === "stopped") {
+            return "Stopped"
+        }
+        return "Ready"
+    }
+
+    function hasAction(component, actionId) {
+        var actions = component.enabled_actions || []
+        for (var i = 0; i < actions.length; i += 1) {
+            if (actions[i] === actionId) {
+                return true
+            }
+        }
+        return false
+    }
+
+    function actionsFrom(component, actionIds) {
+        var result = []
+        for (var i = 0; i < actionIds.length; i += 1) {
+            if (root.hasAction(component, actionIds[i])) {
+                result.push(actionIds[i])
+            }
+        }
+        return result
+    }
+
+    function shortcutKind(component) {
+        if (component.type === "shortcut.folder") {
+            return "folder"
+        }
+        if (component.type === "shortcut.url") {
+            return "url"
+        }
+        return "app"
+    }
+
+    function actionLabel(actionId, component) {
+        if (root.isShortcutComponent(component.type)) {
+            if (root.shortcutKind(component) === "folder") {
+                return "Open Folder"
+            }
+            if (root.shortcutKind(component) === "url") {
+                return "Open URL"
+            }
+            return "Launch App"
+        }
+        if (root.activeState(component) === "interrupted") {
+            if (actionId === "open_logs" || actionId === "open_run_log") {
+                return "Inspect Run"
+            }
+            if (actionId === "run") {
+                return "Start Fresh"
+            }
+        }
+        if (actionId === "dry_run") {
+            return "Dry Run"
+        }
+        if (actionId === "doctor") {
+            return "Doctor"
+        }
+        if (actionId === "open_logs" || actionId === "open_run_log") {
+            return "Open Logs"
+        }
+        if (actionId === "preview_plan") {
+            return "Preview Plan"
+        }
+        if (actionId === "run") {
+            return "Run"
+        }
+        if (actionId === "resume") {
+            return "Resume"
+        }
+        if (actionId === "pause") {
+            return "Pause"
+        }
+        if (actionId === "stop") {
+            return "Stop"
+        }
+        return actionId
+    }
+
+    function formatSeconds(value) {
+        if (value === undefined || value === null || value === "") {
+            return "0s"
+        }
+        var seconds = Math.max(0, Math.floor(Number(value)))
+        if (seconds >= 60) {
+            return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s"
+        }
+        return seconds + "s"
+    }
+
+    function readinessSummary(component) {
+        var doctor = root.doctorState(component)
+        var dry = root.dryRunState(component)
+        var doctorText = "Doctor: " + String(doctor.status || "unknown")
+        var dryText = "Dry Run: " + String(dry.status || "not_run")
+        if (dry.planned_step_count !== undefined && dry.planned_step_count !== null) {
+            dryText += " / " + dry.planned_step_count + " steps"
+        }
+        if (dry.confirmation_count !== undefined && dry.confirmation_count !== null && dry.confirmation_count > 0) {
+            dryText += " / " + dry.confirmation_count + " confirmations"
+        }
+        return doctorText + " | " + dryText
+    }
+
+    function currentStepTitle(component) {
+        var step = root.activeRun(component).current_step || {}
+        return step.name || component.message || "Current step"
+    }
+
+    function currentStepSubtitle(component) {
+        var step = root.activeRun(component).current_step || {}
+        var details = []
+        if (step.index !== undefined && step.index !== null) {
+            details.push("Step " + step.index)
+        }
+        if (step.action) {
+            details.push(step.action)
+        }
+        if (step.message) {
+            details.push(step.message)
+        }
+        return details.join(" | ")
+    }
+
+    function waitSummary(component) {
+        var wait = root.activeRun(component).wait || {}
+        var target = wait.target || "current target"
+        var timeout = wait.timeout_seconds === undefined || wait.timeout_seconds === null ? "none" : root.formatSeconds(wait.timeout_seconds)
+        return "Target: " + target + " | elapsed " + root.formatSeconds(wait.elapsed_seconds) + " | timeout " + timeout
+    }
+
+    function confirmationSummary(component) {
+        var confirmation = root.activeRun(component).confirmation || {}
+        var target = confirmation.target || confirmation.step_name || "requested action"
+        var targetType = confirmation.target_type || confirmation.action || "native confirmation"
+        return "Target: " + target + " | " + targetType
+    }
+
+    function lastRunSummary(component) {
+        var last = root.lastRun(component)
+        if (!last || !last.state || last.state === "none") {
+            return "Last run: none"
+        }
+        var text = "Last run: " + last.state
+        if (last.final_message) {
+            text += " | " + last.final_message
+        }
+        if (last.finished_at) {
+            text += " | " + last.finished_at
+        }
+        return text
+    }
+
+    function artifactSummary(component) {
+        var last = root.lastRun(component)
+        var artifacts = last.artifacts || []
+        var names = []
+        for (var i = 0; i < artifacts.length; i += 1) {
+            if (artifacts[i].name) {
+                names.push(artifacts[i].name)
+            }
+        }
+        if (names.length === 0 && last.run_log_path) {
+            return "Artifacts: run log"
+        }
+        return names.length ? "Artifacts: " + names.join(", ") : ""
+    }
+
     function delegateFor(typeName) {
+        if (root.isRitualComponent(typeName)) {
+            return ritualDelegate
+        }
+        if (root.isShortcutComponent(typeName)) {
+            return shortcutDelegate
+        }
         if (typeName === "image") {
             return imageDelegate
         }
@@ -242,7 +486,7 @@ ApplicationWindow {
         if (typeName === "category.dock") {
             return dockDelegate
         }
-        if (typeName === "ritual.status" || typeName === "target.status" || typeName === "doctor.badge" || typeName === "ritual.controller") {
+        if (typeName === "target.status") {
             return statusDelegate
         }
         return cardDelegate
@@ -1071,6 +1315,538 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: ritualDelegate
+
+        ColumnLayout {
+            property var componentData: ({})
+            property string visualState: root.activeState(componentData)
+
+            spacing: root.spaceSm
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+
+                Rectangle {
+                    width: visualState === "running" || visualState === "waiting" || visualState === "confirming" ? 14 : 10
+                    height: width
+                    radius: width / 2
+                    color: root.borderColor(visualState === "interrupted" ? "interrupted" : componentData.status)
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+
+                    Text {
+                        text: componentData.title || componentData.id
+                        color: root.token("foreground", "#f4f7fb")
+                        font.family: root.token("font_family", "Segoe UI")
+                        font.pixelSize: componentData.type === "ritual.card" ? 17 : 14
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.runStateLabel(visualState)
+                        color: root.borderColor(componentData.status)
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: readyPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                radius: root.radiusMd
+                color: root.token("panel_alt", "#101720")
+                border.color: root.token("border", "#203044")
+                visible: visualState === "ready" || visualState === "idle" || visualState === "success" || visualState === "stopped"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Readiness"
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.readinessSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: currentStepPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: visualState === "running" || visualState === "waiting" || visualState === "confirming" ? 84 : 0
+                radius: root.radiusMd
+                color: root.token("focus_panel", "#132235")
+                border.color: root.token("focus_ring", "#7fb8ff")
+                visible: visualState === "running" || visualState === "waiting" || visualState === "confirming"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Current step"
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.currentStepTitle(componentData)
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 18
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.currentStepSubtitle(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: waitPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 46
+                radius: root.radiusMd
+                color: root.token("focus_panel", "#132235")
+                border.color: root.token("accent", "#3dd6a5")
+                visible: visualState === "waiting"
+
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    text: "Waiting for " + root.waitSummary(componentData)
+                    color: root.token("foreground", "#f4f7fb")
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                id: confirmationPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                radius: root.radiusMd
+                color: root.token("warning_panel", "#252014")
+                border.color: root.token("warning", "#f5c45b")
+                visible: visualState === "confirming" || visualState === "confirmation" || (root.activeRun(componentData).confirmation || {}).required === true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Native confirmation required"
+                        color: root.token("warning", "#f5c45b")
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.confirmationSummary(componentData)
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: pausedPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 48
+                radius: root.radiusMd
+                color: root.token("warning_panel", "#252014")
+                border.color: root.token("warning", "#f5c45b")
+                visible: visualState === "paused"
+
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    text: "Paused: " + (root.currentStepTitle(componentData) || componentData.message || "run paused")
+                    color: root.token("foreground", "#f4f7fb")
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                id: failedPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 58
+                radius: root.radiusMd
+                color: root.token("danger_panel", "#28151c")
+                border.color: root.token("danger", "#ff6b7a")
+                visible: visualState === "failed" || root.lastRun(componentData).state === "failed"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Failed step"
+                        color: root.token("danger", "#ff6b7a")
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.currentStepTitle(componentData) || root.lastRun(componentData).last_step || componentData.message
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: interruptedPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 72
+                radius: root.radiusMd
+                color: root.token("danger_panel", "#28151c")
+                border.color: root.token("danger", "#ff6b7a")
+                visible: visualState === "interrupted"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Repaired interrupted run"
+                        color: root.token("danger", "#ff6b7a")
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.lastRunSummary(componentData)
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Text {
+                text: root.detailText(componentData)
+                color: root.token("muted", "#91a2b8")
+                font.family: root.token("font_family", "Segoe UI")
+                font.pixelSize: root.token("font_size_body", 13)
+                wrapMode: Text.WordWrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                visible: text.length > 0 && visualState !== "running" && visualState !== "waiting" && visualState !== "confirming"
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: componentData.warnings && componentData.warnings.length ? componentData.warnings.join("; ") : ""
+                color: root.token("warning", "#f5c45b")
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                visible: text.length > 0
+                Layout.fillWidth: true
+            }
+
+            Rectangle {
+                id: lastRunPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 50
+                radius: root.radiusMd
+                color: root.token("panel_alt", "#101720")
+                border.color: root.token("border", "#203044")
+                visible: root.lastRun(componentData).state && root.lastRun(componentData).state !== "none" && visualState !== "interrupted"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 1
+
+                    Text {
+                        text: root.lastRunSummary(componentData)
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.artifactSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && (visualState === "ready" || visualState === "idle" || visualState === "success" || visualState === "stopped") &&
+                         root.actionsFrom(componentData, ["doctor", "dry_run", "run"]).length > 0
+
+                Repeater {
+                    model: root.actionsFrom(componentData, ["doctor", "dry_run", "run"])
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(92, Math.min(118, parent.width / 3 - root.spaceSm))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && visualState === "paused" &&
+                         root.actionsFrom(componentData, ["resume", "stop", "open_run_log"]).length > 0
+
+                Repeater {
+                    model: root.actionsFrom(componentData, ["resume", "stop", "open_run_log"])
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(92, Math.min(118, parent.width / 3 - root.spaceSm))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && (visualState === "running" || visualState === "waiting" || visualState === "confirming") &&
+                         root.actionsFrom(componentData, ["pause", "resume", "stop", "open_run_log"]).length > 0
+
+                Repeater {
+                    model: root.actionsFrom(componentData, ["pause", "resume", "stop", "open_run_log"])
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(92, Math.min(118, parent.width / 3 - root.spaceSm))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && (visualState === "failed" || root.lastRun(componentData).state === "failed") &&
+                         root.actionsFrom(componentData, ["open_logs", "open_run_log"]).length > 0
+
+                Repeater {
+                    model: root.actionsFrom(componentData, ["open_logs", "open_run_log"])
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(104, Math.min(128, parent.width))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && visualState === "interrupted" &&
+                         root.actionsFrom(componentData, ["open_logs", "open_run_log", "doctor", "run"]).length > 0
+
+                Repeater {
+                    model: root.actionsFrom(componentData, ["open_logs", "open_run_log", "doctor", "run"])
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(92, Math.min(118, parent.width / 3 - root.spaceSm))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: shortcutDelegate
+
+        ColumnLayout {
+            property var componentData: ({})
+            property string kind: root.shortcutKind(componentData)
+
+            spacing: root.spaceSm
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+
+                Rectangle {
+                    width: 36
+                    height: 36
+                    radius: root.radiusMd
+                    color: kind === "folder" ? root.token("focus_panel", "#132235") :
+                           (kind === "url" ? root.token("success_panel", "#12251f") : root.token("panel_alt", "#101720"))
+                    border.color: kind === "folder" ? root.token("focus_ring", "#7fb8ff") :
+                                  (kind === "url" ? root.token("success", root.token("accent", "#3dd6a5")) : root.token("border", "#203044"))
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: kind === "folder" ? "DIR" : (kind === "url" ? "URL" : "APP")
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+
+                    Text {
+                        text: componentData.title || componentData.id
+                        color: root.token("foreground", "#f4f7fb")
+                        font.family: root.token("font_family", "Segoe UI")
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: "Instant " + kind + " shortcut"
+                        color: root.borderColor(componentData.status)
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Text {
+                text: (componentData.data && componentData.data.shortcut && componentData.data.shortcut.target_label) ?
+                      componentData.data.shortcut.target_label : root.detailText(componentData)
+                color: root.token("muted", "#91a2b8")
+                font.pixelSize: root.token("font_size_body", 13)
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: componentData.warnings && componentData.warnings.length ? componentData.warnings.join("; ") : ""
+                color: root.token("warning", "#f5c45b")
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                maximumLineCount: 3
+                visible: text.length > 0
+                Layout.fillWidth: true
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && componentData.enabled_actions && componentData.enabled_actions.length > 0
+
+                Repeater {
+                    model: componentData.enabled_actions || []
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(116, Math.min(150, parent.width))
+                        enabled: !root.actionBusy && !root.mockMode
+                        onClicked: root.dispatch(componentData.id, modelData)
                     }
                 }
             }

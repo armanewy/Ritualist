@@ -80,6 +80,22 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
         encoding="utf-8"
     )
 
+    assert "visibility: Window.Windowed" in qml
+    assert "Window.FullScreen" not in qml
+    assert "FramelessWindowHint" not in qml
+    assert 'property var promotedRoomIds: ["gaming", "project", "support_desk"]' in qml
+    assert "model: roomModel" in qml
+    assert qml.count("Open on Desktop") == 1
+    assert qml.count("Open in Window") == 1
+    assert 'root.openRoom(model.id, "desktop-work-area")' in qml
+    assert 'root.openRoom(model.id, "windowed")' in qml
+    assert "Classic GUI" in qml
+    assert "openClassicGui" in qml
+    assert "Recipe Library" in qml
+    assert "Minimal Room" not in qml
+    assert "Focus Room" not in qml
+    assert "Coding Room" not in qml
+    assert "Media Room" not in qml
     assert "stopCurrentRun" in qml
     assert "pauseCurrentRun" in qml
     assert "resumeCurrentRun" in qml
@@ -102,6 +118,71 @@ def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
     assert "Last run:" in qml
     assert "statusDwellTimer" in qml
     assert "Math.max(100, root.minStatusDwellMs)" in qml
+
+
+def test_home_rooms_payload_exposes_exactly_three_promoted_rooms() -> None:
+    payload = home_app._rooms_payload()
+
+    assert [room["id"] for room in payload["rooms"]] == [
+        "gaming",
+        "project",
+        "support_desk",
+    ]
+    assert [room["name"] for room in payload["rooms"]] == [
+        "Gaming Room",
+        "Project Room",
+        "Support Desk",
+    ]
+    assert "minimal_desktop" not in {room["canvas_id"] for room in payload["rooms"]}
+
+
+def test_home_room_launch_command_uses_packaged_room_arguments(monkeypatch) -> None:
+    monkeypatch.setattr(home_app.sys, "executable", "Ritualist.exe")
+    monkeypatch.setattr(home_app.sys, "frozen", True, raising=False)
+
+    command, args, room = home_app._room_launch_command("gaming", "desktop-work-area")
+
+    assert command == "Ritualist.exe"
+    assert args == [
+        "--room",
+        "gaming",
+        "--host",
+        "desktop-work-area",
+        "--taskbar-policy",
+        "respect",
+    ]
+    assert room.canvas_id == "gaming_desktop"
+
+
+def test_home_room_launch_command_uses_source_canvas_cli(monkeypatch) -> None:
+    monkeypatch.setattr(home_app.sys, "executable", sys.executable)
+    monkeypatch.setattr(home_app.sys, "frozen", False, raising=False)
+
+    command, args, room = home_app._room_launch_command("support_desk", "windowed")
+
+    assert command == sys.executable
+    assert args == [
+        "-m",
+        "ritualist",
+        "canvas",
+        "use",
+        "helpdesk_desktop",
+        "--host",
+        "windowed",
+        "--taskbar-policy",
+        "respect",
+    ]
+    assert room.name == "Support Desk"
+
+
+def test_home_classic_gui_launch_command_keeps_source_and_packaged_paths(monkeypatch) -> None:
+    monkeypatch.setattr(home_app.sys, "executable", "Ritualist.exe")
+    monkeypatch.setattr(home_app.sys, "frozen", True, raising=False)
+    assert home_app._classic_gui_launch_command() == ("Ritualist.exe", ["--classic-gui"])
+
+    monkeypatch.setattr(home_app.sys, "executable", sys.executable)
+    monkeypatch.setattr(home_app.sys, "frozen", False, raising=False)
+    assert home_app._classic_gui_launch_command() == (sys.executable, ["-m", "ritualist", "gui"])
 
 
 def test_home_runtime_control_is_active_before_action_state_signal():

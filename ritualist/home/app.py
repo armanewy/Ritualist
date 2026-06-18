@@ -37,7 +37,7 @@ def run_home(*, mock: bool = False) -> int:
     usable without GUI dependencies installed.
     """
     try:
-        from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
+        from PySide6.QtCore import Property, QObject, QProcess, QTimer, QUrl, Signal, Slot
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtQml import QQmlApplicationEngine
         from PySide6.QtWidgets import QApplication
@@ -67,6 +67,7 @@ def run_home(*, mock: bool = False) -> int:
             mock: bool,
             overlay_controller: Any | None,
             confirmation_presenter: Any | None,
+            process_starter: Any,
         ) -> None:
             super().__init__()
             self._model = model
@@ -90,6 +91,7 @@ def run_home(*, mock: bool = False) -> int:
             self._confirmation_result = False
             self._runtime_control: Any | None = None
             self._runtime_paused = False
+            self._process_starter = process_starter
             self.installedModelLoaded.connect(self._replace_model)
             self.installedModelLoadFailed.connect(self._mark_load_failed)
             self.actionCompleted.connect(self._complete_action)
@@ -201,6 +203,40 @@ def run_home(*, mock: bool = False) -> int:
         @Slot(str)
         def openLogs(self, card_id: str) -> None:
             self._start_action(card_id, HomeCardAction.OPEN_LOGS)
+
+        @Slot(str, str)
+        def openRoom(self, room_id: str, host: str) -> None:
+            try:
+                command, args, room = _room_launch_command(room_id, host)
+            except RitualistError as exc:
+                self._last_event_label = str(exc)
+                self.metricsChanged.emit()
+                return
+            record_event(
+                "home.room.open_requested",
+                room_id=room.room_id,
+                canvas_id=room.canvas_id,
+                host=_normalize_room_host(host),
+            )
+            started = bool(self._process_starter(command, args))
+            self._last_event_label = (
+                f"Opening {room.name}"
+                if started
+                else f"Could not open {room.name}"
+            )
+            self.metricsChanged.emit()
+
+        @Slot()
+        def openClassicGui(self) -> None:
+            command, args = _classic_gui_launch_command()
+            record_event("home.classic_gui.open_requested")
+            started = bool(self._process_starter(command, args))
+            self._last_event_label = (
+                "Opening classic GUI"
+                if started
+                else "Could not open classic GUI"
+            )
+            self.metricsChanged.emit()
 
         @Slot(str)
         def closeKeepOpenBrowser(self, card_id: str) -> None:
@@ -536,6 +572,7 @@ def run_home(*, mock: bool = False) -> int:
         mock=mock,
         overlay_controller=overlay_controller,
         confirmation_presenter=confirmation_presenter,
+        process_starter=QProcess.startDetached,
     )
     emitter = FakeHomeStatusEmitter(bridge.queue_runtime_event) if mock else None
 
@@ -546,6 +583,7 @@ def run_home(*, mock: bool = False) -> int:
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("ritualistMockMode", mock)
     engine.rootContext().setContextProperty("ritualistHomePayload", model.to_qml())
+    engine.rootContext().setContextProperty("ritualistRoomsPayload", _rooms_payload())
     engine.rootContext().setContextProperty("ritualistHomeController", controller)
 
     qml_resource = files("ritualist.home.qml").joinpath("Home.qml")
@@ -584,6 +622,64 @@ def _doctor_status(compatibility: str) -> HomeCardStatus:
     if compatibility == "incompatible":
         return HomeCardStatus.FAILED
     return HomeCardStatus.WARNING
+
+
+def _rooms_payload() -> dict[str, object]:
+    from ritualist.rooms import room_list_payload
+
+    return room_list_payload()
+
+
+def _room_launch_command(room_id: str, host: str) -> tuple[str, list[str], object]:
+    from ritualist.rooms import room_by_id
+
+    room = room_by_id(room_id)
+    normalized_host = _normalize_room_host(host)
+    if _running_from_packaged_app():
+        return (
+            sys.executable,
+            [
+                "--room",
+                room.room_id,
+                "--host",
+                normalized_host,
+                "--taskbar-policy",
+                "respect",
+            ],
+            room,
+        )
+    return (
+        sys.executable,
+        [
+            "-m",
+            "ritualist",
+            "canvas",
+            "use",
+            room.canvas_id,
+            "--host",
+            normalized_host,
+            "--taskbar-policy",
+            "respect",
+        ],
+        room,
+    )
+
+
+def _classic_gui_launch_command() -> tuple[str, list[str]]:
+    if _running_from_packaged_app():
+        return sys.executable, ["--classic-gui"]
+    return sys.executable, ["-m", "ritualist", "gui"]
+
+
+def _normalize_room_host(host: str) -> str:
+    normalized = str(host or "windowed").strip().casefold().replace("_", "-")
+    if normalized in {"windowed", "desktop-work-area"}:
+        return normalized
+    raise RitualistError("Room host must be 'windowed' or 'desktop-work-area'.")
+
+
+def _running_from_packaged_app() -> bool:
+    return bool(getattr(sys, "frozen", False))
 
 
 def _should_flush_home_event(event: HomeRuntimeEvent) -> bool:

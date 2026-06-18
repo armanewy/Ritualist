@@ -7,15 +7,19 @@ Window {
 
     width: 1280
     height: 720
+    minimumWidth: 980
+    minimumHeight: 640
     visible: true
-    visibility: Window.FullScreen
-    flags: Qt.Window | Qt.FramelessWindowHint
+    visibility: Window.Windowed
+    flags: Qt.Window
     color: "#090b10"
     title: "Ritualist Home"
 
     property bool mockMode: ritualistMockMode
     property var homeController: typeof ritualistHomeController === "undefined" ? null : ritualistHomeController
     property var homePayload: homeController ? homeController.payload : (typeof ritualistHomePayload === "undefined" ? ({ "categories": [], "cards": [] }) : ritualistHomePayload)
+    property var roomsPayload: typeof ritualistRoomsPayload === "undefined" ? ({ "rooms": [] }) : ritualistRoomsPayload
+    property var promotedRoomIds: ["gaming", "project", "support_desk"]
     property int selectedCategory: 0
     property int selectedCard: 0
     property bool railActive: false
@@ -45,6 +49,32 @@ Window {
             return []
         }
         return homePayload.categories
+    }
+
+    function allRooms() {
+        if (!roomsPayload || !roomsPayload.rooms) {
+            return []
+        }
+        return roomsPayload.rooms
+    }
+
+    function loadRooms() {
+        roomModel.clear()
+        var rooms = allRooms()
+        for (var i = 0; i < rooms.length; i += 1) {
+            var room = rooms[i]
+            if (promotedRoomIds.indexOf(room.id) >= 0) {
+                roomModel.append(room)
+            }
+        }
+    }
+
+    function openRoom(roomId, host) {
+        if (!homeController || mockMode) {
+            footerText = "Room launch is disabled in mock mode"
+            return
+        }
+        homeController.openRoom(roomId, host)
     }
 
     function clamp(value, minimum, maximum) {
@@ -301,6 +331,10 @@ Window {
     }
 
     ListModel {
+        id: roomModel
+    }
+
+    ListModel {
         id: cardModel
     }
 
@@ -387,6 +421,7 @@ Window {
         focus: true
 
         Component.onCompleted: {
+            root.loadRooms()
             root.loadCategories()
             root.loadCards()
             forceActiveFocus()
@@ -552,6 +587,183 @@ Window {
                     anchors.fill: parent
                     spacing: 18
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Text {
+                                    text: "Rooms"
+                                    color: "#f2f5f8"
+                                    font.pixelSize: 28
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "Choose a local Room for the work in front of you."
+                                    color: "#8f9aad"
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                id: classicGuiControl
+
+                                Layout.preferredWidth: 132
+                                Layout.preferredHeight: 38
+                                radius: 8
+                                color: classicGuiControl.launchEnabled ? (classicGuiPointer.containsMouse ? "#263648" : "#1c2734") : "#151b24"
+                                border.color: classicGuiControl.launchEnabled ? "#40546a" : "#263648"
+                                opacity: classicGuiControl.launchEnabled ? 1.0 : 0.52
+
+                                property bool launchEnabled: homeController && !mockMode
+
+                                MouseArea {
+                                    id: classicGuiPointer
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: classicGuiControl.launchEnabled
+                                    onClicked: root.homeController.openClassicGui()
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 12
+                                    text: "Classic GUI"
+                                    color: classicGuiControl.launchEnabled ? "#d8e2ee" : "#7f8da1"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        GridLayout {
+                            id: roomCards
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 184
+                            columns: 3
+                            columnSpacing: 12
+                            rowSpacing: 12
+
+                            Repeater {
+                                model: roomModel
+
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 184
+                                    radius: 8
+                                    color: "#121821"
+                                    border.color: "#2f4556"
+                                    border.width: 1
+
+                                    property bool launchEnabled: homeController && !mockMode
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 14
+                                        spacing: 8
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: name
+                                            color: "#f4f7fa"
+                                            font.pixelSize: 18
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            text: description
+                                            color: "#aebbd0"
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 4
+                                            elide: Text.ElideRight
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 32
+                                                radius: 7
+                                                color: desktopPointer.containsMouse ? "#244735" : "#1c3529"
+                                                border.color: "#4f9f75"
+                                                opacity: launchEnabled ? 1.0 : 0.52
+
+                                                MouseArea {
+                                                    id: desktopPointer
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: launchEnabled
+                                                    onClicked: root.openRoom(model.id, "desktop-work-area")
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - 10
+                                                    text: "Open on Desktop"
+                                                    color: "#e9fff1"
+                                                    font.pixelSize: 11
+                                                    font.weight: Font.DemiBold
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 32
+                                                radius: 7
+                                                color: windowPointer.containsMouse ? "#263648" : "#1c2734"
+                                                border.color: "#50667e"
+                                                opacity: launchEnabled ? 1.0 : 0.52
+
+                                                MouseArea {
+                                                    id: windowPointer
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: launchEnabled
+                                                    onClicked: root.openRoom(model.id, "windowed")
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - 10
+                                                    text: "Open in Window"
+                                                    color: "#e6edf7"
+                                                    font.pixelSize: 11
+                                                    font.weight: Font.DemiBold
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 58
@@ -562,14 +774,14 @@ Window {
                             spacing: 4
 
                             Text {
-                                text: root.currentCategoryName()
+                                text: "Recipe Library"
                                 color: "#f2f5f8"
                                 font.pixelSize: 28
                                 font.weight: Font.DemiBold
                             }
 
                             Text {
-                                text: root.footerText
+                                text: root.currentCategoryName() + " - " + root.footerText
                                 color: "#8f9aad"
                                 font.pixelSize: 14
                                 elide: Text.ElideRight

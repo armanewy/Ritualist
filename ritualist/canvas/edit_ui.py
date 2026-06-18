@@ -20,6 +20,9 @@ EDIT_UI_PALETTE_TYPES = frozenset(
         "clock",
         "recent.activity",
         "doctor.badge",
+        "shortcut.folder",
+        "shortcut.app",
+        "shortcut.url",
     }
 )
 

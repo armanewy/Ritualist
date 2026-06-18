@@ -781,6 +781,8 @@ def _placeholder_value(schema: CanvasComponentPropSchema) -> Any:
         return 0
     if schema.type.value == "bool":
         return False
+    if schema.type.value == "url":
+        return "https://example.com"
     if schema.allowed_values:
         return schema.allowed_values[0]
     return schema.name.replace("_", " ").title()
@@ -814,6 +816,8 @@ def _palette_category(component_type: CanvasComponentType) -> str:
         return "Status"
     if raw in {"navigation", "launcher", "window"}:
         return "Controls"
+    if raw in {"shortcut"}:
+        return "Shortcuts"
     if raw in {"layout"}:
         return "Layout"
     return "Display"

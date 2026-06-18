@@ -70,13 +70,47 @@ def _launch_mode(argv: Sequence[str]) -> DesktopLaunch:
         return DesktopLaunch("home")
     if args in (("--classic-gui",), ("--gui",)):
         return DesktopLaunch("classic-gui")
+    if args and (args[0] == "--room" or args[0].startswith("--room=")):
+        if args[0] == "--room":
+            return _room_launch(args[1:])
+        return _room_launch((args[0].split("=", 1)[1], *args[1:]))
     if args and args[0] in {"--canvas", "--canvas-use"}:
         return _canvas_launch(args[1:])
     raise RitualistError(
         "Unsupported desktop option. Use Ritualist.exe for Home or "
         "Ritualist.exe --classic-gui for the classic GUI, or "
+        "Ritualist.exe --room gaming --host desktop-work-area for a Room, or "
         "Ritualist.exe --canvas gaming_desktop for Canvas Use Mode."
     )
+
+
+def _room_launch(argv: Sequence[str]) -> DesktopLaunch:
+    from ritualist.rooms import room_by_id
+
+    room_id: str | None = None
+    host = "windowed"
+    taskbar_policy = "respect"
+    args = list(argv)
+    while args:
+        token = args.pop(0)
+        if token == "--host":
+            host = _pop_option_value("--host", args)
+        elif token.startswith("--host="):
+            host = token.split("=", 1)[1]
+        elif token == "--taskbar-policy":
+            taskbar_policy = _pop_option_value("--taskbar-policy", args)
+        elif token.startswith("--taskbar-policy="):
+            taskbar_policy = token.split("=", 1)[1]
+        elif token.startswith("-"):
+            raise RitualistError(f"Unsupported Room option for packaged app: {token}")
+        elif room_id is None:
+            room_id = token
+        else:
+            raise RitualistError(f"Unexpected extra Room argument for packaged app: {token}")
+    if room_id is None:
+        raise RitualistError("--room requires a Room id.")
+    room = room_by_id(room_id)
+    return DesktopLaunch("canvas", canvas=room.canvas_id, host=host, taskbar_policy=taskbar_policy)
 
 
 def _canvas_launch(argv: Sequence[str]) -> DesktopLaunch:
