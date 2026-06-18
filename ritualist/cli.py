@@ -119,6 +119,13 @@ from .run_logs import (
 )
 from .rooms import room_list_payload, room_show_payload
 from .runtime_control import RuntimeControl
+from .suggestions.service import (
+    delete_all_suggestions_payload,
+    dismiss_suggestion_payload,
+    list_suggestions_payload,
+    scan_suggestions_payload,
+    show_suggestion_payload,
+)
 from .target_resolution import (
     compile_target_start_plan,
     resolve_target,
@@ -140,6 +147,7 @@ diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
 learning_app = typer.Typer(help="Manage local, opt-in learning data.")
+suggestions_app = typer.Typer(help="Review local, on-demand learning suggestions.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
 canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
 canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
@@ -153,6 +161,7 @@ app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(learning_app, name="learning")
+app.add_typer(suggestions_app, name="suggestions")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(theme_app, name="theme")
 app.add_typer(room_app, name="room")
@@ -499,6 +508,165 @@ def learning_delete_data(
     _print_learning_delete(payload)
 
 
+@suggestions_app.command("scan")
+def suggestions_scan(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview suggestions without persisting them."),
+    ] = False,
+    min_confidence: Annotated[
+        float,
+        typer.Option(
+            "--min-confidence",
+            min=0.0,
+            max=1.0,
+            help="Minimum suggestion confidence to return.",
+        ),
+    ] = 0.0,
+    include_sensitive: Annotated[
+        bool,
+        typer.Option("--include-sensitive", help="Include suggestions marked sensitive."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable suggestion scan results."),
+    ] = False,
+) -> None:
+    """Mine review-only suggestions from one on-demand Local Learning scan."""
+    try:
+        payload = scan_suggestions_payload(
+            dry_run=dry_run,
+            min_confidence=min_confidence,
+            include_sensitive=include_sensitive,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_suggestions_scan(payload)
+
+
+@suggestions_app.command("list")
+def suggestions_list(
+    min_confidence: Annotated[
+        float,
+        typer.Option(
+            "--min-confidence",
+            min=0.0,
+            max=1.0,
+            help="Minimum suggestion confidence to return.",
+        ),
+    ] = 0.0,
+    include_sensitive: Annotated[
+        bool,
+        typer.Option("--include-sensitive", help="Include suggestions marked sensitive."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable stored suggestions."),
+    ] = False,
+) -> None:
+    """List stored review-only suggestions."""
+    try:
+        payload = list_suggestions_payload(
+            min_confidence=min_confidence,
+            include_sensitive=include_sensitive,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_suggestions_list(payload, title="Stored Suggestions")
+
+
+@suggestions_app.command("show")
+def suggestions_show(
+    suggestion_id: Annotated[str, typer.Argument(help="Suggestion id to inspect.")],
+    include_sensitive: Annotated[
+        bool,
+        typer.Option("--include-sensitive", help="Show suggestions marked sensitive."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable suggestion details."),
+    ] = False,
+) -> None:
+    """Show one stored suggestion without creating artifacts."""
+    try:
+        payload = show_suggestion_payload(
+            suggestion_id,
+            include_sensitive=include_sensitive,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_suggestion_show(payload)
+
+
+@suggestions_app.command("dismiss")
+def suggestions_dismiss(
+    suggestion_id: Annotated[str, typer.Argument(help="Suggestion id to dismiss.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable dismissal result."),
+    ] = False,
+) -> None:
+    """Dismiss one stored suggestion."""
+    try:
+        payload = dismiss_suggestion_payload(suggestion_id)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"[green]Dismissed suggestion:[/] {escape(suggestion_id)}")
+
+
+@suggestions_app.command("delete-all")
+def suggestions_delete_all(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report stored suggestion deletion without deleting."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Delete stored suggestions without an interactive prompt.",
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable deletion result."),
+    ] = False,
+) -> None:
+    """Delete all stored suggestions without touching learning journal data."""
+    if not dry_run and not yes and not typer.confirm(
+        "Delete all stored suggestions?",
+        default=False,
+    ):
+        console.print("Cancelled.")
+        raise typer.Exit(1)
+    try:
+        payload = delete_all_suggestions_payload(dry_run=dry_run)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_suggestions_delete_all(payload)
+
+
 def _print_learning_status(payload: dict[str, object]) -> None:
     table = Table(title="Local Learning")
     table.add_column("Field", no_wrap=True)
@@ -634,6 +802,101 @@ def _print_learning_delete(payload: dict[str, object]) -> None:
             escape(str(item.get("error", ""))),
         )
     console.print(table)
+
+
+def _print_suggestions_scan(payload: dict[str, object]) -> None:
+    console.print("On-demand suggestion scan only; no artifacts are created or executed.")
+    console.print(
+        "dry-run: "
+        f"{'yes' if payload.get('dry_run') else 'no'} | "
+        "persisted: "
+        f"{escape(str(payload.get('persisted_count', 0)))}"
+    )
+    _print_suggestions_list(payload, title="Mined Suggestions")
+    warnings = payload.get("warnings")
+    warning_rows = warnings if isinstance(warnings, list) else []
+    if warning_rows:
+        console.print("[bold]Warnings[/]")
+        for warning in warning_rows:
+            if isinstance(warning, dict):
+                console.print(
+                    "- "
+                    f"{escape(str(warning.get('code', '')))}: "
+                    f"{escape(str(warning.get('message', '')))}"
+                )
+
+
+def _print_suggestions_list(payload: dict[str, object], *, title: str) -> None:
+    suggestions = payload.get("suggestions")
+    rows = suggestions if isinstance(suggestions, list) else []
+    if not rows:
+        console.print("No suggestions found.")
+        return
+    table = Table(title=title)
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("Privacy", no_wrap=True)
+    table.add_column("Title", overflow="fold")
+    for suggestion in rows:
+        if not isinstance(suggestion, dict):
+            continue
+        table.add_row(
+            escape(str(suggestion.get("id", ""))),
+            escape(str(suggestion.get("kind", ""))),
+            escape(str(suggestion.get("status", ""))),
+            escape(f"{float(suggestion.get('confidence') or 0.0):.2f}"),
+            escape(str(suggestion.get("privacy_level", ""))),
+            escape(str(suggestion.get("title", ""))),
+        )
+    console.print(table)
+
+
+def _print_suggestion_show(payload: dict[str, object]) -> None:
+    suggestion = payload.get("suggestion")
+    if not isinstance(suggestion, dict):
+        console.print("No suggestion found.")
+        return
+    table = Table(title=f"Suggestion: {escape(str(suggestion.get('id', '')))}")
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    for key in (
+        "kind",
+        "status",
+        "privacy_level",
+        "confidence",
+        "title",
+        "description",
+        "evidence_summary",
+        "evidence_count",
+        "sources",
+        "missing_inputs",
+    ):
+        table.add_row(escape(key), escape(_format_metadata_value(suggestion.get(key, ""))))
+    console.print(table)
+    actions = suggestion.get("proposed_actions")
+    action_rows = actions if isinstance(actions, list) else []
+    if action_rows:
+        action_table = Table(title="Review-Only Proposed Actions")
+        action_table.add_column("Action", no_wrap=True)
+        action_table.add_column("Details", overflow="fold")
+        for action in action_rows:
+            if isinstance(action, dict):
+                action_table.add_row(
+                    escape(str(action.get("action", ""))),
+                    escape(_format_metadata_value(action)),
+                )
+        console.print(action_table)
+
+
+def _print_suggestions_delete_all(payload: dict[str, object]) -> None:
+    action = "Would delete" if payload.get("dry_run") else "Deleted"
+    count_key = "would_delete_count" if payload.get("dry_run") else "deleted_count"
+    console.print(
+        f"{action} {escape(str(payload.get(count_key, 0)))} stored suggestion(s) "
+        f"from {escape(str(payload.get('storage_path', '')))}."
+    )
 
 
 def _print_primitive_spec(spec: PrimitiveSpec) -> None:
