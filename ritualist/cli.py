@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 import time
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -87,6 +87,7 @@ from .paths import (
     imported_canvas_packs_dir,
     imported_packs_dir,
     imported_packs_path,
+    imported_suite_packs_dir,
     imported_theme_packs_dir,
     learning_journal_path,
     learning_suggestions_path,
@@ -126,6 +127,14 @@ from .suggestions.service import (
     scan_suggestions_payload,
     show_suggestion_payload,
 )
+from .suite_packs import (
+    ImportedSuitePackRecord,
+    SuitePackExportResult,
+    export_suite_pack,
+    import_suite_pack,
+    list_suite_imports,
+    validate_suite_pack,
+)
 from .target_resolution import (
     compile_target_start_plan,
     resolve_target,
@@ -153,6 +162,7 @@ canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.
 canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
 theme_app = typer.Typer(help="Inspect and validate safe declarative Ritualist themes.")
 room_app = typer.Typer(help="Inspect starter Ritualist Rooms backed by Canvas templates.")
+suite_app = typer.Typer(help="Export, import, and review quarantined whole-Room suite packs.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
@@ -165,6 +175,7 @@ app.add_typer(suggestions_app, name="suggestions")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(theme_app, name="theme")
 app.add_typer(room_app, name="room")
+app.add_typer(suite_app, name="suite")
 canvas_app.add_typer(canvas_pack_app, name="pack")
 canvas_app.add_typer(canvas_theme_app, name="theme")
 console = Console()
@@ -217,6 +228,7 @@ def paths() -> None:
             "imported_canvas_packs": imported_canvas_packs_dir(),
             "themes": themes_dir(),
             "imported_theme_packs": imported_theme_packs_dir(),
+            "imported_suite_packs": imported_suite_packs_dir(),
             "logs": logs_dir(),
             "runs": runs_dir(),
             "browser_profiles": browser_profiles_dir(),
@@ -1658,6 +1670,141 @@ def canvas_theme_import(
     _print_visual_pack_import(record, json_output=json_output)
 
 
+@suite_app.command("export")
+def suite_pack_export(
+    canvas_pack: Annotated[
+        Path,
+        typer.Option("--canvas-pack", help="Nested .ritualistcanvas Room pack to include."),
+    ],
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Output .ritualistsuite archive path."),
+    ],
+    suite_id: Annotated[
+        str | None,
+        typer.Option("--id", help="Optional safe suite id; defaults from the Canvas pack."),
+    ] = None,
+    name: Annotated[
+        str | None,
+        typer.Option("--name", help="Optional suite display name."),
+    ] = None,
+    theme_pack: Annotated[
+        Path | None,
+        typer.Option("--theme-pack", help="Optional nested .ritualisttheme pack to include."),
+    ] = None,
+    ritual_pack: Annotated[
+        list[Path] | None,
+        typer.Option("--ritual-pack", help="Optional behavior-bearing .ritualistpack to include."),
+    ] = None,
+    readme: Annotated[
+        Path | None,
+        typer.Option("--readme", help="Optional UTF-8 README file to include as README.md."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable export result."),
+    ] = False,
+) -> None:
+    """Export a suite wrapper around already validated nested packs."""
+    try:
+        result = export_suite_pack(
+            canvas_pack=canvas_pack,
+            theme_pack=theme_pack,
+            ritual_packs=tuple(ritual_pack or ()),
+            out=out,
+            suite_id=suite_id,
+            name=name,
+            readme_path=readme,
+        )
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_suite_pack_result(result, json_output=json_output)
+
+
+@suite_app.command("validate")
+def suite_pack_validate(
+    suite: Annotated[Path, typer.Argument(help="Path to a .ritualistsuite archive.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable validation result."),
+    ] = False,
+) -> None:
+    """Validate a suite and every nested pack without importing or enabling anything."""
+    try:
+        result = validate_suite_pack(suite)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    payload = result.to_dict()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"[green]Suite pack is valid:[/] {escape(str(result.path))}")
+    _print_suite_pack_summary(payload)
+
+
+@suite_app.command("import")
+def suite_pack_import(
+    suite: Annotated[Path, typer.Argument(help="Path to a .ritualistsuite archive.")],
+    visuals_only: Annotated[
+        bool,
+        typer.Option(
+            "--visuals-only",
+            help="Import only Canvas/theme packs and skip behavior-bearing ritual packs.",
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable import record."),
+    ] = False,
+) -> None:
+    """Import a suite into quarantine without enabling or running nested behavior."""
+    try:
+        record = import_suite_pack(suite, include_rituals=not visuals_only)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    _print_suite_pack_import(record, json_output=json_output)
+
+
+@suite_app.command("list-imports")
+def suite_pack_list_imports(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable suite import records."),
+    ] = False,
+) -> None:
+    """List quarantined suite imports."""
+    try:
+        records = list_suite_imports()
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=[record.to_dict() for record in records])
+        return
+    table = Table(title="Imported Suite Packs")
+    table.add_column("Import ID")
+    table.add_column("Name")
+    table.add_column("Version")
+    table.add_column("Status")
+    table.add_column("Ritual Packs")
+    table.add_column("Path")
+    for record in records:
+        table.add_row(
+            escape(record.import_id),
+            escape(record.name),
+            escape(record.version),
+            escape(record.status),
+            escape(str(len(record.ritual_imports))),
+            escape(str(record.root)),
+        )
+    console.print(table)
+    if not records:
+        console.print("No imported suite packs found.")
+
+
 @theme_app.command("list")
 def theme_list(
     json_output: Annotated[
@@ -3034,6 +3181,46 @@ def _print_visual_pack_import(record: ImportedVisualPackRecord, *, json_output: 
         table.add_row(escape(str(key)), escape(str(value)))
     console.print(table)
     console.print("Review the quarantined visual pack before copying it into active canvases or themes.")
+
+
+def _print_suite_pack_result(result: SuitePackExportResult, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=result.to_dict())
+        return
+    console.print(f"[green]Exported suite pack:[/] {escape(str(result.output_path))}")
+    console.print(f"suite: {escape(result.suite_id)}")
+    console.print("contents:")
+    for entry in result.entries:
+        console.print(f"- {escape(entry)}")
+
+
+def _print_suite_pack_import(record: ImportedSuitePackRecord, *, json_output: bool) -> None:
+    payload = record.to_dict()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(
+        f"[green]Imported suite pack {escape(record.import_id)} into quarantine; nothing was enabled or run.[/]"
+    )
+    _print_suite_pack_summary(payload)
+    console.print("Behavior-bearing ritual packs remain disabled in recipe-pack quarantine.")
+
+
+def _print_suite_pack_summary(payload: dict[str, Any]) -> None:
+    table = Table(title="Suite Pack")
+    table.add_column("Field")
+    table.add_column("Value", overflow="fold")
+    for key in ("import_id", "suite_id", "name", "version", "status", "root", "source"):
+        if key in payload:
+            table.add_row(escape(key), escape(str(payload.get(key, ""))))
+    if "manifest" in payload:
+        manifest = payload.get("manifest")
+        if isinstance(manifest, dict):
+            table.add_row("suite_id", escape(str(manifest.get("id", ""))))
+            table.add_row("name", escape(str(manifest.get("name", ""))))
+    table.add_row("auto_run", escape(str(payload.get("auto_run", False))))
+    table.add_row("auto_enable", escape(str(payload.get("auto_enable", False))))
+    console.print(table)
 
 
 def _print_import_record(record: ImportedPackRecord) -> None:

@@ -130,6 +130,16 @@ def imported_theme_packs_path() -> Path:
     return app_data_path() / "imported-theme-packs"
 
 
+def imported_suite_packs_dir() -> Path:
+    path = imported_suite_packs_path()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def imported_suite_packs_path() -> Path:
+    return app_data_path() / "imported-suite-packs"
+
+
 def browser_profiles_dir() -> Path:
     path = browser_profiles_path()
     path.mkdir(parents=True, exist_ok=True)
@@ -164,6 +174,7 @@ def ensure_app_dirs() -> dict[str, Path]:
         "imported_canvas_packs": imported_canvas_packs_dir(),
         "themes": themes_dir(),
         "imported_theme_packs": imported_theme_packs_dir(),
+        "imported_suite_packs": imported_suite_packs_dir(),
         "browser_profiles": browser_profiles_dir(),
     }
     return paths
