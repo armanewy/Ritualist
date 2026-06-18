@@ -217,11 +217,12 @@ def test_desktop_click_preview_can_be_disabled_without_disabling_confirmation_de
 
     assert summary.results[0].status == "cancelled"
     assert overlay.previews == []
-    assert fakes.desktop.calls == []
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
     request = requests[0]
     assert isinstance(request, ConfirmationRequest)
     assert request.window_title == "Battle.net"
     assert request.target_text == "Play"
+    assert request.target_rect is not None
 
 
 def test_null_overlay_does_not_trigger_hidden_preview_probe():
@@ -249,7 +250,7 @@ def test_null_overlay_does_not_trigger_hidden_preview_probe():
     ).run(recipe)
 
     assert summary.results[0].status == "cancelled"
-    assert fakes.desktop.calls == []
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
     request = requests[0]
     assert isinstance(request, ConfirmationRequest)
     assert request.window_title == "Battle.net"

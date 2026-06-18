@@ -32,6 +32,8 @@ def test_default_registry_contains_supported_actions():
         "browser.element_visible",
         "browser.media",
         "browser.open",
+        "browser.open_native",
+        "browser.wait_media_playing",
         "browser.wait_text",
         "browser.wait_title",
         "browser.wait_url",

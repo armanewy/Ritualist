@@ -32,6 +32,7 @@ EXPECTED_CHECK_IDS = {
     "recent_activity_updates",
     "native_confirmation_z_order",
     "declining_play_stopped",
+    "positive_fake_target_approval",
     "show_run_declined_confirmation",
     "hard_kill_repairs_interrupted",
     "project_room_acceptance",
@@ -80,6 +81,20 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "release_v0_2_alpha_1.yaml",
         "NEEDS_HUMAN_REVIEW",
         "no_recording_or_preview_capture",
+        "truth_model",
+        "engine_tests_pass",
+        "simulated_acceptance_pass",
+        "live_integration_pass",
+        "human_ux_pass",
+        "release_pass",
+        "Fixture and packaged machine evidence only",
+        "Release pass requires the release policy",
+        "Alias of release_pass.passed",
+        "Invoke-PositiveFakeTargetApprovalEvidence",
+        "positive_fake_target_approval",
+        "simulated_acceptance_only",
+        "exact_fake_target_invoked",
+        "postcondition_verified",
         "cli_help_no_recording_surface",
         "visible_text_scan_no_recording_surface",
         "forbidden_marker_scan",
@@ -331,3 +346,30 @@ def test_release_acceptance_harness_keeps_click_through_unverified() -> None:
     assert "native per-component hit testing is not implemented" in script
     assert "does not synthesize blank-area mouse input" in script
     assert 'status = if ($exitInvoked) { "PASS" } else { "NEEDS_HUMAN_REVIEW" }' in script
+
+
+def test_release_acceptance_summary_truth_model_does_not_tag_from_fixture() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "truth_model = [ordered]@{" in script
+    assert "simulated_acceptance_pass = $simulatedAcceptance" in script
+    assert 'status = "NOT_RUN"' in script
+    assert "live_integration_pass = $liveIntegration" in script
+    assert "human_ux_pass = $humanUx" in script
+    assert "release_pass = $releasePass" in script
+    assert "$taggable = [bool]$releasePass.passed" in script
+    assert "Fixture and packaged machine evidence only" in script
+    assert "simulated fixture evidence alone is insufficient" in script
+
+
+def test_release_acceptance_spec_declares_truth_model() -> None:
+    spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
+
+    assert set(spec["truth_model"]) == {
+        "engine_tests_pass",
+        "simulated_acceptance_pass",
+        "live_integration_pass",
+        "human_ux_pass",
+        "release_pass",
+    }
+    assert "fixture evidence alone is insufficient" in spec["truth_model"]["release_pass"]

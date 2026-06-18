@@ -10,10 +10,12 @@ import pytest
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.actions.base import ActionContext
 from ritualist.actions.browser_actions import BrowserWaitTextHandler
+from ritualist.actions.browser_actions import BrowserWaitMediaPlayingHandler
 from ritualist.actions.registry import create_default_registry
 from ritualist.config import AppConfig
+from ritualist.doctor import build_doctor_report
 from ritualist.executor import WorkflowExecutor
-from ritualist.models import BrowserWaitTextStep, Recipe
+from ritualist.models import BrowserWaitMediaPlayingStep, BrowserWaitTextStep, Recipe
 from ritualist.overlay import ConfirmationRequest, NullOverlayController
 from ritualist.recipe_loader import load_recipe
 from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
@@ -98,6 +100,91 @@ def test_browser_open_dry_run_describes_clean_start_options():
     assert "managed profile 'gaming_mode'" in summary.results[0].message
 
 
+def test_browser_open_native_uses_os_handoff_fake_without_managed_browser():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_native",
+            "name": "Browser Native",
+            "steps": [
+                {
+                    "action": "browser.open_native",
+                    "url": "https://example.test",
+                    "new_window": True,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert fakes.native_browser.calls == [
+        ("open_url", ("https://example.test",), {"new_window": True})
+    ]
+    assert fakes.browser.calls == []
+    assert summary.results[0].message == "handed URL to default browser"
+
+
+def test_browser_open_native_dry_run_does_not_handoff_or_initialize_playwright():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_native",
+            "name": "Browser Native",
+            "steps": [{"action": "browser.open_native", "url": "https://example.test"}],
+        }
+    )
+    fakes = FakeAdapters()
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig(), dry_run=True).run(recipe)
+
+    assert summary.success
+    assert summary.results[0].status == "dry-run"
+    assert summary.results[0].message == "would hand off URL to default browser"
+    assert fakes.native_browser.calls == []
+    assert fakes.browser.calls == []
+
+
+def test_browser_open_native_doctor_does_not_require_playwright(monkeypatch):
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_native",
+            "name": "Browser Native",
+            "steps": [{"action": "browser.open_native", "url": "https://example.test"}],
+        }
+    )
+    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda _name: None)
+
+    report = build_doctor_report(recipe)
+
+    assert report.errors_count == 0
+    assert report.required_capabilities == ["native_browser_handoff"]
+    assert any(
+        check.name == "native_browser_handoff" and check.status == "ok"
+        for check in report.checks
+    )
+
+
+def test_browser_open_native_rejects_malformed_and_non_http_urls():
+    for url in ("javascript:alert(1)", "file:///tmp/index.html", "https://"):
+        with pytest.raises(Exception, match="HTTP or HTTPS URL"):
+            Recipe.model_validate(
+                {
+                    "id": "browser_native",
+                    "name": "Browser Native",
+                    "steps": [{"action": "browser.open_native", "url": url}],
+                }
+            )
+
+
+def test_managed_browser_open_metadata_remains_explicit():
+    catalog_entry = create_default_registry().metadata("browser.open")
+
+    assert catalog_entry.required_capabilities == ("playwright", "browser_control")
+    assert "profile" in catalog_entry.optional_params
+    assert "use_dedicated_profile" in catalog_entry.optional_params
+
+
 def test_browser_wait_text_timeout_fails_without_page_contents():
     recipe = Recipe.model_validate(
         {
@@ -147,6 +234,60 @@ def test_browser_click_text_invokes_adapter_with_structured_target():
         "target_type": "text",
         "text": "Continue",
     }
+
+
+def test_browser_wait_media_playing_polls_until_media_advances():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_media_wait",
+            "name": "Browser Media Wait",
+            "steps": [
+                {
+                    "action": "browser.wait_media_playing",
+                    "selector": "video",
+                    "timeout_seconds": 1,
+                    "sample_seconds": 0.01,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.responses["media_playing"] = [False, True]
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.browser.calls] == ["media_playing", "media_playing", "close"]
+    assert fakes.browser.calls[0][2] == {
+        "selector": "video",
+        "sample_seconds": 0.01,
+        "timeout_seconds": 0.25,
+    }
+
+
+def test_browser_wait_media_playing_times_out_when_paused_or_stalled():
+    recipe = Recipe.model_validate(
+        {
+            "id": "browser_media_wait",
+            "name": "Browser Media Wait",
+            "steps": [
+                {
+                    "action": "browser.wait_media_playing",
+                    "selector": "video",
+                    "timeout_seconds": 0.01,
+                }
+            ],
+        }
+    )
+    fakes = FakeAdapters()
+    fakes.browser.responses["media_playing"] = False
+
+    summary = WorkflowExecutor(adapters=fakes.bundle(), config=AppConfig()).run(recipe)
+
+    assert not summary.success
+    assert summary.results[0].action == "browser.wait_media_playing"
+    assert summary.results[0].status == "failed"
+    assert "timed out" in summary.results[0].message
 
 
 def test_browser_click_role_invokes_adapter_with_accessible_name():
@@ -406,6 +547,62 @@ def test_pause_resume_during_browser_wait_is_cooperative():
 
     with pytest.raises(Exception, match="timed out"):
         BrowserWaitTextHandler().run(step, context)
+
+    resume_thread.join(timeout=1)
+    assert pause_started.is_set()
+    assert control.is_paused() is False
+    assert heartbeats >= 2
+
+
+def test_stop_during_browser_wait_media_playing_is_cooperative():
+    control = RuntimeControl()
+    heartbeats = 0
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        control.stop()
+
+    context = _context(FakeAdapters(), control=control, heartbeat=heartbeat)
+    step = BrowserWaitMediaPlayingStep.model_validate(
+        {"action": "browser.wait_media_playing", "selector": "video", "timeout_seconds": 5}
+    )
+
+    with pytest.raises(RuntimeStoppedError):
+        BrowserWaitMediaPlayingHandler().run(step, context)
+
+    assert heartbeats == 1
+
+
+def test_pause_resume_during_browser_wait_media_playing_is_cooperative():
+    control = RuntimeControl()
+    fakes = FakeAdapters()
+    fakes.browser.responses["media_playing"] = False
+    heartbeats = 0
+    pause_started = threading.Event()
+
+    def resume_soon() -> None:
+        pause_started.wait(timeout=1)
+        time.sleep(0.02)
+        control.resume()
+
+    resume_thread = threading.Thread(target=resume_soon, daemon=True)
+    resume_thread.start()
+
+    def heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        if heartbeats == 1:
+            control.pause()
+            pause_started.set()
+
+    context = _context(fakes, control=control, heartbeat=heartbeat)
+    step = BrowserWaitMediaPlayingStep.model_validate(
+        {"action": "browser.wait_media_playing", "selector": "video", "timeout_seconds": 0.05}
+    )
+
+    with pytest.raises(Exception, match="timed out"):
+        BrowserWaitMediaPlayingHandler().run(step, context)
 
     resume_thread.join(timeout=1)
     assert pause_started.is_set()

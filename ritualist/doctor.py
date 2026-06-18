@@ -438,6 +438,14 @@ def _check_capability(capability: str) -> DoctorCheck:
             "browser_control",
             "install ritualist[browser] and run 'python -m playwright install chromium'",
         )
+    if capability == "native_browser_handoff":
+        return DoctorCheck(
+            "ok",
+            capability,
+            "OS default browser handoff is available for HTTP/HTTPS URLs",
+            section="Capabilities",
+            details={"capability": capability},
+        )
     if capability == "windows_uia":
         if sys.platform != "win32":
             return DoctorCheck(

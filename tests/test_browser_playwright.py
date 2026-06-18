@@ -14,6 +14,7 @@ class FakePage:
         self.visible_text: set[str] = set()
         self.visible_roles: set[tuple[str, str]] = set()
         self.visible_test_ids: set[str] = set()
+        self.media: dict[str, dict[str, object]] = {}
         self.clicked: list[tuple[str, str]] = []
         self._title = "Example Page"
         self.url = "about:blank"
@@ -34,6 +35,34 @@ class FakePage:
     def get_by_test_id(self, test_id: str):
         return FakeTextLocator(("test_id", test_id), test_id in self.visible_test_ids, self.clicked)
 
+    def locator(self, selector: str):
+        return FakeMediaLocator(selector, selector in self.media)
+
+    def evaluate(self, script: str, params: dict[str, object]):
+        selector = str(params["selector"])
+        state = self.media[selector]
+        if "sampleSeconds" not in params:
+            if params.get("loop") is not None:
+                state["loop"] = params["loop"]
+            if params.get("muted") is not None:
+                state["muted"] = params["muted"]
+            if params.get("play") is True:
+                state["paused"] = False
+            if params.get("play") is False:
+                state["paused"] = True
+            return None
+        if int(state.get("readyState", 0)) < 2 or state.get("paused") or state.get("ended"):
+            return False
+        start = float(state.get("currentTime", 0.0))
+        if state.get("advance", True):
+            state["currentTime"] = start + 0.25
+        return (
+            int(state.get("readyState", 0)) >= 2
+            and not state.get("paused")
+            and not state.get("ended")
+            and float(state.get("currentTime", 0.0)) > start + 0.01
+        )
+
 
 class FakeTextLocator:
     def __init__(self, target: tuple[str, str], visible: bool, clicked: list[tuple[str, str]]) -> None:
@@ -53,6 +82,20 @@ class FakeTextLocator:
         if not self.visible:
             raise FakePlaywrightTimeout("not visible")
         self.clicked.append(self.target)
+
+
+class FakeMediaLocator:
+    def __init__(self, selector: str, attached: bool) -> None:
+        self.selector = selector
+        self.attached = attached
+
+    @property
+    def first(self):
+        return self
+
+    def wait_for(self, *, state: str, timeout: float) -> None:
+        if not self.attached:
+            raise FakePlaywrightTimeout("not attached")
 
 
 class FakeContext:
@@ -139,6 +182,21 @@ def test_browser_open_clean_start_adds_prevention_launch_flags(tmp_path, monkeyp
     assert "--no-default-browser-check" in options["args"]
     assert "--disable-session-crashed-bubble" in options["args"]
     assert "--hide-crash-restore-bubble" in options["args"]
+
+
+def test_browser_open_launch_args_do_not_disable_browser_sandbox(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url("https://example.test/one", profile="gaming", clean_start=True)
+
+    _user_data_dir, options = fake_playwright.chromium.calls[0]
+    assert "--no-sandbox" not in options.get("args", [])
 
 
 def test_browser_open_rejects_non_dedicated_profiles(tmp_path, monkeypatch):
@@ -282,3 +340,54 @@ def test_browser_structured_waits_and_clicks_use_playwright_locators(tmp_path, m
         ("role", "button:Save"),
         ("test_id", "ready-button"),
     ]
+
+
+def test_browser_wait_media_playing_requires_time_advancement(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url("https://example.test/watch", profile="gaming")
+    page = fake_playwright.chromium.context.pages[0]
+    page.media["video"] = {
+        "readyState": 4,
+        "paused": False,
+        "ended": False,
+        "currentTime": 1.0,
+        "advance": True,
+    }
+
+    assert adapter.media_playing(selector="video", sample_seconds=0.01, timeout_seconds=0.01) is True
+    assert page.media["video"]["currentTime"] == 1.25
+
+
+def test_browser_wait_media_playing_rejects_paused_and_stalled_media(tmp_path, monkeypatch):
+    fake_playwright = FakePlaywright()
+    monkeypatch.setattr(
+        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        lambda: tmp_path,
+    )
+    install_fake_playwright(monkeypatch, fake_playwright)
+    adapter = PlaywrightBrowserAdapter()
+    adapter.open_url("https://example.test/watch", profile="gaming")
+    page = fake_playwright.chromium.context.pages[0]
+    page.media["video"] = {
+        "readyState": 4,
+        "paused": True,
+        "ended": False,
+        "currentTime": 1.0,
+        "advance": True,
+    }
+    assert adapter.media_playing(selector="video", sample_seconds=0.01, timeout_seconds=0.01) is False
+
+    page.media["video"] = {
+        "readyState": 4,
+        "paused": False,
+        "ended": False,
+        "currentTime": 1.0,
+        "advance": False,
+    }
+    assert adapter.media_playing(selector="video", sample_seconds=0.01, timeout_seconds=0.01) is False

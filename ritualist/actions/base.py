@@ -22,6 +22,7 @@ StatusCallback = Callable[["StepEvent"], None]
 class AdapterBundle:
     shell: Any
     browser: Any
+    native_browser: Any
     window: Any
     desktop: Any
     input: Any

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -113,12 +114,40 @@ class BrowserOpenStep(StepBase):
         return value
 
 
+class BrowserOpenNativeStep(StepBase):
+    action: Literal["browser.open_native"]
+    url: str
+    new_window: bool = False
+
+    @field_validator("url")
+    @classmethod
+    def validate_native_url(cls, value: str) -> str:
+        return _required_http_url("browser.open_native", value)
+
+
 class BrowserMediaStep(StepBase):
     action: Literal["browser.media"]
     selector: str = "video"
     play: bool | None = None
     loop: bool | None = None
     muted: bool | None = None
+
+
+class BrowserWaitMediaPlayingStep(StepBase):
+    action: Literal["browser.wait_media_playing"]
+    selector: str = Field(min_length=1)
+    sample_seconds: float = Field(default=0.25, gt=0)
+    on_timeout: list[Any] = Field(default_factory=list)
+
+    @field_validator("selector")
+    @classmethod
+    def reject_blank_selector(cls, value: str) -> str:
+        return _required_text("selector", value)
+
+    @model_validator(mode="after")
+    def validate_on_timeout_steps(self) -> "BrowserWaitMediaPlayingStep":
+        self.on_timeout = _validate_workflow_step_list(self.on_timeout, field_name="on_timeout")
+        return self
 
 
 class BrowserWaitTextStep(StepBase):
@@ -603,7 +632,9 @@ AssertionStep = Annotated[
 
 WorkflowStep = Annotated[
     BrowserOpenStep
+    | BrowserOpenNativeStep
     | BrowserMediaStep
+    | BrowserWaitMediaPlayingStep
     | BrowserWaitTextStep
     | BrowserWaitTitleStep
     | BrowserWaitUrlStep
@@ -794,6 +825,17 @@ def _require_one_text_field(action: str, values: dict[str, str | None]) -> None:
     if len(provided) != 1:
         choices = ", ".join(values)
         raise ValueError(f"{action} requires exactly one of {choices}")
+
+
+def _required_http_url(action: str, value: str) -> str:
+    cleaned = _required_text("url", value)
+    try:
+        parsed = urlsplit(cleaned)
+    except ValueError as exc:
+        raise ValueError(f"{action} requires an HTTP or HTTPS URL") from exc
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{action} requires an HTTP or HTTPS URL")
+    return cleaned
 
 
 def _validate_browser_locator(

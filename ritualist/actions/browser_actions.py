@@ -9,7 +9,9 @@ from ritualist.models import (
     BrowserClickTextStep,
     BrowserElementVisibleStep,
     BrowserMediaStep,
+    BrowserOpenNativeStep,
     BrowserOpenStep,
+    BrowserWaitMediaPlayingStep,
     BrowserWaitTextStep,
     BrowserWaitTitleStep,
     BrowserWaitUrlStep,
@@ -59,6 +61,26 @@ class BrowserOpenHandler:
         return f"opened {step.url}"
 
 
+class BrowserOpenNativeHandler:
+    action_type = "browser.open_native"
+    metadata = ActionMetadata(
+        action_name=action_type,
+        schema_version="0.1",
+        category="browser",
+        required_params=("url",),
+        optional_params=("new_window", "name", "optional", "timeout_seconds"),
+        required_capabilities=("native_browser_handoff",),
+        supported_platforms=ALL_PLATFORMS,
+        side_effect_level="launches_app",
+        confirmation_policy="optional",
+        allowed_in_imported_packs=False,
+    )
+
+    def run(self, step: BrowserOpenNativeStep, context: ActionContext) -> str:
+        context.adapters.native_browser.open_url(step.url, new_window=step.new_window)
+        return "handed URL to default browser"
+
+
 class BrowserMediaHandler:
     action_type = "browser.media"
     metadata = ActionMetadata(
@@ -90,6 +112,38 @@ class BrowserMediaHandler:
         if step.muted is not None:
             changes.append(f"muted={step.muted}")
         return "configured media" + (f" ({', '.join(changes)})" if changes else "")
+
+
+class BrowserWaitMediaPlayingHandler:
+    action_type = "browser.wait_media_playing"
+    metadata = ActionMetadata(
+        action_name=action_type,
+        schema_version="0.1",
+        category="browser",
+        required_params=("selector",),
+        optional_params=("sample_seconds", "timeout_seconds", "on_timeout", "name", "optional", "when"),
+        required_capabilities=("playwright", "browser_control"),
+        supported_platforms=ALL_PLATFORMS,
+        side_effect_level="read_only",
+        confirmation_policy="never",
+        allowed_in_imported_packs=True,
+    )
+
+    def run(self, step: BrowserWaitMediaPlayingStep, context: ActionContext) -> str:
+        timeout = step.timeout_seconds or 10.0
+        if not _wait_until(
+            lambda: context.adapters.browser.media_playing(
+                selector=step.selector,
+                sample_seconds=step.sample_seconds,
+                timeout_seconds=min(timeout, 0.25),
+            ),
+            timeout_seconds=timeout,
+            context=context,
+        ):
+            raise RitualistError(
+                f"browser.wait_media_playing timed out: media did not advance: {step.selector}"
+            )
+        return f"browser media playing: {step.selector}"
 
 
 class BrowserWaitTextHandler:
@@ -336,7 +390,9 @@ class BrowserClickTestIdHandler:
 def create_browser_handlers():
     return (
         BrowserOpenHandler(),
+        BrowserOpenNativeHandler(),
         BrowserMediaHandler(),
+        BrowserWaitMediaPlayingHandler(),
         BrowserWaitTextHandler(),
         BrowserWaitTitleHandler(),
         BrowserWaitUrlHandler(),

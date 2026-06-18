@@ -26,6 +26,9 @@ class TargetRegion:
     window_title: str | None = None
     target_text: str | None = None
     control_type: str | None = None
+    target_identity: str | None = None
+    visible: bool | None = None
+    enabled: bool | None = None
 
 
 @dataclass(frozen=True)

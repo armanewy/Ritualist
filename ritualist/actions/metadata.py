@@ -9,6 +9,7 @@ CapabilityName = Literal[
     "windows_uia",
     "app_launch",
     "browser_control",
+    "native_browser_handoff",
     "window_management",
     "keyboard_input",
     "file_read",

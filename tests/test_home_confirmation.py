@@ -98,7 +98,7 @@ def test_native_home_confirmation_presenter_uses_top_level_always_on_top_dialog(
     assert "QTimer.singleShot(150" in source
     assert "QTimer.singleShot(700" in source
     assert "Skip if supported" in source
-    assert "Cancel Ritual" in source
+    assert "Cancel" in source
     assert "create_win32_confirmation_presenter" in source
     assert "_show_win32_confirmation(request)" in source
     assert "SetForegroundWindow" in source
@@ -166,7 +166,7 @@ def test_win32_confirmation_presenter_does_not_block_caller_thread(monkeypatch):
     assert _wait_for(lambda: decisions == [True])
 
 
-def test_home_confirmation_proceed_label_uses_browser_target_metadata():
+def test_home_confirmation_proceed_label_uses_allow_once_copy():
     request = ConfirmationRequest(
         prompt="Run step?",
         action="browser.click_test_id",
@@ -176,7 +176,7 @@ def test_home_confirmation_proceed_label_uses_browser_target_metadata():
         target_test_id="confirm-order",
     )
 
-    assert _proceed_label(request) == "Click target"
+    assert _proceed_label(request) == "Allow once"
 
 
 def _wait_for(predicate, *, timeout: float = 2.0) -> bool:

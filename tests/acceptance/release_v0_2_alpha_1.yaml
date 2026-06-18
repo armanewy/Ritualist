@@ -4,6 +4,12 @@ semantics:
   PASS: "Machine evidence satisfies the check without adding product scope."
   FAIL: "Machine evidence contradicts the release requirement or a command failed."
   NEEDS_HUMAN_REVIEW: "Evidence is partial, subjective, unavailable on this host, or requires human visual judgment."
+truth_model:
+  engine_tests_pass: "Separate test-suite evidence; not inferred from fixture acceptance."
+  simulated_acceptance_pass: "Packaged and fixture machine evidence only."
+  live_integration_pass: "NOT_RUN unless explicitly executed against real user applications."
+  human_ux_pass: "NOT_RUN until a person explicitly approves the UX."
+  release_pass: "Requires the release policy's chosen live and human gates; fixture evidence alone is insufficient."
 artifact_contract:
   summary_json: artifacts/release-acceptance/acceptance-summary.json
   summary_md: artifacts/release-acceptance/acceptance-summary.md
@@ -145,6 +151,15 @@ checks:
       - steps_jsonl
       - e2e_event: confirmation.resolved
     pass_when: "Final run state is stopped and final Play step is cancelled after declined confirmation."
+  - id: positive_fake_target_approval
+    blocker: "Simulation has a positive approved fake target path without claiming live integration."
+    expected_evidence:
+      - fake_external_app_window
+      - target_evidence
+      - simulated_user_approval
+      - exact_fake_target_invoked
+      - postcondition_verified
+    pass_when: "The fake Battle.net Play target exists, is enabled, receives simulated approval, is invoked exactly, and the fixture postcondition is verified; this counts only as simulated_acceptance evidence."
   - id: show_run_declined_confirmation
     blocker: "`show-run` clearly records declined confirmation."
     expected_evidence:

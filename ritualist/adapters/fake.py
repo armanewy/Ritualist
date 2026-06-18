@@ -76,6 +76,10 @@ class FakeBrowserAdapter(RecordingAdapter):
     def configure_media(self, **kwargs: Any) -> None:
         self.record("configure_media", **kwargs)
 
+    def media_playing(self, **kwargs: Any) -> bool:
+        self.record("media_playing", **kwargs)
+        return bool(self.response("media_playing", True))
+
     def text_visible(self, **kwargs: Any) -> bool:
         self.record("text_visible", **kwargs)
         return bool(self.response("text_visible", True))
@@ -108,6 +112,11 @@ class FakeBrowserAdapter(RecordingAdapter):
             {"title": "Example Page", "url": "https://example.test/current"},
         )
         return dict(value) if isinstance(value, dict) else {}
+
+
+class FakeNativeBrowserAdapter(RecordingAdapter):
+    def open_url(self, url: str, *, new_window: bool = False) -> None:
+        self.record("open_url", url, new_window=new_window)
 
 
 class FakeWindowAdapter(RecordingAdapter):
@@ -247,7 +256,7 @@ class FakeDesktopAdapter(RecordingAdapter):
         self.record("text_visible", **kwargs)
         return bool(self.response("text_visible", True))
 
-    def find_text_region(self, **kwargs: Any) -> TargetRegion:
+    def find_text_region(self, **kwargs: Any) -> TargetRegion | None:
         self.record("find_text_region", **kwargs)
         return self.response("find_text_region", _fake_text_region(kwargs))
 
@@ -255,13 +264,34 @@ class FakeDesktopAdapter(RecordingAdapter):
         self.record("click_text", **kwargs)
         return self.response("click_text", _fake_text_region(kwargs))
 
+    def invoke_resolved_text_region(self, **kwargs: Any) -> TargetRegion:
+        self.record("invoke_resolved_text_region", **kwargs)
+        target = kwargs.get("target")
+        default = (
+            target
+            if isinstance(target, TargetRegion)
+            else _fake_text_region(
+                {
+                    "window_title_contains": kwargs.get("window_title_contains"),
+                    "text": kwargs.get("text"),
+                    "control_type": kwargs.get("control_type"),
+                }
+            )
+        )
+        return self.response("invoke_resolved_text_region", default)
+
 
 def _fake_text_region(kwargs: dict[str, Any]) -> TargetRegion:
+    target_text = kwargs.get("text")
+    window_title = kwargs.get("window_title_contains")
     return TargetRegion(
         rect=ScreenRect(30, 40, 120, 36),
-        window_title=kwargs.get("window_title_contains"),
-        target_text=kwargs.get("text"),
+        window_title=window_title,
+        target_text=target_text,
         control_type=kwargs.get("control_type"),
+        target_identity=f"{window_title}|{target_text}|{kwargs.get('control_type') or ''}",
+        visible=True,
+        enabled=True,
     )
 
 
@@ -274,6 +304,7 @@ class FakeInputAdapter(RecordingAdapter):
 class FakeAdapters:
     shell: FakeShellAdapter = field(default_factory=FakeShellAdapter)
     browser: FakeBrowserAdapter = field(default_factory=FakeBrowserAdapter)
+    native_browser: FakeNativeBrowserAdapter = field(default_factory=FakeNativeBrowserAdapter)
     window: FakeWindowAdapter = field(default_factory=FakeWindowAdapter)
     desktop: FakeDesktopAdapter = field(default_factory=FakeDesktopAdapter)
     input: FakeInputAdapter = field(default_factory=FakeInputAdapter)
@@ -282,6 +313,7 @@ class FakeAdapters:
         return AdapterBundle(
             shell=self.shell,
             browser=self.browser,
+            native_browser=self.native_browser,
             window=self.window,
             desktop=self.desktop,
             input=self.input,

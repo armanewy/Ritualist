@@ -334,6 +334,7 @@ class TargetPlanSummary(BaseModel):
     unresolved_questions: tuple[str, ...] = ()
     recommended_next_action: str = ""
     last_successful_source: str | None = None
+    readiness: dict[str, Any] = Field(default_factory=dict)
     schema_version: str = TARGET_PLAN_SUMMARY_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
@@ -348,6 +349,7 @@ class TargetPlanSummary(BaseModel):
             "unresolved_questions": list(self.unresolved_questions),
             "recommended_next_action": self.recommended_next_action,
             "last_successful_source": self.last_successful_source,
+            "readiness": self.readiness,
         }
 
 
@@ -467,8 +469,11 @@ def builtin_target_catalog() -> TargetCatalog:
 
 
 def default_target_providers() -> tuple[TargetDiscoveryProvider, ...]:
+    from ritualist.integrations.battlenet_readiness import BattleNetReadinessProvider
+
     return (
         RunningProcessProvider(),
+        BattleNetReadinessProvider(),
         UserMemoryProvider(),
         StartMenuShortcutProvider(),
         DesktopShortcutProvider(),
@@ -600,7 +605,10 @@ def compile_target_start_plan(
                 parameters={"command": command, "wait": False},
             )
         else:
-            unresolved.append(f"{candidate.label} is launchable but has no command path")
+            unresolved.append(
+                _candidate_recommendation(candidate)
+                or f"{candidate.label} is ready but has no command path"
+            )
     elif candidate.state is TargetState.LAUNCHER_AVAILABLE:
         _append_registered_plan_step(
             steps,
@@ -616,6 +624,7 @@ def compile_target_start_plan(
         )
         unresolved.append("launcher metadata is available, but no safe launch command was found")
     elif candidate.state is TargetState.INSTALL_MEDIA_PRESENT:
+        recommendation = _candidate_recommendation(candidate)
         _append_registered_plan_step(
             steps,
             "operator.prompt.prompt",
@@ -628,26 +637,45 @@ def compile_target_start_plan(
                 )
             },
         )
-        unresolved.append("installer/media execution is not implemented by Target Resolution v1")
+        unresolved.append(
+            recommendation or "installer/media execution is not implemented by Target Resolution v1"
+        )
     elif candidate.state in {TargetState.INSTALL_AVAILABLE, TargetState.UPDATE_AVAILABLE}:
+        recommendation = _candidate_recommendation(candidate)
         _append_registered_plan_step(
             steps,
             "operator.prompt.prompt",
             registry=registry,
             step_name=f"Review {display_name} setup/update source",
-            parameters={"prompt": f"Review the available setup/update source for {display_name} manually."},
+            parameters={
+                "prompt": (
+                    recommendation
+                    or f"Review the available setup/update source for {display_name} manually."
+                )
+            },
         )
-        unresolved.append("automatic install/update transitions are not implemented by Target Resolution v1")
+        unresolved.append(
+            recommendation
+            or "automatic install/update transitions are not implemented by Target Resolution v1"
+        )
     elif candidate.state is TargetState.LOGIN_REQUIRED:
+        recommendation = _candidate_recommendation(candidate)
         _append_registered_plan_step(
             steps,
             "operator.prompt.prompt",
             registry=registry,
             step_name=f"Manual login required for {display_name}",
-            parameters={"prompt": f"Log in manually, then resume {display_name}."},
+            parameters={
+                "prompt": recommendation or f"Log in manually, then resume {display_name}."
+            },
         )
+        if recommendation:
+            unresolved.append(recommendation)
     else:
-        unresolved.append(f"target state {candidate.state.value} has no executable transition in v1")
+        unresolved.append(
+            _candidate_recommendation(candidate)
+            or f"target state {candidate.state.value} has no executable transition in v1"
+        )
 
     unresolved.extend(ranked_resolution.suggestions if ranked_resolution.state is TargetState.NOT_FOUND else ())
     intent = _target_intent_with_resolution(intent, ranked_resolution, selected_candidate=candidate)
@@ -704,6 +732,7 @@ def build_target_plan_summary(
             if candidate is not None and candidate.provider == "user_memory"
             else None
         ),
+        readiness=_candidate_readiness(candidate),
     )
 
 
@@ -1379,14 +1408,18 @@ def _candidate_sort_key(candidate: TargetCandidate) -> tuple[int, int, float, st
 _STATE_PRIORITY: dict[TargetState, int] = {
     TargetState.RUNNING: 100,
     TargetState.READY: 95,
+    TargetState.LAUNCHING: 94,
+    TargetState.UPDATING: 93,
+    TargetState.UPDATE_AVAILABLE: 92,
+    TargetState.INSTALL_AVAILABLE: 91,
+    TargetState.INSTALL_SOURCE_AVAILABLE: 91,
+    TargetState.LOGIN_REQUIRED: 91,
+    TargetState.BLOCKED: 91,
     TargetState.LAUNCHABLE: 90,
     TargetState.LAUNCHER_AVAILABLE: 75,
+    TargetState.LAUNCHER_MISSING: 70,
     TargetState.INSTALL_MEDIA_PRESENT: 65,
-    TargetState.INSTALL_SOURCE_AVAILABLE: 60,
-    TargetState.INSTALL_AVAILABLE: 55,
-    TargetState.UPDATE_AVAILABLE: 50,
-    TargetState.LOGIN_REQUIRED: 40,
-    TargetState.BLOCKED: 10,
+    TargetState.INSTALLING: 60,
     TargetState.FAILED: 0,
     TargetState.NOT_FOUND: 0,
     TargetState.UNKNOWN: 0,
@@ -1394,6 +1427,7 @@ _STATE_PRIORITY: dict[TargetState, int] = {
 
 _PROVIDER_PRIORITY: dict[str, int] = {
     "running_process": 100,
+    "battle_net_readiness": 95,
     "user_memory": 90,
     "start_menu_shortcut": 80,
     "desktop_shortcut": 75,
@@ -1459,6 +1493,20 @@ def _candidate_summary(candidate: TargetCandidate | None) -> str:
     return f"{candidate.provider}: {candidate.state.value} - {source}"
 
 
+def _candidate_readiness(candidate: TargetCandidate | None) -> dict[str, Any]:
+    if candidate is None:
+        return {}
+    readiness = candidate.details.get("readiness")
+    return dict(readiness) if isinstance(readiness, dict) else {}
+
+
+def _candidate_recommendation(candidate: TargetCandidate | None) -> str:
+    if candidate is None:
+        return ""
+    value = candidate.details.get("recommendation")
+    return str(value or "").strip()
+
+
 def _recommended_next_action(
     resolution: TargetResolutionResult,
     plan: PrimitivePlan,
@@ -1479,6 +1527,9 @@ def _recommended_next_action(
         return "Run the launch plan when ready."
     if resolution.state is TargetState.INSTALL_MEDIA_PRESENT:
         return "Review detected install media manually; Ritualist will not install silently."
+    recommendation = _candidate_recommendation(resolution.best_candidate)
+    if recommendation:
+        return recommendation
     if resolution.state is TargetState.NOT_FOUND:
         return "Choose a local executable or shortcut for this target."
     return "Review the target plan before running."
@@ -1493,6 +1544,8 @@ def _suggestions_for_state(state: TargetState) -> tuple[str, ...]:
         return ("Review the detected setup/update source manually before proceeding.",)
     if state is TargetState.LOGIN_REQUIRED:
         return ("Log in manually, then rerun discovery or resume the ritual.",)
+    if state in {TargetState.BLOCKED, TargetState.LAUNCHER_MISSING}:
+        return ("Review the target readiness evidence before taking a desktop action.",)
     return ()
 
 

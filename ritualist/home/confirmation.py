@@ -104,7 +104,7 @@ def create_qt_confirmation_presenter() -> Any:
             skip.setObjectName("ritualistSkipButton")
             skip.setEnabled(False)
             skip.setToolTip("This step cannot be skipped safely in v0.1.")
-            cancel = QPushButton("Cancel Ritual")
+            cancel = QPushButton("Cancel")
             cancel.setObjectName("ritualistCancelButton")
             buttons.addButton(proceed, QDialogButtonBox.ButtonRole.AcceptRole)
             buttons.addButton(skip, QDialogButtonBox.ButtonRole.ActionRole)
@@ -292,8 +292,6 @@ def _is_windows() -> bool:
 
 
 def _proceed_label(request: ConfirmationRequest | str) -> str:
-    if isinstance(request, ConfirmationRequest) and (
-        request.target_text or request.target_role or request.target_test_id
-    ):
-        return "Click target"
+    if isinstance(request, ConfirmationRequest):
+        return "Allow once"
     return "Proceed"

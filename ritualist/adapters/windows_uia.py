@@ -16,6 +16,20 @@ class WindowInspection:
     labels: list[str]
 
 
+@dataclass(frozen=True)
+class UIAControlInspection:
+    name: str
+    control_type: str
+    enabled: bool
+    visible: bool
+
+
+@dataclass(frozen=True)
+class WindowControlInspection:
+    title: str
+    controls: list[UIAControlInspection]
+
+
 class WindowsUIAutomationAdapter:
     def text_visible(
         self,
@@ -55,24 +69,16 @@ class WindowsUIAutomationAdapter:
         deadline = time.monotonic() + timeout_seconds
         matcher = _text_matcher(text, exact)
 
-        while time.monotonic() < deadline:
+        while True:
             roots = _candidate_roots(desktop, window_title_contains)
             for root in roots:
                 for element in _preferred_descendants(root, control_type):
                     label = _element_text(element)
-                    if matcher(label):
-                        return TargetRegion(
-                            rect=_element_rect(element),
-                            window_title=_element_text(root),
-                            target_text=label or text,
-                            control_type=control_type,
-                        )
+                    if matcher(label) and _is_visible_enabled(element):
+                        return _target_region(root, element, label or text, control_type)
+            if timeout_seconds <= 0 or time.monotonic() >= deadline:
+                return None
             time.sleep(0.25)
-        return TargetRegion(
-            window_title=window_title_contains,
-            target_text=text,
-            control_type=control_type,
-        )
 
     def inspect_windows(
         self,
@@ -92,6 +98,36 @@ class WindowsUIAutomationAdapter:
             for root in roots
         ]
 
+    def inspect_control_tree(
+        self,
+        *,
+        title_contains: str,
+        limit: int = 200,
+    ) -> list[WindowControlInspection]:
+        _ensure_windows()
+        desktop = _desktop()
+        roots = _candidate_roots(desktop, title_contains)
+        windows: list[WindowControlInspection] = []
+        for root in roots:
+            controls: list[UIAControlInspection] = []
+            for element in _descendants(root, None):
+                name = _element_text(element).strip()
+                control_type = _element_control_type(element)
+                if not name and not control_type:
+                    continue
+                controls.append(
+                    UIAControlInspection(
+                        name=name,
+                        control_type=control_type,
+                        enabled=_is_enabled(element),
+                        visible=_is_visible(element),
+                    )
+                )
+                if len(controls) >= limit:
+                    break
+            windows.append(WindowControlInspection(title=_element_text(root), controls=controls))
+        return windows
+
     def click_text(
         self,
         *,
@@ -108,21 +144,18 @@ class WindowsUIAutomationAdapter:
         matcher = _text_matcher(text, exact)
         last_roots: list[Any] = []
 
-        while time.monotonic() < deadline:
+        while True:
             roots = _candidate_roots(desktop, window_title_contains)
             last_roots = roots
             for root in roots:
                 for element in _preferred_descendants(root, control_type):
                     label = _element_text(element)
-                    if matcher(label):
-                        region = TargetRegion(
-                            rect=_element_rect(element),
-                            window_title=_element_text(root),
-                            target_text=label or text,
-                            control_type=control_type,
-                        )
+                    if matcher(label) and _is_visible_enabled(element):
+                        region = _target_region(root, element, label or text, control_type)
                         _activate(element, button=button)
                         return region
+            if timeout_seconds <= 0 or time.monotonic() >= deadline:
+                break
             time.sleep(0.25)
 
         if not last_roots:
@@ -135,6 +168,44 @@ class WindowsUIAutomationAdapter:
             f"visible text not found within {timeout_seconds:g}s in window "
             f"'{window_title_contains}': {text}.{suffix}"
         )
+
+    def invoke_resolved_text_region(
+        self,
+        *,
+        target: TargetRegion,
+        text: str,
+        window_title_contains: str,
+        control_type: str | None,
+        exact: bool,
+        button: str,
+        timeout_seconds: float,
+    ) -> TargetRegion:
+        _ensure_windows()
+        if button != "left":
+            raise RitualistError("confirmed desktop clicks can only invoke left-button targets")
+        if not target.target_identity:
+            raise RitualistError("confirmed desktop click target is missing resolved identity")
+        desktop = _desktop()
+        deadline = time.monotonic() + timeout_seconds
+        matcher = _text_matcher(text, exact)
+
+        while True:
+            roots = _candidate_roots(desktop, window_title_contains)
+            for root in roots:
+                for element in _preferred_descendants(root, control_type):
+                    label = _element_text(element)
+                    if not matcher(label) or not _is_visible_enabled(element):
+                        continue
+                    if _element_identity(element) != target.target_identity:
+                        continue
+                    _invoke(element)
+                    return _target_region(root, element, label or text, control_type)
+            if timeout_seconds <= 0 or time.monotonic() >= deadline:
+                raise RitualistError(
+                    "resolved target changed or disappeared before invocation: "
+                    f"{text} in '{window_title_contains}'"
+                )
+            time.sleep(0.25)
 
 
 class WindowsInputAdapter:
@@ -190,30 +261,81 @@ def _preferred_descendants(root: Any, control_type: str | None) -> list[Any]:
 
 
 def _is_visible_enabled(element: Any) -> bool:
+    return _is_visible(element) and _is_enabled(element)
+
+
+def _is_visible(element: Any) -> bool:
     try:
-        visible = bool(element.is_visible())
+        return bool(element.is_visible())
     except Exception:  # noqa: BLE001
-        visible = True
+        return True
+
+
+def _is_enabled(element: Any) -> bool:
     try:
-        enabled = bool(element.is_enabled())
+        return bool(element.is_enabled())
     except Exception:  # noqa: BLE001
-        enabled = True
-    return visible and enabled
+        return True
 
 
 def _activate(element: Any, *, button: str) -> None:
-    if button == "left":
+    if button != "left":
+        raise RitualistError("desktop.click_text does not support coordinate fallback clicks")
+    _invoke(element)
+
+
+def _invoke(element: Any) -> None:
+    try:
+        element.invoke()
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        element.iface_invoke.Invoke()
+        return
+    except Exception as exc:  # noqa: BLE001
+        raise RitualistError("target does not support UI Automation invoke") from exc
+
+
+def _target_region(
+    root: Any,
+    element: Any,
+    label: str,
+    control_type: str | None,
+) -> TargetRegion:
+    return TargetRegion(
+        rect=_element_rect(element),
+        window_title=_element_text(root),
+        target_text=label,
+        control_type=control_type,
+        target_identity=_element_identity(element),
+        visible=_is_visible(element),
+        enabled=_is_enabled(element),
+    )
+
+
+def _element_identity(element: Any) -> str:
+    parts: list[str] = []
+    info = getattr(element, "element_info", None)
+    for attr in ("runtime_id", "automation_id", "control_type", "class_name", "handle", "process_id"):
         try:
-            element.invoke()
-            return
+            value = getattr(info, attr)
         except Exception:  # noqa: BLE001
-            pass
-        try:
-            element.iface_invoke.Invoke()
-            return
-        except Exception:  # noqa: BLE001
-            pass
-    element.click_input(button=button)
+            value = None
+        if callable(value):
+            try:
+                value = value()
+            except Exception:  # noqa: BLE001
+                value = None
+        if value not in (None, "", []):
+            parts.append(f"{attr}={value!r}")
+    rect = _element_rect(element)
+    if rect is not None:
+        parts.append(f"rect={rect.x},{rect.y},{rect.width},{rect.height}")
+    text = _element_text(element)
+    if text:
+        parts.append(f"text={text!r}")
+    return "|".join(parts)
 
 
 def _candidate_labels(roots: list[Any], control_type: str | None, *, limit: int = 30) -> list[str]:
@@ -243,6 +365,14 @@ def _element_text(element: Any) -> str:
             pass
     try:
         return str(element.element_info.name or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _element_control_type(element: Any) -> str:
+    try:
+        value = getattr(element.element_info, "control_type", "")
+        return str(value or "")
     except Exception:  # noqa: BLE001
         return ""
 

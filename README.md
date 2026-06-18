@@ -307,6 +307,7 @@ Supported capability names include:
 - `windows_uia`
 - `app_launch`
 - `browser_control`
+- `native_browser_handoff`
 - `window_management`
 - `keyboard_input`
 - `file_read`
@@ -389,23 +390,35 @@ Run history uses `success` for completed runs, `stopped` for cleanly cancelled o
 
 Playwright owns the browser process it launches. When a CLI run exits, the browser it opened may close with the Playwright driver. For media workflows, set `keep_open: true` on `browser.open` or pass `ritualist run <recipe> --keep-alive`; Ritualist will keep the CLI process alive after execution until you press `Ctrl+C`. Recipe-level `keep_open: true` activates only after that browser step succeeds. The `--keep-alive` option keeps the CLI alive after execution regardless of workflow success, unless the run is a dry-run.
 
-GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open` and `browser.media`; arbitrary recipe-supplied JavaScript is not supported.
+GUI/tray mode is the better long-running shape for media rituals because the app process naturally stays alive. Recipes still expose only structured browser actions such as `browser.open`, `browser.open_native`, `browser.media`, and `browser.wait_media_playing`; arbitrary recipe-supplied JavaScript is not supported.
 
-`browser.open` uses Ritualist-managed browser profile folders under the local
-`browser-profiles` directory. Set `clean_start: true` to launch with safe
-Chromium startup flags that reduce first-run and session-restore prompts without
-deleting profile data. `dismiss_restore_prompt: true` is accepted for forward
-compatibility, but this release treats it as a safe no-op unless Ritualist has a browser
-UI-scoped mechanism available. Ritualist does not use webpage text or buttons to
-dismiss Chrome restore prompts, because page content can imitate browser prompts.
-`use_dedicated_profile: false` is rejected so Ritualist cannot silently
-operate on a user's normal browser profile.
+`browser.open` is a managed browser session. It uses Playwright and
+Ritualist-managed profile folders under the local `browser-profiles` directory.
+It does not operate on the user's normal signed-in browser profile.
+Set `clean_start: true` to launch with safe Chromium startup flags that reduce
+first-run and session-restore prompts without deleting profile data.
+`dismiss_restore_prompt: true` is accepted for forward compatibility, but this
+release treats it as a safe no-op unless Ritualist has a browser UI-scoped
+mechanism available. Ritualist does not use webpage text or buttons to dismiss
+Chrome restore prompts, because page content can imitate browser prompts.
+`use_dedicated_profile: false` is rejected so Ritualist cannot silently operate
+on a user's normal browser profile.
+
+`browser.open_native` is a native handoff. It accepts only HTTP and HTTPS URLs,
+delegates the URL to the OS default browser, does not start Playwright, does not
+create a Ritualist browser profile, and does not claim DOM or media control.
+It is still logged as a ritual step and is supported by dry-run and Doctor.
+
+Ritualist's managed Playwright launch options are audited by tests to ensure
+production launches do not deliberately pass `--no-sandbox`. Current clean-start
+flags are limited to first-run and session-restore prompt prevention.
 
 ## Structured Browser Runbooks
 
 Ritualist supports a narrow browser runbook surface for pages it opened through
 `browser.open`. These actions operate on the current Ritualist-managed page:
 
+- `browser.wait_media_playing`
 - `browser.wait_text`
 - `browser.wait_title`
 - `browser.wait_url`
@@ -415,6 +428,10 @@ Ritualist supports a narrow browser runbook surface for pages it opened through
 - `browser.click_test_id`
 
 Browser waits are read-only and can use `timeout_seconds` and `on_timeout`.
+`browser.wait_media_playing` is managed-only and requires `selector`; it waits
+for a media element, verifies readiness, verifies it is not paused or ended, and
+checks that `currentTime` advances over a short interval. It does not make
+provider-specific content, playback, or advertising claims.
 Browser clicks are structured and reviewable: they target visible text, ARIA
 role plus `accessible_name`, or test id. Ritualist does not support arbitrary
 recipe-supplied JavaScript, browser clicking by raw CSS selector, password

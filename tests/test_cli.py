@@ -375,10 +375,13 @@ def test_perf_fake_run_uses_fake_adapters_and_confirms(monkeypatch):
     assert data["counts"]["confirmations"] == 1
     assert data["counts"]["browser_calls"] == 1
     assert data["counts"]["shell_calls"] == 1
-    assert data["counts"]["desktop_calls"] == 1
+    assert data["counts"]["desktop_calls"] == 2
     assert fakes.browser.calls[0][0] == "open_url"
     assert fakes.shell.calls[0][0] == "launch"
-    assert fakes.desktop.calls[0][0] == "click_text"
+    assert [call[0] for call in fakes.desktop.calls] == [
+        "find_text_region",
+        "invoke_resolved_text_region",
+    ]
 
 
 def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
@@ -1364,7 +1367,7 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
 
     assert result.exit_code == 1
     assert called == [True]
-    assert fakes.desktop.calls == []
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
     assert "Recipe: Demo" in result.output
     assert "Window: Battle.net" in result.output
     assert "Target: Play" in result.output

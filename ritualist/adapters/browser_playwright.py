@@ -72,6 +72,56 @@ class PlaywrightBrowserAdapter:
             {"selector": selector, "play": play, "loop": loop, "muted": muted},
         )
 
+    def media_playing(
+        self,
+        *,
+        selector: str,
+        sample_seconds: float,
+        timeout_seconds: float,
+    ) -> bool:
+        if self._page is None:
+            raise RitualistError("browser.wait_media_playing requires a prior browser.open step")
+        try:
+            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "browser media checks require Playwright; install ritualist[browser] and run "
+                "'python -m playwright install chromium'"
+            ) from exc
+
+        locator = self._page.locator(selector).first
+        try:
+            locator.wait_for(state="attached", timeout=timeout_seconds * 1000)
+        except PlaywrightTimeoutError:
+            return False
+        return bool(
+            self._page.evaluate(
+                """
+                async ({ selector, sampleSeconds }) => {
+                  const element = document.querySelector(selector);
+                  if (!element) {
+                    throw new Error(`media element not found: ${selector}`);
+                  }
+                  if (typeof element.currentTime !== "number") {
+                    throw new Error(`element is not media-like: ${selector}`);
+                  }
+                  if (element.readyState < 2 || element.paused || element.ended) {
+                    return false;
+                  }
+                  const startTime = element.currentTime;
+                  await new Promise((resolve) => setTimeout(resolve, sampleSeconds * 1000));
+                  return (
+                    element.readyState >= 2 &&
+                    !element.paused &&
+                    !element.ended &&
+                    element.currentTime > startTime + 0.01
+                  );
+                }
+                """,
+                {"selector": selector, "sampleSeconds": sample_seconds},
+            )
+        )
+
     def text_visible(self, *, text: str, exact: bool, timeout_seconds: float) -> bool:
         if self._page is None:
             raise RitualistError("assert.browser_text_visible requires a prior browser.open step")

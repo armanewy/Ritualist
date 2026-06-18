@@ -48,6 +48,7 @@ class PrimitiveCapability(str, Enum):
     WINDOWS_UIA = "windows_uia"
     APP_LAUNCH = "app_launch"
     BROWSER_CONTROL = "browser_control"
+    NATIVE_BROWSER_HANDOFF = "native_browser_handoff"
     WINDOW_MANAGEMENT = "window_management"
     KEYBOARD_INPUT = "keyboard_input"
     FILE_READ = "file_read"
@@ -446,6 +447,8 @@ def _primitive_mapping(action_name: str) -> tuple[str, str]:
         "browser.element_visible": ("browser.assert", "element_visible"),
         "browser.media": ("browser.interact", "media"),
         "browser.open": ("browser.session", "open"),
+        "browser.open_native": ("browser.session", "open_native"),
+        "browser.wait_media_playing": ("browser.assert", "wait_media_playing"),
         "browser.wait_text": ("browser.assert", "wait_text"),
         "browser.wait_title": ("browser.assert", "wait_title"),
         "browser.wait_url": ("browser.assert", "wait_url"),
@@ -488,6 +491,12 @@ def _primitive_mapping(action_name: str) -> tuple[str, str]:
 
 
 def _adapter_binding_for(action_name: str, family_name: str) -> PrimitiveAdapterBinding:
+    if action_name == "browser.open_native":
+        return PrimitiveAdapterBinding(
+            "native_browser",
+            "os_default_browser",
+            "OS default browser handoff",
+        )
     if action_name.startswith("browser.") or family_name.startswith("browser."):
         return PrimitiveAdapterBinding("playwright", "managed_browser", "Ritualist Playwright adapter")
     if action_name.startswith("desktop.") or family_name == "uia.element":

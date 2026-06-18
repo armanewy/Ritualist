@@ -120,6 +120,110 @@ def test_executor_cancels_when_confirmation_declined():
     assert summary.results[0].status == "cancelled"
 
 
+def test_confirmed_desktop_click_absent_target_does_not_request_confirmation():
+    recipe = _play_click_recipe()
+    fakes = FakeAdapters()
+    fakes.desktop.responses["find_text_region"] = None
+    confirmations = []
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert not summary.success
+    assert summary.results[0].status == "failed"
+    assert "target unavailable or blocked before confirmation" in summary.results[0].message
+    assert summary.results[0].metadata["target_resolution"] == {
+        "status": "unresolved",
+        "target": None,
+    }
+    assert confirmations == []
+    assert not any(isinstance(event, ConfirmationRequested) for event in runtime_events)
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
+
+
+def test_confirmed_desktop_click_disabled_target_does_not_request_confirmation():
+    recipe = _play_click_recipe()
+    fakes = FakeAdapters()
+    fakes.desktop.responses["find_text_region"] = TargetRegion(
+        rect=ScreenRect(30, 40, 120, 36),
+        window_title="Battle.net",
+        target_text="Play",
+        control_type="Button",
+        target_identity="battle-net-play",
+        visible=True,
+        enabled=False,
+    )
+    confirmations = []
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert not summary.success
+    assert summary.results[0].status == "failed"
+    assert summary.results[0].metadata["target_resolution"]["status"] == "blocked"
+    assert summary.results[0].metadata["target_resolution"]["target"]["enabled"] is False
+    assert confirmations == []
+    assert not any(isinstance(event, ConfirmationRequested) for event in runtime_events)
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
+
+
+def test_confirmed_desktop_click_enabled_target_requests_confirmation_then_invokes():
+    recipe = _play_click_recipe()
+    fakes = FakeAdapters()
+    confirmations = []
+    runtime_events = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        runtime_event_callback=runtime_events.append,
+    ).run(recipe)
+
+    assert summary.success
+    assert [call[0] for call in fakes.desktop.calls] == [
+        "find_text_region",
+        "invoke_resolved_text_region",
+    ]
+    assert confirmations[0].prompt == "Start Diablo IV"
+    assert summary.results[0].metadata["target_resolution"]["status"] == "resolved"
+    assert summary.results[0].metadata["approval"] == {"status": "approved"}
+    assert summary.results[0].metadata["target_invocation"]["status"] == "invoked"
+    assert any(isinstance(event, ConfirmationRequested) for event in runtime_events)
+
+
+def test_confirmed_desktop_click_target_disappears_after_approval_fails_visibly():
+    recipe = _play_click_recipe()
+    fakes = FakeAdapters()
+    fakes.desktop.failures["invoke_resolved_text_region"] = RuntimeError(
+        "resolved target changed or disappeared before invocation"
+    )
+    confirmations = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+    ).run(recipe)
+
+    assert not summary.success
+    assert confirmations
+    assert summary.results[0].status == "failed"
+    assert "resolved target changed or disappeared" in summary.results[0].message
+    assert summary.results[0].metadata["approval"] == {"status": "approved"}
+    assert summary.results[0].metadata["target_invocation"]["status"] == "failed"
+    assert [call[0] for call in fakes.desktop.calls] == [
+        "find_text_region",
+        "invoke_resolved_text_region",
+    ]
+
+
 def test_desktop_click_result_includes_target_preview_metadata_without_overlay():
     recipe = Recipe.model_validate(
         {
@@ -689,6 +793,26 @@ def test_executor_stops_during_cooperative_wait_path():
         RunState.STOPPED,
     ]
     assert runtime_events[-1].state == RunState.STOPPED
+
+
+def _play_click_recipe() -> Recipe:
+    return Recipe.model_validate(
+        {
+            "id": "run",
+            "name": "Gaming Mode",
+            "home": {"card": {"title": "Diablo IV Night"}},
+            "steps": [
+                {
+                    "name": "Ask before clicking Play",
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "control_type": "Button",
+                    "requires_confirmation": True,
+                }
+            ],
+        }
+    )
 
 
 class _StoppingAppLaunchHandler:

@@ -45,6 +45,94 @@ Remove-Item Env:\PYTHONFAULTHANDLER -ErrorAction SilentlyContinue
 
 On Linux CI, keep `QT_QPA_PLATFORM=offscreen` for optional GUI/Home tests.
 
+## Set 2 Wave F1 Contract Validation - 2026-06-18
+
+Status: Functionality contract repair and packaged fixture acceptance evidence
+only. This supersedes earlier fixture-only `taggable: true` acceptance summaries:
+fixture evidence is useful, but it does not prove live Battle.net, Chrome,
+YouTube, editor, VPN, terminal, support-portal, or human UX integration.
+
+Starting HEAD:
+
+- `525bdd7` (`Simplify Home and extract Canvas controls`).
+
+Contract updates validated:
+
+- Added `browser.open_native` as an HTTP/HTTPS-only OS default browser handoff.
+  It does not initialize Playwright, create a Ritualist browser profile, or claim
+  DOM/media control.
+- Kept `browser.open` as the managed Playwright browser session and documented
+  its dedicated-profile behavior.
+- Added managed-only `browser.wait_media_playing`, which requires a selector and
+  verifies media readiness plus `currentTime` advancement without
+  provider-specific or ad-skipping claims.
+- Added read-only Battle.net/Diablo IV readiness inspection behind the generic
+  target model. It inspects scoped UIA labels/control types/enabled state,
+  distinguishes install/locate/update/play/login/running/ambiguous states, and
+  never clicks or uses coordinates.
+- Changed confirmed desktop clicks so the exact visible/enabled target is
+  resolved before confirmation, absent/disabled targets do not ask for approval,
+  and approved actions revalidate/invoke the same target identity without a
+  coordinate fallback.
+- Updated native confirmation copy to user-facing `Start Diablo IV`, `Allow
+  once`, and `Cancel`, while preserving top-level/foreground confirmation
+  behavior.
+- Corrected the release acceptance truth model to separate
+  `engine_tests_pass`, `simulated_acceptance_pass`, `live_integration_pass`,
+  `human_ux_pass`, and `release_pass`. `taggable` is now an alias of
+  `release_pass.passed`, not a fixture-only verdict.
+
+Validation commands:
+
+- `python -m pytest -q`: `1230 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 45 managed files.
+- `.\scripts\build_windows_app.ps1`: passed and rebuilt
+  `dist\Ritualist\Ritualist.exe`.
+- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f1-rerun`:
+  passed with `32 PASS`, `0 FAIL`, and `0 NEEDS_HUMAN_REVIEW`.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance-set2-f1-rerun\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance-set2-f1-rerun\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance-set2-f1-rerun\evidence`
+
+Truth model from the generated summary:
+
+- `engine_tests_pass`: `NOT_RUN` in the harness; the separate full test command
+  above is the engine evidence.
+- `simulated_acceptance_pass`: `PASS`.
+- `live_integration_pass`: `NOT_RUN`.
+- `human_ux_pass`: `NOT_RUN`.
+- `release_pass`: `NOT_RUN`.
+- `taggable`: `false`.
+
+Objective checks that passed:
+
+- Packaged Home, Canvas Use Mode, and classic GUI opened and stayed alive.
+- Gaming, Project, and Support hero Room fixture acceptance checks passed.
+- Native confirmation appeared above the fake Battle.net fixture.
+- Declined Play stopped cleanly, `show-run` recorded the declined confirmation,
+  and the positive fake approval case invoked the exact fake Play target.
+- Hard-kill recovery repaired an abandoned run to `interrupted`.
+- No recording/Watch Me/preview-capture surface was exposed.
+- Canvas/theme and Suite Pack import/export evidence stayed quarantined and did
+  not auto-run behavior.
+- Arbitrary component code was rejected.
+- 100/300 component performance and UI heartbeat evidence were recorded without
+  an obvious freeze.
+
+Release note:
+
+- No `v0.2.0-alpha.1` tag was created.
+- `v0.2.0-alpha.1` is still not taggable from this evidence alone because live
+  integration and human UX remain `NOT_RUN`.
+
 ## Historical v0.1.0-alpha.1 Release Candidate Validation - 2026-06-16
 
 Validation commit: `2d83b66`.

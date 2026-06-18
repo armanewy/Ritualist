@@ -208,7 +208,7 @@ def test_bundled_gaming_mode_keep_open_survives_declined_play_confirmation(
     assert keep_alive_calls == [True]
     assert fakes.browser.calls[0][0] == "open_url"
     assert fakes.browser.calls[0][2]["keep_open"] is True
-    assert fakes.desktop.calls == []
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
     assert "Target: Play" in result.output
     assert "Confirmation declined; no confirmed risky action was performed." in result.output
 

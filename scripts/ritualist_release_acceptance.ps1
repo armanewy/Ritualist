@@ -491,6 +491,20 @@ function Invoke-AnyNamedButton {
     return $false
 }
 
+function Get-ElementEvidence {
+    param([object]$Element)
+    if (-not $Element) {
+        return $null
+    }
+    return [ordered]@{
+        name = $Element.Current.Name
+        automation_id = $Element.Current.AutomationId
+        control_type = $Element.Current.ControlType.ProgrammaticName
+        is_enabled = [bool]$Element.Current.IsEnabled
+        class_name = $Element.Current.ClassName
+    }
+}
+
 function Save-WindowTree {
     param([string]$Name, [object]$Window, [int]$Limit = 250)
     $items = @()
@@ -790,6 +804,54 @@ function Read-RunJson {
         return $null
     }
     return Get-Content -Path $path -Raw | ConvertFrom-Json
+}
+
+function Invoke-PositiveFakeTargetApprovalEvidence {
+    $process = $null
+    try {
+        $process = Start-FakeExternalApp
+        $window = Get-WindowByName $FakeBattleNetTitle 10
+        $target = if ($window) { Find-Button $window "Play" } else { $null }
+        $targetEvidence = Get-ElementEvidence $target
+        $simulatedApproval = $target -and [bool]$target.Current.IsEnabled
+        $invoked = $false
+        if ($simulatedApproval) {
+            $pattern = $target.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+            $pattern.Invoke()
+            $invoked = $true
+            Start-Sleep -Milliseconds 500
+        }
+        $tree = if ($window) { Save-WindowTree "positive-fake-target-approval" $window } else { $null }
+        $postcondition = if ($tree) { Test-WindowTreeContainsText $tree "Play was invoked." } else { $false }
+        if ($targetEvidence -and $simulatedApproval -and $invoked -and $postcondition) {
+            Set-Check "positive_fake_target_approval" "PASS" "Simulation-only positive fake target case resolved Play, recorded simulated approval, invoked the exact fake target, and verified the fixture postcondition." @{
+                evidence_scope = "simulated_acceptance_only"
+                fixture = "fake Battle.net"
+                target_evidence = $targetEvidence
+                simulated_user_approval = $true
+                exact_fake_target_invoked = $invoked
+                postcondition_verified = $postcondition
+                window_tree = $tree
+            }
+        }
+        else {
+            Set-Check "positive_fake_target_approval" "FAIL" "Simulation-only positive fake target approval evidence was incomplete." @{
+                evidence_scope = "simulated_acceptance_only"
+                fixture = "fake Battle.net"
+                target_evidence = $targetEvidence
+                simulated_user_approval = [bool]$simulatedApproval
+                exact_fake_target_invoked = $invoked
+                postcondition_verified = $postcondition
+                window_tree = $tree
+            }
+        }
+    }
+    finally {
+        if ($process) {
+            Stop-AcceptanceProcess $process -Force
+        }
+        Stop-FakeExternalApps
+    }
 }
 
 function Wait-RunStatus {
@@ -2317,7 +2379,7 @@ function Invoke-CanvasRunDecline {
             window_tree = $confirmationTree
             z_order = $zOrder
         }
-        $cancel = if ($confirmation) { Invoke-NamedButton $confirmation "Cancel Ritual" 5 } else { $false }
+        $cancel = if ($confirmation) { Invoke-AnyNamedButton $confirmation @("Cancel", "Cancel Ritual") 5 } else { $false }
         Start-Sleep -Seconds 6
         $fakeWindow = Get-WindowByName $FakeBattleNetTitle 5
         $fakeWindowTree = Save-WindowTree "fake-battlenet-after-decline" $fakeWindow
@@ -3154,7 +3216,33 @@ function Write-Summaries {
         FAIL = @($Results.Values | Where-Object { $_.status -eq "FAIL" }).Count
         NEEDS_HUMAN_REVIEW = @($Results.Values | Where-Object { $_.status -eq "NEEDS_HUMAN_REVIEW" }).Count
     }
-    $taggable = ($counts.FAIL -eq 0 -and $counts.NEEDS_HUMAN_REVIEW -eq 0)
+    $simulatedAcceptancePass = ($counts.FAIL -eq 0 -and $counts.NEEDS_HUMAN_REVIEW -eq 0)
+    $engineTestsPass = [ordered]@{
+        status = "NOT_RUN"
+        passed = $null
+        basis = "This packaged acceptance harness does not execute the engine test suite. Use python -m pytest -q as separate evidence."
+    }
+    $simulatedAcceptance = [ordered]@{
+        status = if ($simulatedAcceptancePass) { "PASS" } else { "FAIL" }
+        passed = [bool]$simulatedAcceptancePass
+        basis = "Fixture and packaged machine evidence only; this does not prove real Battle.net, Chrome, YouTube, VPN, editor, terminal, or support-portal integration."
+    }
+    $liveIntegration = [ordered]@{
+        status = "NOT_RUN"
+        passed = $false
+        basis = "Not executed against the real user applications in this harness run."
+    }
+    $humanUx = [ordered]@{
+        status = "NOT_RUN"
+        passed = $false
+        basis = "No human has explicitly approved the UX in this machine harness run."
+    }
+    $releasePass = [ordered]@{
+        status = "NOT_RUN"
+        passed = $false
+        basis = "Release pass requires the release policy's chosen live-integration and human-UX gates; simulated fixture evidence alone is insufficient."
+    }
+    $taggable = [bool]$releasePass.passed
     $summary = [ordered]@{
         schema = "ritualist.release_acceptance_summary.v1"
         release = "v0.2.0-alpha.1"
@@ -3174,7 +3262,20 @@ function Write-Summaries {
             path = $parseErrorsPath
         }
         counts = $counts
+        truth_model = [ordered]@{
+            engine_tests_pass = $engineTestsPass
+            simulated_acceptance_pass = $simulatedAcceptance
+            live_integration_pass = $liveIntegration
+            human_ux_pass = $humanUx
+            release_pass = $releasePass
+        }
+        engine_tests_pass = $engineTestsPass
+        simulated_acceptance_pass = $simulatedAcceptance
+        live_integration_pass = $liveIntegration
+        human_ux_pass = $humanUx
+        release_pass = $releasePass
         taggable = $taggable
+        taggable_basis = "Alias of release_pass.passed. Fixture-only simulated acceptance cannot make this true."
         tag_created = $false
         checks = @($Results.Values)
     }
@@ -3187,8 +3288,18 @@ function Write-Summaries {
     $lines += "- Executable: ``$($summary.executable)``"
     $lines += "- Command scope: $($summary.command_scope)"
     $lines += "- Artifact root: ``$AcceptanceRoot``"
-    $lines += "- Taggable: **$taggable**"
+    $lines += "- Taggable: **$taggable** ($($summary.taggable_basis))"
     $lines += "- Tag created: **false**"
+    $lines += ""
+    $lines += "## Release Truth Model"
+    $lines += ""
+    $lines += "| Gate | Status | Basis |"
+    $lines += "|---|---:|---|"
+    foreach ($gate in @("engine_tests_pass", "simulated_acceptance_pass", "live_integration_pass", "human_ux_pass", "release_pass")) {
+        $gateValue = $summary[$gate]
+        $basis = ($gateValue.basis -replace "\|", "\|")
+        $lines += "| ``$gate`` | $($gateValue.status) | $basis |"
+    }
     if ($themeEvidence.selected_theme_ids.Count -gt 0) {
         $lines += "- Canvas theme evidence: ``$($themeEvidence.selected_theme_ids -join ", ")``"
     }
@@ -3241,6 +3352,7 @@ try {
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls
     Invoke-CanvasRunDecline
+    Invoke-PositiveFakeTargetApprovalEvidence
     Invoke-HardKillRecovery
     Set-GamingRoomAggregateEvidence
     Invoke-LocalLearningSuggestionsEvidence

@@ -18,6 +18,7 @@ from .actions.base import (
     StatusCallback,
     StepEvent,
     StepResult,
+    target_region_metadata,
 )
 from .actions.registry import ActionRegistry, create_default_registry
 from .config import AppConfig, load_app_config
@@ -357,7 +358,16 @@ class WorkflowExecutor:
                 wait_overlay = None
                 try:
                     wait_overlay = self._start_wait_overlay(step)
-                    preview_region = self._find_preview_region(step)
+                    confirmed_desktop_target: TargetRegion | None = None
+                    if _requires_confirmed_desktop_target(step):
+                        confirmed_desktop_target = self._resolve_confirmed_desktop_target(step)
+                        result_metadata["target_resolution"] = _target_resolution_metadata(
+                            confirmed_desktop_target
+                        )
+                        if not _is_confirmable_region(confirmed_desktop_target):
+                            message = _target_unavailable_message(step)
+                            raise RuntimeError(message)
+                    preview_region = confirmed_desktop_target or self._find_preview_region(step)
                     self._show_action_preview(step, preview_region)
                     context.confirm = (
                         lambda prompt, step_id=index, phase_name=phase, active_step=step: self._confirm(
@@ -369,7 +379,11 @@ class WorkflowExecutor:
                     )
                     if step.requires_confirmation:
                         prompt = self._confirmation_request(recipe, step, preview_region)
-                        if not self._confirm(prompt, step_id=index, phase=phase, step=step):
+                        approved = self._confirm(prompt, step_id=index, phase=phase, step=step)
+                        result_metadata["approval"] = {
+                            "status": "approved" if approved else "declined",
+                        }
+                        if not approved:
                             raise UserCancelledError("user declined confirmation")
 
                     self._checkpoint_control()
@@ -384,7 +398,14 @@ class WorkflowExecutor:
                         f"starting step {index}/{total}: {step.display_name}",
                         step_index=index,
                     )
-                    outcome = handler.run(step, context)
+                    if _requires_confirmed_desktop_target(step):
+                        outcome = self._invoke_confirmed_desktop_target(
+                            step,
+                            confirmed_desktop_target,
+                            result_metadata=result_metadata,
+                        )
+                    else:
+                        outcome = handler.run(step, context)
                     message, action_metadata = _normalize_action_outcome(outcome)
                     result_metadata.update(action_metadata)
                     if _step_requests_keep_open(step):
@@ -981,6 +1002,60 @@ class WorkflowExecutor:
         self._browser_used = False
         return True
 
+    def _resolve_confirmed_desktop_target(self, step: ExecutableStep) -> TargetRegion | None:
+        if not isinstance(step, DesktopClickTextStep):
+            return None
+        finder = getattr(self.adapters.desktop, "find_text_region", None)
+        if finder is None:
+            return None
+        return finder(
+            text=step.text,
+            window_title_contains=step.window_title_contains,
+            control_type=step.control_type,
+            exact=step.exact,
+            timeout_seconds=step.timeout_seconds or 10.0,
+        )
+
+    def _invoke_confirmed_desktop_target(
+        self,
+        step: ExecutableStep,
+        target: TargetRegion | None,
+        *,
+        result_metadata: dict[str, Any],
+    ) -> ActionOutcome:
+        if not isinstance(step, DesktopClickTextStep):
+            raise RuntimeError("confirmed desktop target invocation requires desktop.click_text")
+        if not _is_confirmable_region(target):
+            raise RuntimeError(_target_unavailable_message(step))
+        invoker = getattr(self.adapters.desktop, "invoke_resolved_text_region", None)
+        if invoker is None:
+            raise RuntimeError("desktop adapter cannot invoke a resolved target safely")
+        try:
+            region = invoker(
+                target=target,
+                text=step.text,
+                window_title_contains=step.window_title_contains,
+                control_type=step.control_type,
+                exact=step.exact,
+                button=step.button,
+                timeout_seconds=step.timeout_seconds or 10.0,
+            )
+        except Exception as exc:  # noqa: BLE001 - preserve failure evidence on the step.
+            result_metadata["target_invocation"] = {
+                "status": "failed",
+                "message": str(exc),
+                "target": _target_evidence_metadata(target),
+            }
+            raise
+        result_metadata["target_invocation"] = {
+            "status": "invoked",
+            "target": _target_evidence_metadata(region),
+        }
+        return ActionOutcome(
+            message=f"invoked resolved target '{step.text}'",
+            metadata=target_region_metadata(region),
+        )
+
     def _start_wait_overlay(self, step: ExecutableStep) -> Any:
         if not self._visual_trust_enabled or not isinstance(step, WindowWaitStep):
             return None
@@ -1056,7 +1131,7 @@ class WorkflowExecutor:
     ) -> ConfirmationRequest:
         browser_context = self._browser_confirmation_context(step)
         return ConfirmationRequest(
-            prompt=f"Run '{step.display_name}' ({step.action})?",
+            prompt=_confirmation_outcome_label(recipe, step, region),
             action=step.action,
             step_name=step.display_name,
             recipe_name=recipe.name,
@@ -1170,6 +1245,62 @@ def _normalize_action_outcome(outcome: str | ActionOutcome) -> tuple[str, dict[s
     return str(outcome), {}
 
 
+def _requires_confirmed_desktop_target(step: ExecutableStep) -> bool:
+    return isinstance(step, DesktopClickTextStep) and bool(step.requires_confirmation)
+
+
+def _is_confirmable_region(region: TargetRegion | None) -> bool:
+    if region is None:
+        return False
+    if not region.target_identity:
+        return False
+    if region.visible is False or region.enabled is False:
+        return False
+    return True
+
+
+def _target_unavailable_message(step: ExecutableStep) -> str:
+    if isinstance(step, DesktopClickTextStep):
+        return (
+            "target unavailable or blocked before confirmation: visible enabled text "
+            f"'{step.text}' was not resolved in window '{step.window_title_contains}'"
+        )
+    return "target unavailable or blocked before confirmation"
+
+
+def _target_resolution_metadata(region: TargetRegion | None) -> dict[str, Any]:
+    if region is None:
+        return {"status": "unresolved", "target": None}
+    status = "resolved" if _is_confirmable_region(region) else "blocked"
+    return {"status": status, "target": _target_evidence_metadata(region)}
+
+
+def _target_evidence_metadata(region: TargetRegion | None) -> dict[str, Any] | None:
+    if region is None:
+        return None
+    payload: dict[str, Any] = {}
+    if region.window_title:
+        payload["window_title"] = region.window_title
+    if region.target_text:
+        payload["target_text"] = region.target_text
+    if region.control_type:
+        payload["control_type"] = region.control_type
+    if region.target_identity:
+        payload["target_identity"] = region.target_identity
+    if region.visible is not None:
+        payload["visible"] = region.visible
+    if region.enabled is not None:
+        payload["enabled"] = region.enabled
+    if region.rect is not None and region.rect.is_valid:
+        payload["bounds"] = {
+            "x": region.rect.x,
+            "y": region.rect.y,
+            "width": region.rect.width,
+            "height": region.rect.height,
+        }
+    return payload
+
+
 def _runtime_step_state(status: str) -> StepState:
     return {
         "dry-run": StepState.SUCCESS,
@@ -1223,6 +1354,7 @@ def _is_wait_step(step: ExecutableStep) -> bool:
         or step.action
         in {
             "browser.wait_text",
+            "browser.wait_media_playing",
             "browser.wait_title",
             "browser.wait_url",
             "browser.element_visible",
@@ -1235,7 +1367,19 @@ def _step_requests_keep_open(step: ExecutableStep) -> bool:
 
 
 def _uses_browser_adapter(step: ExecutableStep) -> bool:
-    return step.action.startswith("browser.") or step.action == "assert.browser_text_visible"
+    return step.action in {
+        "browser.open",
+        "browser.media",
+        "browser.wait_media_playing",
+        "browser.wait_text",
+        "browser.wait_title",
+        "browser.wait_url",
+        "browser.element_visible",
+        "browser.click_text",
+        "browser.click_role",
+        "browser.click_test_id",
+        "assert.browser_text_visible",
+    }
 
 
 def _wait_target_label(step: ExecutableStep) -> str:
@@ -1256,6 +1400,8 @@ def _wait_target_label(step: ExecutableStep) -> str:
         return f"window {_window_match_label(step)} to close"
     if action == "browser.wait_text":
         return f"browser text {getattr(step, 'text', '')}"
+    if action == "browser.wait_media_playing":
+        return f"browser media {getattr(step, 'selector', '')} playing"
     if action == "browser.wait_title":
         return f"browser title {getattr(step, 'title', None) or getattr(step, 'title_contains', '')}"
     if action == "browser.wait_url":
@@ -1281,6 +1427,12 @@ def _runtime_result_message(result: StepResult) -> str | None:
         if result.status == "success":
             return "opened URL"
         return "browser.open did not complete"
+    if result.action == "browser.open_native":
+        if result.dry_run:
+            return "would hand off URL"
+        if result.status == "success":
+            return "handed URL to default browser"
+        return "browser.open_native did not complete"
     return result.message or None
 
 
@@ -1596,6 +1748,38 @@ def _confirmation_safety_message(step: ExecutableStep) -> str | None:
     return None
 
 
+def _confirmation_outcome_label(
+    recipe: Recipe,
+    step: ExecutableStep,
+    region: TargetRegion | None,
+) -> str:
+    if isinstance(step, DesktopClickTextStep):
+        target_text = (region.target_text if region and region.target_text else step.text).strip()
+        if target_text.casefold() == "play":
+            subject = _confirmation_subject_from_recipe(recipe)
+            if subject:
+                return f"Start {subject}"
+        if target_text:
+            return f"{target_text} in {_confirmation_window_title(step, region) or 'desktop window'}"
+    browser_target = _browser_click_target(step)
+    if browser_target:
+        return f"{browser_target.strip()} in browser"
+    return f"Run '{step.display_name}' ({step.action})?"
+
+
+def _confirmation_subject_from_recipe(recipe: Recipe) -> str:
+    title = recipe.home.card.title.strip()
+    if title:
+        return _trim_session_words(title)
+    name = recipe.name.strip()
+    return _trim_session_words(name)
+
+
+def _trim_session_words(value: str) -> str:
+    cleaned = re.sub(r"\s+(night|mode|setup|placeholder)$", "", value.strip(), flags=re.IGNORECASE)
+    return cleaned or value.strip()
+
+
 def _confirmation_prompt_text(prompt: ConfirmationRequest | str) -> str:
     if isinstance(prompt, ConfirmationRequest):
         return prompt.prompt
@@ -1642,6 +1826,8 @@ def _dry_run_message(step: ExecutableStep) -> str:
             options.append(f"managed profile '{getattr(step, 'profile', 'default')}'")
         suffix = f" ({', '.join(options)})" if options else ""
         return f"would open browser URL{suffix}"
+    if step.action == "browser.open_native":
+        return "would hand off URL to default browser"
     layout_message = _dry_run_layout_message(step)
     if layout_message is not None:
         return layout_message

@@ -469,6 +469,12 @@ def _safe_message(result: StepResult) -> str:
         if result.status == "success":
             return "opened URL"
         return "browser.open did not complete"
+    if result.action == "browser.open_native":
+        if result.dry_run:
+            return "would hand off URL"
+        if result.status == "success":
+            return "handed URL to default browser"
+        return "browser.open_native did not complete"
     if result.action == "app.launch":
         if result.dry_run:
             return "would launch app"
