@@ -660,7 +660,7 @@ def room_list(
 
 @room_app.command("show")
 def room_show(
-    room: Annotated[str, typer.Argument(help="Room id, e.g. minimal or gaming.")],
+    room: Annotated[str, typer.Argument(help="Room id, e.g. gaming, project, or support_desk.")],
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Print machine-readable Room template."),

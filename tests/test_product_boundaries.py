@@ -44,6 +44,27 @@ def test_roadmap_keeps_feature_freeze_as_current_focus() -> None:
     assert "Watch Me, record mode, macro recording" in text
 
 
+def test_canvas_docs_do_not_reopen_frozen_desktop_host_expansion() -> None:
+    text = (REPO_ROOT / "docs" / "canvas.md").read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
+
+    assert "Desktop Work-Area mode on top of the normal desktop" in normalized
+    assert "Desktop-host expansion is frozen" in normalized
+    assert "immersive/fullscreen canvas mode" not in text
+    assert "true shell replacement research" not in text
+
+
+def test_room_builder_roadmap_keeps_three_hero_rooms() -> None:
+    text = (REPO_ROOT / "docs" / "ROOM_BUILDER_ROADMAP.md").read_text(encoding="utf-8")
+
+    assert "- Gaming Room" in text
+    assert "- Project Room" in text
+    assert "- Support Desk" in text
+    assert "- Focus/Study" not in text
+    assert "- Helpdesk" not in text
+    assert "not a promoted starter Room" in text
+
+
 def test_readme_leads_with_ritual_first_product_definition() -> None:
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 

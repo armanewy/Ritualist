@@ -52,26 +52,26 @@ pause/resume/stop controls, logs, and recovery visible.
 
 ## First Starter Rooms
 
-The first starter Rooms should be small, typed, and built from existing safe
-Canvas infrastructure:
+The first starter Rooms are the three north-star hero Rooms. They should be
+small, typed, ritual-aware, and built from existing safe Canvas infrastructure:
 
-- **Minimal Room** (`minimal` -> `minimal_desktop`): a calm starter with
-  status, recent activity, clock, and safe ritual cards.
 - **Gaming Room** (`gaming` -> `gaming_desktop`): the existing gaming Canvas
   direction, with target preview and explicit confirmation. It must not automate
   gameplay.
 - **Project Room** (`project` -> `project_room`): project setup plan previews,
   launcher placeholders, status, and recent runs.
-- **Focus Room** (`focus` -> `focus_room`): a low-distraction Room with current
-  task, local time, safe preview cards, and recent activity.
-- **Helpdesk Room** (`helpdesk` -> `helpdesk_desktop`): runbook cards, Doctor,
+- **Support Desk** (`support_desk` -> `helpdesk_desktop`): runbook cards, Doctor,
   status, recent runs, and evidence surfaces.
+
+`minimal_desktop` remains an internal Desktop Work-Area fallback and acceptance
+fixture. It is intentionally not a promoted starter Room while the product is
+narrowed around Gaming Room, Project Room, and Support Desk.
 
 The starter Room CLI is a product-facing alias over bundled Canvas templates:
 
 ```powershell
 python -m ritualist room list --json
-python -m ritualist room show minimal --json
+python -m ritualist room show support_desk --json
 ```
 
 `room show` reads the bundled starter template for evidence and onboarding

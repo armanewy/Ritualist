@@ -1,8 +1,9 @@
 # Ritualist Canvas
 
-Canvas is the product abstraction that lets Ritualist become a customizable PC
-command surface without becoming a true Windows shell replacement. Home remains
-the current renderer/surface. Canvas Foundation v1 adds the data model,
+Canvas is the implementation layer that lets Ritualist present a ritual-aware
+desktop command surface without becoming a Windows shell replacement, file
+manager, wallpaper renderer, or generic widget platform. Home remains the
+current compatibility surface. Canvas Foundation v1 adds the data model,
 component registry, validation, storage, default templates, and performance
 smoke. Canvas Runtime Components v1 adds model/controller bindings from those
 typed components to existing Ritualist recipe, Doctor, target, runtime, and
@@ -311,12 +312,10 @@ Canvas Mode is a reversible desktop canvas layer. It is not v1 shell
 replacement. Ritualist does not hide the taskbar, replace Explorer, use kiosk
 mode, or claim ownership of the Windows session.
 
-Future stages can be:
-
-- Stage 1: desktop canvas mode on top of the normal desktop.
-- Stage 2: immersive/fullscreen canvas mode.
-- Stage 3: true shell replacement research, only after separate safety,
-  recovery, and policy design.
+The supported stage is Desktop Work-Area mode on top of the normal desktop.
+Desktop-host expansion is frozen after that stage: no immersive/fullscreen
+mode, shell replacement research, taskbar manipulation, WorkerW/Progman
+attachment, or desktop icon integration belongs on the v0.2 release line.
 
 ## Pack Domains
 

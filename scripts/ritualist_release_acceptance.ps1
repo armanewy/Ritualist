@@ -2067,7 +2067,7 @@ try {
     Assert-LaunchWindow -Id "packaged_classic_gui_visible" -Title "Ritualist" -LaunchArguments @("--classic-gui") -ScreenshotName "packaged-classic-gui"
     Capture-CanvasVisualArtifact -CanvasId "minimal_desktop" -ArtifactId "minimal-room"
     Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
-    Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "helpdesk-room"
+    Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "support-desk"
     Capture-DesktopWorkAreaCanvasArtifact
     Capture-DesktopWorkAreaWindowedFallbackArtifact
     Capture-CanvasEditModeVisualArtifact

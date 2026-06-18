@@ -11,7 +11,7 @@ from ritualist.cli import app
 from ritualist.rooms import room_list_payload, room_show_payload
 
 
-EXPECTED_ROOM_IDS = {"minimal", "gaming", "project", "focus", "helpdesk"}
+EXPECTED_ROOM_IDS = {"gaming", "project", "support_desk"}
 
 
 def test_room_list_cli_exposes_starter_rooms() -> None:
@@ -21,11 +21,9 @@ def test_room_list_cli_exposes_starter_rooms() -> None:
     payload = json.loads(result.output)
     assert payload["schema_version"] == "ritualist.rooms.v1"
     assert {room["id"] for room in payload["rooms"]} == EXPECTED_ROOM_IDS
-    assert {room["canvas_id"] for room in payload["rooms"]} >= {
-        "minimal_desktop",
+    assert {room["canvas_id"] for room in payload["rooms"]} == {
         "gaming_desktop",
         "project_room",
-        "focus_room",
         "helpdesk_desktop",
     }
 
@@ -42,14 +40,22 @@ def test_room_show_alias_matches_bundled_canvas_payload() -> None:
 
 
 def test_room_show_cli_uses_room_alias_without_executing_bindings() -> None:
-    result = CliRunner().invoke(app, ["room", "show", "minimal", "--json"])
+    result = CliRunner().invoke(app, ["room", "show", "support_desk", "--json"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["room"]["id"] == "minimal"
-    assert payload["room"]["canvas_id"] == "minimal_desktop"
-    assert payload["canvas"]["name"] == "Minimal Room"
+    assert payload["room"]["id"] == "support_desk"
+    assert payload["room"]["canvas_id"] == "helpdesk_desktop"
+    assert payload["canvas"]["name"] == "Support Desk"
     assert payload["validation"]["valid"] is True
+
+
+def test_legacy_helpdesk_room_alias_remains_compatible() -> None:
+    result = CliRunner().invoke(app, ["room", "show", "helpdesk", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["room"]["id"] == "support_desk"
 
 
 def test_starter_rooms_validate_use_safe_themes_and_safe_bindings() -> None:

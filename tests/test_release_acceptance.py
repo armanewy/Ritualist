@@ -103,7 +103,7 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "max_allowed_gap_ms",
         'ArtifactId "minimal-room"',
         'ArtifactId "gaming-room"',
-        'ArtifactId "helpdesk-room"',
+        'ArtifactId "support-desk"',
         "Capture-DesktopWorkAreaCanvasArtifact",
         "desktop-work-area-canvas",
         "desktop-work-area-windowed-fallback",

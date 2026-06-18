@@ -118,12 +118,14 @@ account, sandbox, virtual desktop, shell replacement, or automation marketplace.
 
 ```powershell
 python -m ritualist room list --json
-python -m ritualist room show minimal --json
+python -m ritualist room show gaming --json
 ```
 
-Starter Rooms currently map to bundled Canvas templates: Minimal, Gaming,
-Project, Focus, and Helpdesk. See [docs/ROOMS.md](docs/ROOMS.md) for the Room
-language and the Canvas mapping.
+Starter Rooms currently map to the three hero bundled Canvas templates: Gaming
+Room, Project Room, and Support Desk. `minimal_desktop` remains an internal
+desktop work-area fallback and release-acceptance fixture, not a promoted
+starter Room. See [docs/ROOMS.md](docs/ROOMS.md) for the Room language and the
+Canvas mapping.
 
 ## Home Alpha Dogfood
 

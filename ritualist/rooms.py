@@ -31,13 +31,6 @@ class RoomTemplate:
 
 _STARTER_ROOMS: tuple[RoomTemplate, ...] = (
     RoomTemplate(
-        "minimal",
-        "Minimal Room",
-        "minimal_desktop",
-        "A calm starter Room with clock, safe ritual cards, status, and recent activity.",
-        "starter",
-    ),
-    RoomTemplate(
         "gaming",
         "Gaming Room",
         "gaming_desktop",
@@ -52,20 +45,18 @@ _STARTER_ROOMS: tuple[RoomTemplate, ...] = (
         "work",
     ),
     RoomTemplate(
-        "focus",
-        "Focus Room",
-        "focus_room",
-        "A low-distraction Room for current task focus and local status.",
-        "focus",
-    ),
-    RoomTemplate(
-        "helpdesk",
-        "Helpdesk Room",
+        "support_desk",
+        "Support Desk",
         "helpdesk_desktop",
-        "A support Room with Doctor, diagnostics runbooks, status, and recent runs.",
+        "A support runbook Room with Doctor, diagnostics, status, and recent runs.",
         "support",
     ),
 )
+
+_ROOM_ALIASES = {
+    "helpdesk": "support_desk",
+    "helpdesk_desktop": "support_desk",
+}
 
 
 def list_rooms() -> tuple[RoomTemplate, ...]:
@@ -74,8 +65,9 @@ def list_rooms() -> tuple[RoomTemplate, ...]:
 
 def room_by_id(room_id: str) -> RoomTemplate:
     normalized = room_id.strip().casefold()
+    normalized = _ROOM_ALIASES.get(normalized, normalized)
     for room in _STARTER_ROOMS:
-        if room.room_id == normalized or room.canvas_id == room_id:
+        if room.room_id == normalized or room.canvas_id == normalized:
             return room
     raise RitualistError(f"room not found: {room_id}")
 

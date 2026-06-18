@@ -63,12 +63,14 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
         "browser_admin_console_workspace.yaml",
     }.issubset(sample_names)
     assert {
-        "focus_room.yaml",
         "gaming_desktop.yaml",
         "helpdesk_desktop.yaml",
         "minimal_desktop.yaml",
         "project_room.yaml",
     }.issubset(canvas_names)
+    assert "focus_room.yaml" not in canvas_names
+    assert "media_desktop.yaml" not in canvas_names
+    assert "coding_desktop.yaml" not in canvas_names
     assert paper_theme.is_file()
     assert "ritualist.paper" in paper_theme.read_text(encoding="utf-8")
 

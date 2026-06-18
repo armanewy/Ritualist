@@ -40,14 +40,15 @@ Add component performance profiles and Canvas performance diagnostics. Record
 
 Introduce curated Room templates using existing Canvas infrastructure:
 
-- Minimal
-- Gaming
-- Work/Project
-- Focus/Study
-- Helpdesk
+- Gaming Room
+- Project Room
+- Support Desk
 
-Room aliases may map to Canvas commands internally. No new risky behavior should
-be introduced.
+`minimal_desktop` may remain as an internal Desktop Work-Area fallback and
+release-acceptance fixture, but it is not a promoted starter Room. Do not add a
+fourth promoted Room until the three hero Rooms work end to end. Room aliases
+may map to Canvas commands internally. No new risky behavior should be
+introduced.
 
 ## Stage 6: Use Mode Visual Refresh
 
