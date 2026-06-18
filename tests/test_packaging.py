@@ -28,6 +28,8 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "ritualist.sample_recipes" in script
     assert "--add-data" in script
     assert "themes;themes" in script
+    assert "--copy-metadata" not in script
+    assert "copy_metadata" not in script
     assert "dist\\Ritualist\\Ritualist.exe" in script
 
 

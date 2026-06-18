@@ -22,7 +22,6 @@ $pyinstallerArgs = @(
     "--collect-data", "ritualist.home.qml",
     "--collect-data", "ritualist.sample_recipes",
     "--add-data", "themes;themes",
-    "--copy-metadata", "ritualist",
     "ritualist\desktop_entry.py"
 )
 
