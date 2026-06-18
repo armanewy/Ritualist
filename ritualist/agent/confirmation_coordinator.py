@@ -174,6 +174,13 @@ class ConfirmationCoordinator:
         self._resolve_pending(self._pending.context.confirmation_id, ConfirmationDecision.cancel())
         return True
 
+    def resolve_pending(self, decision: ConfirmationDecisionInput) -> bool:
+        if self._pending is None:
+            return False
+        normalized = normalize_confirmation_decision(decision)
+        self._resolve_pending(self._pending.context.confirmation_id, normalized)
+        return True
+
     def _enter_confirmation_state(self, context: ConfirmationContext) -> None:
         if context.ritual_id or context.ritual_name:
             self._state = derive_agent_state(

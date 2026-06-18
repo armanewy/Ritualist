@@ -160,6 +160,26 @@ def test_closing_confirmation_chooses_safe_negative_path() -> None:
     assert coordinator.state.state == AgentRunState.STOPPED
 
 
+def test_agent_can_resolve_pending_confirmation_through_existing_decision_model() -> None:
+    presenter = FakePresenter()
+    coordinator = ConfirmationCoordinator(presenter=presenter)
+    decisions: list[ConfirmationDecision] = []
+    coordinator.request_confirmation(
+        ConfirmationContext(
+            request=_launch_request(),
+            confirmation_id="confirm-agent",
+            run_id="run-1",
+            ritual_name="Gaming Mode",
+        ),
+        on_decision=decisions.append,
+    )
+
+    assert coordinator.resolve_pending(ConfirmationDecision.allow_once())
+
+    assert [decision.value for decision in decisions] == ["allow_once"]
+    assert coordinator.state.state == AgentRunState.RUNNING
+
+
 def test_remembered_approval_uses_existing_store_and_exact_scope_copy(tmp_path: Path) -> None:
     store_path = tmp_path / "local-preferences.json"
     scope = _remember_scope()

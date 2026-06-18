@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 from ritualist.agent.activation import ActivationIntent
 from ritualist.agent.app import start_agent
+from ritualist.agent.instrument_window import FakeInstrumentSurface
 from ritualist.agent.menu_model import MenuAction
+from ritualist.agent.models import AgentConfirmation, AgentRunState, AgentState
 from ritualist.agent.picker_model import (
     PICKER_MODEL_SCHEMA_VERSION,
     PickerAction,
@@ -16,6 +18,7 @@ from ritualist.agent.picker_window import FakePickerSurface
 from ritualist.agent.single_instance import InstanceActivationResult
 from ritualist.agent.tray import FakeApplication, FakeSystemTrayIcon, fake_qt_types
 from ritualist.agent.windows.hotkey import DEFAULT_HOTKEY, HotkeyEvent, HotkeyRegistrationResult
+from ritualist.runtime_models import RunStarted, StepWaiting
 
 
 @dataclass
@@ -205,12 +208,14 @@ def test_hotkey_toggles_picker_while_idle() -> None:
 def test_picker_preflight_request_does_not_start_ritual() -> None:
     coordinator, _server = _primary_coordinator()
     surfaces: list[FakePickerSurface] = []
+    instruments: list[FakeInstrumentSurface] = []
     result = start_agent(
         startup=True,
         application=FakeApplication(),
         coordinator=coordinator,
         qt_types=fake_qt_types(),
         picker_factory=lambda agent: _fake_picker(agent, surfaces),
+        instrument_factory=lambda agent: _fake_instrument(agent, instruments),
         run_event_loop=False,
     )
     assert result.agent is not None
@@ -223,6 +228,166 @@ def test_picker_preflight_request_does_not_start_ritual() -> None:
         {"kind": "open_preflight", "recipe_id": "gaming_mode", "room_id": ""}
     ]
     assert "run_recipe" not in result.agent.received_intents
+    assert surfaces[0].visible is False
+    assert instruments[0].visible is True
+    assert instruments[0].payloads[-1]["state"] == "ready"
+    assert instruments[0].payloads[-1]["primary_action"] == "start_ritual"
+
+
+def test_instrument_start_uses_injected_runner_and_runtime_events() -> None:
+    coordinator, _server = _primary_coordinator()
+    surfaces: list[FakePickerSurface] = []
+    instruments: list[FakeInstrumentSurface] = []
+    started: list[str] = []
+
+    def runtime_runner(recipe_id, callback):
+        started.append(recipe_id)
+        callback(
+            RunStarted(
+                run_id="run-1",
+                sequence=0,
+                recipe_id=recipe_id,
+                recipe_name="Gaming Mode",
+                steps_total=2,
+            )
+        )
+        callback(
+            StepWaiting(
+                run_id="run-1",
+                sequence=1,
+                step_index=1,
+                step_name="Wait for launcher",
+                action="window.wait",
+                reason="waiting for launcher",
+                target="Battle.net",
+                elapsed_seconds=3,
+                timeout_seconds=30,
+            )
+        )
+
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        picker_factory=lambda agent: _fake_picker(agent, surfaces),
+        instrument_factory=lambda agent: _fake_instrument(agent, instruments),
+        runtime_runner=runtime_runner,
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+
+    result.agent.open_preflight("gaming_mode")
+    instruments[0].primary_action("ready")
+
+    assert started == ["gaming_mode"]
+    assert result.agent.runtime_events == ["run.started", "step.waiting"]
+    assert instruments[0].payloads[-1]["state"] == "waiting"
+    assert instruments[0].payloads[-1]["title"] == "Waiting for Battle.net"
+    assert "run:gaming_mode" in result.agent.opened_surfaces
+
+
+def test_preflight_for_second_ritual_returns_to_active_instrument() -> None:
+    coordinator, _server = _primary_coordinator()
+    instruments: list[FakeInstrumentSurface] = []
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        instrument_factory=lambda agent: _fake_instrument(agent, instruments),
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+
+    result.agent.open_preflight("gaming_mode")
+    result.agent.open_preflight("support_triage_workspace")
+
+    assert result.agent.blocked_start_requests == ["support_triage_workspace"]
+    assert result.agent.state.active_ritual_id == "gaming_mode"
+    assert "return_to_active:gaming_mode" in result.agent.opened_surfaces
+
+
+def test_run_recipe_redirect_does_not_start_second_ritual_when_slot_occupied() -> None:
+    coordinator, _server = _primary_coordinator()
+    started: list[str] = []
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        instrument_factory=lambda agent: FakeInstrumentSurface(
+            model_provider=agent.instrument_surface_model,
+            on_primary_action=agent.handle_instrument_primary_action,
+            on_collapse=agent.collapse_instrument,
+        ),
+        runtime_runner=lambda recipe_id, _callback: started.append(recipe_id),
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+    result.agent.open_preflight("gaming_mode")
+
+    result.agent.handle_activation(
+        ActivationIntent("run_recipe", {"recipe_id": "support_triage_workspace"})
+    )
+
+    assert started == []
+    assert result.agent.blocked_start_requests == ["support_triage_workspace"]
+    assert result.agent.state.active_ritual_id == "gaming_mode"
+
+
+def test_run_recipe_redirect_does_not_restart_same_active_ritual() -> None:
+    coordinator, _server = _primary_coordinator()
+    started: list[str] = []
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        instrument_factory=lambda agent: FakeInstrumentSurface(
+            model_provider=agent.instrument_surface_model,
+            on_primary_action=agent.handle_instrument_primary_action,
+            on_collapse=agent.collapse_instrument,
+        ),
+        runtime_runner=lambda recipe_id, _callback: started.append(recipe_id),
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+    result.agent.open_preflight("gaming_mode")
+
+    result.agent.handle_activation(ActivationIntent("run_recipe", {"recipe_id": "gaming_mode"}))
+
+    assert started == []
+    assert result.agent.state.active_ritual_id == "gaming_mode"
+    assert "return_to_active:gaming_mode" in result.agent.opened_surfaces
+
+
+def test_instrument_confirmation_actions_resolve_agent_state_safely() -> None:
+    coordinator, _server = _primary_coordinator()
+    instruments: list[FakeInstrumentSurface] = []
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        instrument_factory=lambda agent: _fake_instrument(agent, instruments),
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+    result.agent.state = result.agent.run_coordinator._state = _confirmation_state("confirm-1")
+    result.agent.open_instrument()
+
+    instruments[0].primary_action("confirmation")
+
+    assert result.agent.state.state == AgentRunState.RUNNING
+    assert result.agent.confirmation_decisions == ["allow_once"]
+
+    result.agent.state = result.agent.run_coordinator._state = _confirmation_state("confirm-2")
+
+    result.agent.handle_instrument_primary_action("confirmation", "cancel_confirmation")
+
+    assert result.agent.state.state == AgentRunState.STOPPED
+    assert result.agent.confirmation_decisions[-1] == "cancel"
 
 
 def test_taskbar_created_reregisters_visible_tray_icon() -> None:
@@ -267,6 +432,16 @@ def _fake_picker(_agent, surfaces: list[FakePickerSurface]) -> FakePickerSurface
     return surface
 
 
+def _fake_instrument(_agent, surfaces: list[FakeInstrumentSurface]) -> FakeInstrumentSurface:
+    surface = FakeInstrumentSurface(
+        model_provider=lambda: _agent.instrument_surface_model(),
+        on_primary_action=_agent.handle_instrument_primary_action,
+        on_collapse=_agent.collapse_instrument,
+    )
+    surfaces.append(surface)
+    return surface
+
+
 def _picker_model() -> PickerModel:
     room = PickerRoom(room_id="gaming", name="Gaming Room", current=True, ritual_count=1)
     ritual = PickerRitual(
@@ -293,4 +468,21 @@ def _picker_model() -> PickerModel:
         active_ritual=None,
         intent_summary="1 ritual available in Gaming Room",
         available_actions=(PickerAction("open_preflight", "Open preflight"),),
+    )
+
+
+def _confirmation_state(confirmation_id: str) -> AgentState:
+    return AgentState(
+        state=AgentRunState.CONFIRMATION,
+        active_ritual_id="gaming_mode",
+        active_ritual_name="Gaming Mode",
+        pending_confirmation=AgentConfirmation(
+            confirmation_id=confirmation_id,
+            step_index=2,
+            step_name="Launch Diablo IV",
+            action="app.launch",
+            prompt="Launch Diablo IV?",
+            target="Diablo IV",
+            target_type="application",
+        ),
     )
