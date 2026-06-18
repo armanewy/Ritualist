@@ -871,104 +871,20 @@ ApplicationWindow {
         root.pendingSuggestionsDelete = false
     }
 
-    component PaperButton: Button {
-        id: control
-        property string role: "neutral"
-        property bool compact: false
-
-        implicitHeight: compact ? 30 : 36
-        leftPadding: root.spaceMd
-        rightPadding: root.spaceMd
-        topPadding: root.spaceSm
-        bottomPadding: root.spaceSm
-        font.family: root.token("font_family", "Segoe UI")
-        font.pixelSize: root.token("font_size_body", 13)
-        focusPolicy: Qt.StrongFocus
-        Accessible.name: text
-        Accessible.role: Accessible.Button
-
-        contentItem: Text {
-            text: control.text
-            color: control.enabled ? root.token("foreground", "#f4f7fb") : root.token("muted", "#91a2b8")
-            font: control.font
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-
-        background: Rectangle {
-            radius: root.radiusMd
-            color: root.buttonBackground(control.role, control.enabled, control.hovered, control.down)
-            border.color: root.buttonBorder(control.role, control.enabled, control.activeFocus)
-            border.width: control.activeFocus ? 2 : 1
-            opacity: control.enabled ? 1.0 : 0.56
-        }
+    component PaperButton: CanvasPaperButton {
+        themeRoot: root
     }
 
-    component PaperTextField: TextField {
-        id: field
-        implicitHeight: 34
-        color: root.token("foreground", "#f4f7fb")
-        placeholderTextColor: root.token("muted", "#91a2b8")
-        selectedTextColor: root.token("background", "#070c13")
-        selectionColor: root.token("accent", "#3dd6a5")
-        font.family: root.token("font_family", "Segoe UI")
-        font.pixelSize: root.token("font_size_body", 13)
-        Accessible.name: placeholderText || text || "Text field"
-        Accessible.role: Accessible.EditableText
-        leftPadding: root.spaceSm
-        rightPadding: root.spaceSm
-        background: Rectangle {
-            radius: root.radiusSm
-            color: root.token("panel_alt", "#101720")
-            border.color: field.activeFocus ? root.token("focus_ring", "#7fb8ff") : root.token("border", "#203044")
-            border.width: field.activeFocus ? 2 : 1
-        }
+    component PaperTextField: CanvasPaperTextField {
+        themeRoot: root
     }
 
-    component PaperComboBox: ComboBox {
-        id: combo
-        implicitHeight: 34
-        font.family: root.token("font_family", "Segoe UI")
-        font.pixelSize: root.token("font_size_body", 13)
-        Accessible.name: currentText || "Option selector"
-        Accessible.role: Accessible.ComboBox
-        contentItem: Text {
-            text: combo.displayText
-            color: combo.enabled ? root.token("foreground", "#f4f7fb") : root.token("muted", "#91a2b8")
-            font: combo.font
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-            leftPadding: root.spaceSm
-            rightPadding: root.spaceLg
-        }
-        background: Rectangle {
-            radius: root.radiusSm
-            color: root.token("panel_alt", "#101720")
-            border.color: combo.activeFocus ? root.token("focus_ring", "#7fb8ff") : root.token("border", "#203044")
-            border.width: combo.activeFocus ? 2 : 1
-        }
+    component PaperComboBox: CanvasPaperComboBox {
+        themeRoot: root
     }
 
-    component SuggestionBadge: Rectangle {
-        property string text: ""
-
-        height: 24
-        width: Math.max(76, badgeText.implicitWidth + 16)
-        radius: root.radiusSm
-        color: root.token("panel_alt", "#101720")
-        border.color: root.token("border", "#203044")
-        border.width: 1
-
-        Text {
-            id: badgeText
-            anchors.centerIn: parent
-            text: parent.text
-            color: root.token("muted", "#91a2b8")
-            font.pixelSize: 11
-            font.weight: Font.DemiBold
-            elide: Text.ElideRight
-        }
+    component SuggestionBadge: CanvasSuggestionBadge {
+        themeRoot: root
     }
 
     Connections {

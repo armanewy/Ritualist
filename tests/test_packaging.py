@@ -38,6 +38,11 @@ def test_windows_build_script_targets_home_onedir_bundle():
 def test_package_data_includes_home_canvas_qml_and_sample_templates():
     qml = files("ritualist.home.qml").joinpath("Home.qml")
     canvas_qml = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
+    canvas_qml_names = {
+        child.name
+        for child in files("ritualist.canvas.qml").iterdir()
+        if child.name.endswith(".qml")
+    }
     sample_names = {
         child.name
         for child in files("ritualist.sample_recipes").iterdir()
@@ -54,6 +59,13 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
     assert "ritualistHomeController" in qml.read_text(encoding="utf-8")
     assert canvas_qml.is_file()
     assert "ritualistCanvasUseController" in canvas_qml.read_text(encoding="utf-8")
+    assert {
+        "CanvasPaperButton.qml",
+        "CanvasPaperComboBox.qml",
+        "CanvasPaperTextField.qml",
+        "CanvasSuggestionBadge.qml",
+        "CanvasUse.qml",
+    }.issubset(canvas_qml_names)
     assert {
         "gaming_mode.yaml",
         "coding_mode.yaml",

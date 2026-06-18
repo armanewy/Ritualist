@@ -99,6 +99,8 @@ def test_edit_ui_bridge_rejects_unsafe_or_unsupported_edits() -> None:
 
 def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    text_field_qml = Path("ritualist/canvas/qml/CanvasPaperTextField.qml").read_text(encoding="utf-8")
+    combo_box_qml = Path("ritualist/canvas/qml/CanvasPaperComboBox.qml").read_text(encoding="utf-8")
 
     assert "setEditMode" in qml
     assert "Edit Room" in qml
@@ -114,8 +116,10 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     assert "Discard Room edits?" in qml
     assert "editSnapGrid" in qml
     assert "property_inspector" in qml
-    assert "component PaperTextField: TextField" in qml
-    assert "component PaperComboBox: ComboBox" in qml
+    assert "component PaperTextField: CanvasPaperTextField" in qml
+    assert "component PaperComboBox: CanvasPaperComboBox" in qml
+    assert "TextField {" in text_field_qml
+    assert "ComboBox {" in combo_box_qml
     assert "Switch to Use Mode before running Canvas actions" in qml or "root.editMode" in qml
     assert "Apply Binding" in qml
     assert "if (root.canvasController.saveCanvas())" in qml

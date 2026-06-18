@@ -6,6 +6,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONVERGENCE_DOC = REPO_ROOT / "docs" / "UI_UX_CONVERGENCE.md"
 CANVAS_QML = REPO_ROOT / "ritualist" / "canvas" / "qml" / "CanvasUse.qml"
+CANVAS_QML_DIR = REPO_ROOT / "ritualist" / "canvas" / "qml"
 HOME_QML = REPO_ROOT / "ritualist" / "home" / "qml" / "Home.qml"
 
 
@@ -39,20 +40,36 @@ def test_ui_ux_convergence_has_phase_six_without_new_product_scope() -> None:
 
 def test_canvas_controls_have_keyboard_focus_and_accessible_names() -> None:
     qml = CANVAS_QML.read_text(encoding="utf-8")
+    control_sources = "\n".join(
+        (CANVAS_QML_DIR / name).read_text(encoding="utf-8")
+        for name in (
+            "CanvasPaperButton.qml",
+            "CanvasPaperTextField.qml",
+            "CanvasPaperComboBox.qml",
+        )
+    )
 
     for snippet in (
-        "component PaperButton: Button",
+        "component PaperButton: CanvasPaperButton",
+        "component PaperTextField: CanvasPaperTextField",
+        "component PaperComboBox: CanvasPaperComboBox",
+        "themeRoot: root",
+        'sequence: "Esc"',
+    ):
+        assert snippet in qml
+
+    for snippet in (
+        "Button {",
         "focusPolicy: Qt.StrongFocus",
         "Accessible.name: text",
         "Accessible.role: Accessible.Button",
-        "component PaperTextField: TextField",
+        "TextField {",
         "Accessible.role: Accessible.EditableText",
-        "component PaperComboBox: ComboBox",
+        "ComboBox {",
         "Accessible.role: Accessible.ComboBox",
-        'sequence: "Esc"',
-        "root.token(\"focus_ring\"",
+        'themeRoot.token("focus_ring"',
     ):
-        assert snippet in qml
+        assert snippet in control_sources
 
 
 def test_home_keeps_keyboard_navigation_without_capture_hooks() -> None:
@@ -72,3 +89,23 @@ def test_home_keeps_keyboard_navigation_without_capture_hooks() -> None:
     forbidden = ("keyboard_logger", "keylogger", "global hook", "recording")
     lowered = qml.casefold()
     assert not any(marker in lowered for marker in forbidden)
+
+
+def test_home_keeps_rooms_primary_and_privacy_settings_disclosed() -> None:
+    qml = HOME_QML.read_text(encoding="utf-8")
+
+    for snippet in (
+        "property bool privacyPanelExpanded: false",
+        "function learningDetailsVisible()",
+        "return privacyPanelExpanded || firstRunLearningChoiceVisible()",
+        'text: root.privacyPanelExpanded ? "Hide Settings" : "Privacy Settings"',
+        "Accessible.name: root.privacyPanelExpanded ? \"Hide privacy settings\" : \"Show privacy settings\"",
+        "Accessible.role: Accessible.Button",
+        "activeFocusOnTab: true",
+        "Keys.onPressed: (event) =>",
+        "root.togglePrivacyPanel()",
+        "visible: root.learningDetailsVisible()",
+        "Secondary recipe surface",
+        "Secondary surface - ",
+    ):
+        assert snippet in qml

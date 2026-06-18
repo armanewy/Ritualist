@@ -38,6 +38,7 @@ Window {
     property var learningSources: homeController ? homeController.learningSources : ({ "sources": [] })
     property var onboardingState: homeController ? homeController.onboardingState : ({ "should_show_first_run": true, "reopen_settings_later": false })
     property bool learningDeletePending: homeController ? homeController.learningDeletePending : false
+    property bool privacyPanelExpanded: false
     property bool detailOpen: false
     property var detailCard: ({})
 
@@ -117,6 +118,14 @@ Window {
             && learningStatus
             && learningStatus.enabled !== true
             && String(learningStatus.consent_timestamp || "") === ""
+    }
+
+    function learningDetailsVisible() {
+        return privacyPanelExpanded || firstRunLearningChoiceVisible()
+    }
+
+    function togglePrivacyPanel() {
+        privacyPanelExpanded = !privacyPanelExpanded
     }
 
     function enableLearningFromSelection() {
@@ -574,10 +583,10 @@ Window {
                 id: rail
 
                 Layout.fillHeight: true
-                Layout.preferredWidth: 230
+                Layout.preferredWidth: 196
                 radius: 8
-                color: "#10151e"
-                border.color: root.railActive ? "#6de2b2" : "#273241"
+                color: "#0d1219"
+                border.color: root.railActive ? "#53687d" : "#222c39"
                 border.width: 1
 
                 Column {
@@ -586,14 +595,14 @@ Window {
                     spacing: 14
 
                     Text {
-                        text: "Home"
+                        text: "Library"
                         color: "#f2f5f8"
-                        font.pixelSize: 30
+                        font.pixelSize: 22
                         font.weight: Font.DemiBold
                     }
 
                     Text {
-                        text: "Local rituals"
+                        text: "Secondary recipe surface"
                         color: "#8f9aad"
                         font.pixelSize: 14
                     }
@@ -605,20 +614,16 @@ Window {
                             id: categoryItem
 
                             width: parent.width
-                            height: 54
+                            height: 46
                             radius: 8
-                            scale: hovered || focused ? 1.025 : 1.0
-                            color: selected ? "#1d3340" : (hovered ? "#18212c" : "transparent")
+                            color: selected ? "#172333" : (hovered ? "#141d28" : "transparent")
                             border.width: focused ? 2 : 1
-                            border.color: focused ? "#6de2b2" : (selected ? "#3c5364" : "transparent")
+                            border.color: focused ? "#7fb8ff" : (selected ? "#334556" : "transparent")
 
                             property bool selected: root.selectedCategory === index
                             property bool focused: root.railActive && selected
                             property bool hovered: pointer.containsMouse
 
-                            Behavior on scale {
-                                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                            }
                             Behavior on color {
                                 ColorAnimation { duration: 120 }
                             }
@@ -644,7 +649,7 @@ Window {
                                     Layout.preferredWidth: 8
                                     Layout.preferredHeight: 8
                                     radius: 4
-                                    color: categoryItem.selected ? "#6de2b2" : "#596779"
+                                    color: categoryItem.selected ? "#7fb8ff" : "#596779"
                                 }
 
                                 Text {
@@ -856,7 +861,7 @@ Window {
                             id: learningPanel
 
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 164
+                            Layout.preferredHeight: root.learningDetailsVisible() ? 164 : 72
                             radius: 8
                             color: "#10151e"
                             border.color: "#2a4052"
@@ -932,11 +937,51 @@ Window {
                                             elide: Text.ElideRight
                                         }
                                     }
+
+                                    Rectangle {
+                                        id: privacyDisclosureControl
+
+                                        Layout.preferredWidth: 136
+                                        Layout.preferredHeight: 34
+                                        radius: 7
+                                        color: privacyDisclosurePointer.containsMouse ? "#263648" : "#1c2734"
+                                        border.color: root.privacyPanelExpanded ? "#7fb8ff" : "#50667e"
+                                        activeFocusOnTab: true
+                                        Accessible.name: root.privacyPanelExpanded ? "Hide privacy settings" : "Show privacy settings"
+                                        Accessible.role: Accessible.Button
+
+                                        Keys.onPressed: (event) => {
+                                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                                root.togglePrivacyPanel()
+                                                event.accepted = true
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: privacyDisclosurePointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.togglePrivacyPanel()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 12
+                                            text: root.privacyPanelExpanded ? "Hide Settings" : "Privacy Settings"
+                                            color: "#e6edf7"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
+                                    visible: root.learningDetailsVisible()
 
                                     Repeater {
                                         model: learningSourceModel
@@ -1004,6 +1049,7 @@ Window {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
+                                    visible: root.learningDetailsVisible()
 
                                     Rectangle {
                                         Layout.preferredWidth: 94
@@ -1153,7 +1199,7 @@ Window {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 58
+                        Layout.preferredHeight: 50
                         spacing: 14
 
                         ColumnLayout {
@@ -1163,14 +1209,14 @@ Window {
                             Text {
                                 text: "Recipe Library"
                                 color: "#f2f5f8"
-                                font.pixelSize: 28
+                                font.pixelSize: 20
                                 font.weight: Font.DemiBold
                             }
 
                             Text {
-                                text: root.currentCategoryName() + " - " + root.footerText
+                                text: "Secondary surface - " + root.currentCategoryName() + " - " + root.footerText
                                 color: "#8f9aad"
-                                font.pixelSize: 14
+                                font.pixelSize: 12
                                 elide: Text.ElideRight
                             }
                         }

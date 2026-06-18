@@ -234,12 +234,12 @@ def test_canvas_use_qml_wires_desktop_work_area_exit_affordance() -> None:
 
 def test_canvas_use_qml_uses_paper_tokens_and_visible_state_roles() -> None:
     qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    button_qml = Path("ritualist/canvas/qml/CanvasPaperButton.qml").read_text(encoding="utf-8")
 
     for snippet in (
-        "component PaperButton: Button",
         "QtQuick.Controls.Basic",
-        "focusPolicy: Qt.StrongFocus",
-        "buttonBorder(control.role, control.enabled, control.activeFocus)",
+        "component PaperButton: CanvasPaperButton",
+        "themeRoot: root",
         "stateIsDanger(status)",
         'status === "interrupted"',
         'status === "confirming"',
@@ -256,3 +256,10 @@ def test_canvas_use_qml_uses_paper_tokens_and_visible_state_roles() -> None:
         "root.spaceMd",
     ):
         assert snippet in qml
+
+    for snippet in (
+        "Button {",
+        "focusPolicy: Qt.StrongFocus",
+        "buttonBorder(control.role, control.enabled, control.activeFocus)",
+    ):
+        assert snippet in button_qml
