@@ -100,3 +100,23 @@ These are targets for review and regression testing. They are not excuses to blo
 | Cold packaged visible window | <2s soft target |
 
 When a change cannot reasonably meet a budget, document the tradeoff in the pull request or issue and keep the slow work outside the UI thread.
+
+## Hero Room Advisory Evidence
+
+`tests/test_hero_room_performance.py` records side-effect-free advisory evidence for the three promoted hero Rooms: Gaming Room, Project Room, and Support Desk. It does not promote additional Rooms, does not remove `minimal_desktop`, and does not exercise desktop capture, recording, hooks, OCR, screenshots, browser history, or adapter automation.
+
+The test evidence covers:
+
+- Runtime model builds for all three promoted hero Rooms.
+- Runtime state-transition update cost for the Gaming Room run/status/controller path.
+- Synthetic 100 and 300 component Canvas model/runtime builds.
+- A shortcut-heavy test-only Room where folder/app/URL actions remain Shortcuts, not Rituals.
+- Recent Activity rendering with 20 bounded run records.
+
+The measurements are attached as pytest record properties under schema `ritualist.hero_room.performance_evidence.v1`. Timing budgets in this file are advisory: the tests warn when a measurement exceeds its budget, but they do not fail solely because a local machine is slow. Functional assertions still fail for broken model shape, missing hero Rooms, accidental side effects, or shortcut/ritual boundary regressions.
+
+Refresh this evidence with:
+
+```powershell
+python -m pytest -q tests/test_hero_room_performance.py
+```

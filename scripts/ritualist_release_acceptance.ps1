@@ -366,6 +366,17 @@ function Find-Button {
     return $Window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
+function Find-AnyButton {
+    param([object]$Window, [string[]]$Names)
+    foreach ($name in $Names) {
+        $button = Find-Button $Window $name
+        if ($button) {
+            return $button
+        }
+    }
+    return $null
+}
+
 function Find-NamedElement {
     param([object]$Window, [string]$Name)
     if (-not $Window) {
@@ -420,6 +431,21 @@ function Invoke-NamedButton {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         $button = Find-Button $Window $Name
+        if ($button -and $button.Current.IsEnabled) {
+            $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+            $pattern.Invoke()
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    return $false
+}
+
+function Invoke-AnyNamedButton {
+    param([object]$Window, [string[]]$Names, [int]$TimeoutSeconds = 15)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $button = Find-AnyButton $Window $Names
         if ($button -and $button.Current.IsEnabled) {
             $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
             $pattern.Invoke()
@@ -918,6 +944,490 @@ function Test-WindowTreeContainsText {
     return [bool]($items | Where-Object { $_.name -match [regex]::Escape($Text) } | Select-Object -First 1)
 }
 
+function Convert-CommandJson {
+    param([object]$Command)
+    if (-not $Command -or [string]::IsNullOrWhiteSpace($Command.stdout_text)) {
+        return $null
+    }
+    try {
+        return $Command.stdout_text | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-RunDirectoryNames {
+    $runs = Join-Path $script:FixtureAppData "runs"
+    if (-not (Test-Path $runs)) {
+        return @()
+    }
+    return @(Get-ChildItem -Path $runs -Directory | ForEach-Object { $_.Name })
+}
+
+function Test-StringContainsAny {
+    param([string]$Text, [string[]]$Terms)
+    foreach ($term in $Terms) {
+        if ($Text -match [regex]::Escape($term)) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function New-ProjectRoomShortcutFixture {
+    $fixtureProject = Join-Path $FixtureRoot "project-room-fixture"
+    $fixtureApps = Join-Path $FixtureRoot "project-room-apps"
+    New-Item -ItemType Directory -Force -Path @($fixtureProject, $fixtureApps) | Out-Null
+    $fakeEditor = Join-Path $fixtureApps "Code.exe"
+    $fakeTerminal = Join-Path $fixtureApps "wt.exe"
+    if (-not (Test-Path $fakeEditor)) {
+        "" | Set-Content -Path $fakeEditor -Encoding UTF8
+    }
+    if (-not (Test-Path $fakeTerminal)) {
+        "" | Set-Content -Path $fakeTerminal -Encoding UTF8
+    }
+
+    $source = Join-Path $RepoRoot "ritualist\sample_canvases\project_room.yaml"
+    $fixtureCanvas = Join-Path $FixtureRoot "project_room_shortcuts_ready.yaml"
+    $text = Get-Content -Path $source -Raw
+    $text = $text.Replace("'~/Documents/Project'", "'$fixtureProject'")
+    $text = $text.Replace("'C:\Program Files\Microsoft VS Code\Code.exe'", "'$fakeEditor'")
+    $text = $text.Replace("'C:\Program Files\Windows Terminal\wt.exe'", "'$fakeTerminal'")
+    $text | Set-Content -Path $fixtureCanvas -Encoding UTF8
+    $script:ProjectRoomShortcutFixtureCanvas = $fixtureCanvas
+    return [ordered]@{
+        canvas = $fixtureCanvas
+        project_folder = $fixtureProject
+        fake_editor = $fakeEditor
+        fake_terminal = $fakeTerminal
+    }
+}
+
+function Invoke-RoomPickerEvidence {
+    $process = Start-AcceptanceProcess $script:RitualistExe @()
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Home" 10
+        $screenshot = Save-Screenshot "room-picker"
+        $frames = Capture-ScreenFrames "room-picker" 2
+        $windowTree = Save-WindowTree "room-picker" $window
+        $processTree = Save-ProcessTree "room-picker" $process.Id
+        $zOrderPath = Save-ZOrderSnapshot "room-picker"
+        $zRows = Get-Content -Path $zOrderPath -Raw | ConvertFrom-Json
+        $screen = Get-PrimaryScreenGeometry
+        $homeRow = $zRows | Where-Object { [int64]$_.process_id -eq [int64]$process.Id -and $_.title -eq "Ritualist Home" } | Select-Object -First 1
+        $notFullscreen = if ($homeRow) { -not (Test-BoundsMatch $homeRow.bounds $screen.bounds 3) } else { $false }
+        $taskbarVisibleByWorkArea = (
+            [int]$screen.work_area.width -lt [int]$screen.bounds.width -or
+            [int]$screen.work_area.height -lt [int]$screen.bounds.height
+        )
+
+        $roomList = Invoke-CapturedCommand "room-list" "python" @("-m", "ritualist", "room", "list", "--json")
+        $roomPayload = Convert-CommandJson $roomList
+        $roomIds = @()
+        $roomNames = @()
+        $canvasIds = @()
+        if ($roomPayload) {
+            $roomIds = @($roomPayload.rooms | ForEach-Object { $_.id })
+            $roomNames = @($roomPayload.rooms | ForEach-Object { $_.name })
+            $canvasIds = @($roomPayload.rooms | ForEach-Object { $_.canvas_id })
+        }
+        $expectedIds = @("gaming", "project", "support_desk")
+        $expectedNames = @("Gaming Room", "Project Room", "Support Desk")
+        $exactRooms = (
+            ($roomIds -join "|") -eq ($expectedIds -join "|") -and
+            ($roomNames -join "|") -eq ($expectedNames -join "|") -and
+            ($canvasIds -notcontains "minimal_desktop")
+        )
+        $namesVisible = @($expectedNames | Where-Object { Test-WindowTreeContainsText $windowTree $_ })
+        $nonBlank = Test-ScreenshotNonBlank $screenshot
+        $evidence = @{
+            screenshot = $screenshot
+            frames = $frames
+            process_tree = $processTree
+            window_tree = $windowTree
+            z_order = $zOrderPath
+            screen_geometry = $screen
+            window_bounds = if ($homeRow) { $homeRow.bounds } else { $null }
+            not_fullscreen = $notFullscreen
+            taskbar_visible_by_work_area = $taskbarVisibleByWorkArea
+            room_list_stdout = $roomList.stdout
+            room_list_stderr = $roomList.stderr
+            promoted_room_ids = $roomIds
+            promoted_room_names = $roomNames
+            promoted_canvas_ids = $canvasIds
+            exact_three_promoted_rooms = $exactRooms
+            minimal_desktop_promoted = ($canvasIds -contains "minimal_desktop")
+            visible_room_names = $namesVisible
+            non_blank = $nonBlank
+        }
+        if ($exactRooms -and $notFullscreen -and $taskbarVisibleByWorkArea -and $nonBlank) {
+            Set-Check "room_picker_three_heroes_taskbar_visible" "PASS" "Packaged Home Room picker is windowed, taskbar-preserving, and promotes exactly three hero Rooms." $evidence
+        }
+        elseif (-not $exactRooms -or -not $notFullscreen -or -not $nonBlank) {
+            Set-Check "room_picker_three_heroes_taskbar_visible" "FAIL" "Room picker contract failed machine checks." $evidence
+        }
+        else {
+            Set-Check "room_picker_three_heroes_taskbar_visible" "NEEDS_HUMAN_REVIEW" "Room picker contract passed except taskbar visibility was not machine-observable, usually because the OS work area matches the screen bounds." $evidence
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $process
+    }
+}
+
+function Invoke-StateUiFixtureEvidence {
+    $probe = Join-Path $CommandRoot "state_ui_fixture_probe.py"
+    $output = Join-Path $SnapshotRoot "state-ui-fixtures.json"
+    @'
+import json
+import sys
+
+from ritualist.canvas import CanvasRuntimeContext, build_canvas_runtime_model, load_bundled_canvas
+
+
+def component_state(canvas_id, recipe_id, runtime_state):
+    canvas = load_bundled_canvas(canvas_id)
+    model = build_canvas_runtime_model(
+        canvas,
+        context=CanvasRuntimeContext(
+            recipe_ids={recipe_id},
+            target_ids={"diablo_iv"},
+            runtime_state={recipe_id: runtime_state} if runtime_state else {},
+            recent_runs=(),
+        ),
+    )
+    component_id = "run_status" if canvas_id != "project_room" else "coding_status"
+    controller_id = "run_controller" if canvas_id != "project_room" else "coding_controller"
+    status_state = model.component_state(component_id).to_dict()
+    controller_state = model.component_state(controller_id).to_dict()
+    return {
+        "status": status_state,
+        "controller": controller_state,
+        "ritual_state": status_state["data"].get("ritual_state", {}),
+    }
+
+
+def active_state(state, **extra):
+    payload = {
+        "run_id": f"fixture-{state}",
+        "state": state,
+        "message": extra.pop("message", state),
+        "current_step": extra.pop("current_step", state.title()),
+        "current_step_state": state,
+    }
+    payload.update(extra)
+    return payload
+
+
+fixtures = {
+    "ready": component_state("gaming_desktop", "gaming_mode", {}),
+    "running": component_state(
+        "gaming_desktop",
+        "gaming_mode",
+        active_state("running", message="opening local setup", current_step="Open references"),
+    ),
+    "waiting": component_state(
+        "gaming_desktop",
+        "gaming_mode",
+        active_state(
+            "waiting",
+            message="waiting for operator",
+            current_step="Wait for manual readiness",
+            wait={"target": "operator confirmation", "elapsed_seconds": 2.0, "timeout_seconds": 60.0},
+        ),
+    ),
+    "confirming": component_state(
+        "gaming_desktop",
+        "gaming_mode",
+        active_state(
+            "confirming",
+            message="native confirmation required",
+            current_step="Ask before clicking Play",
+            confirmation={
+                "required": True,
+                "step_index": 3,
+                "step_name": "Ask before clicking Play",
+                "action": "desktop.click_text",
+                "target": "Play",
+                "target_type": "button",
+                "message": "Confirm before clicking Play",
+            },
+        ),
+    ),
+    "paused": component_state(
+        "gaming_desktop",
+        "gaming_mode",
+        active_state(
+            "paused",
+            message="paused by operator",
+            current_step="Control checkpoint",
+            paused={"active": True, "reason": "operator requested pause"},
+        ),
+    ),
+    "failed": component_state(
+        "project_room",
+        "coding_mode",
+        active_state("failed", message="fixture failure", current_step="Open documentation"),
+    ),
+    "interrupted": component_state(
+        "helpdesk_desktop",
+        "support_triage_workspace",
+        active_state("interrupted", message="fixture interrupted", current_step="Open Logs / Evidence"),
+    ),
+}
+states = sorted(fixtures)
+payload = {
+    "schema": "ritualist.acceptance.state_ui_fixture.v1",
+    "states": states,
+    "fixtures": fixtures,
+    "forbidden_capture": {
+        "screenshots": False,
+        "ocr": False,
+        "keylogging": False,
+        "coordinate_capture": False,
+        "browser_history": False,
+    },
+}
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, indent=2)
+print(json.dumps({"path": sys.argv[1], "states": states}))
+'@ | Set-Content -Path $probe -Encoding UTF8
+
+    $command = Invoke-CapturedCommand "state-ui-fixture" "python" @($probe, $output)
+    $payload = if (Test-Path $output) { Get-Content -Path $output -Raw | ConvertFrom-Json } else { $null }
+    $expectedStates = @("ready", "running", "waiting", "confirming", "paused", "failed", "interrupted")
+    $observedStates = if ($payload) { @($payload.states) } else { @() }
+    $hasStates = (($observedStates | Sort-Object) -join "|") -eq (($expectedStates | Sort-Object) -join "|")
+    $hasRitualState = $false
+    if ($payload) {
+        $hasRitualState = [bool](
+            $payload.fixtures.ready.status.data.ritual_state.schema_version -and
+            $payload.fixtures.confirming.status.data.ritual_state.active_run.confirmation.required -and
+            $payload.fixtures.paused.status.data.ritual_state.active_run.paused.active
+        )
+    }
+    $script:StateUiFixturePath = $output
+    if ($command.exit_code -eq 0 -and $hasStates -and $hasRitualState) {
+        Set-Check "state_ui_fixture_evidence" "PASS" "State UI fixture recorded ready, running, waiting, confirming, paused, failed, and interrupted states." @{
+            state_fixture_json = $output
+            command_stdout = $command.stdout
+            command_stderr = $command.stderr
+            observed_states = $observedStates
+            visual_artifact_references = @($script:VisualArtifacts | ForEach-Object { $_.id })
+        }
+    }
+    else {
+        Set-Check "state_ui_fixture_evidence" "FAIL" "State UI fixture evidence was missing expected states or ritual_state data." @{
+            state_fixture_json = $output
+            command_stdout = $command.stdout
+            command_stderr = $command.stderr
+            exit_code = $command.exit_code
+            observed_states = $observedStates
+            has_ritual_state = $hasRitualState
+        }
+    }
+}
+
+function Invoke-HeroRoomEvidence {
+    $projectFixture = New-ProjectRoomShortcutFixture
+    $projectProcess = Start-AcceptanceProcess $script:RitualistExe @("--canvas", $script:ProjectRoomShortcutFixtureCanvas)
+    $projectEvidence = @{}
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $screenshot = Save-Screenshot "project-room"
+        $windowTree = Save-WindowTree "project-room" $window
+        $processTree = Save-ProcessTree "project-room" $projectProcess.Id
+        $zOrder = Save-ZOrderSnapshot "project-room"
+        $roomShow = Invoke-CapturedCommand "project-room-show" "python" @("-m", "ritualist", "room", "show", "project", "--json")
+        $doctor = Invoke-CapturedCommand "coding-mode-doctor" "python" @("-m", "ritualist", "doctor", "ritualist\sample_recipes\coding_mode.yaml", "--json", "--no-strict")
+        $dryRun = Invoke-CapturedCommand "coding-mode-dry-run" "python" @("-m", "ritualist", "dry-run", "ritualist\sample_recipes\coding_mode.yaml")
+        $beforeRuns = Get-RunDirectoryNames
+        $folderDryRun = Invoke-CapturedCommand "project-folder-shortcut-dry-run" "python" @("-m", "ritualist", "canvas", "action", $script:ProjectRoomShortcutFixtureCanvas, "project_folder", "open", "--dry-run", "--json")
+        $afterRuns = Get-RunDirectoryNames
+        $roomPayload = Convert-CommandJson $roomShow
+        $componentIds = if ($roomPayload) { @($roomPayload.canvas.components | ForEach-Object { $_.id }) } else { @() }
+        $componentTypes = @{}
+        $componentTitles = @{}
+        if ($roomPayload) {
+            foreach ($component in $roomPayload.canvas.components) {
+                $componentTypes[$component.id] = $component.type
+                $componentTitles[$component.id] = $component.props.title
+            }
+        }
+        $requiredShortcutIds = @("project_folder", "editor_shortcut", "terminal_shortcut", "docs_shortcut")
+        $shortcutsPresent = @($requiredShortcutIds | Where-Object { $componentIds -contains $_ })
+        $shortcutControls = @($requiredShortcutIds | ForEach-Object { $componentTitles[$_] } | Where-Object { $_ })
+        $expectedShortcutTitles = @("Project Folder", "Editor", "Terminal", "Docs")
+        $shortcutTitlesPresent = @($expectedShortcutTitles | Where-Object { $shortcutControls -contains $_ })
+        $requiredActionControls = @("Open Folder", "Launch App", "Open URL")
+        $shortcutActionControls = @($requiredActionControls | Where-Object { Test-WindowTreeContainsText $windowTree $_ })
+        $folderShortcutNoRunLog = (($afterRuns -join "|") -eq ($beforeRuns -join "|"))
+        $projectEvidence = @{
+            screenshot = $screenshot
+            window_tree = $windowTree
+            process_tree = $processTree
+            z_order = $zOrder
+            shortcut_fixture = $projectFixture
+            room_show_stdout = $roomShow.stdout
+            room_show_stderr = $roomShow.stderr
+            coding_mode_doctor_json = $doctor.stdout
+            coding_mode_doctor_stderr = $doctor.stderr
+            coding_mode_dry_run_output = $dryRun.stdout
+            coding_mode_dry_run_stderr = $dryRun.stderr
+            project_folder_shortcut_dry_run_stdout = $folderDryRun.stdout
+            project_folder_shortcut_dry_run_stderr = $folderDryRun.stderr
+            shortcut_component_ids = $shortcutsPresent
+            shortcut_control_names = $shortcutControls
+            expected_shortcut_control_names = $expectedShortcutTitles
+            shortcut_action_controls = $shortcutActionControls
+            required_shortcut_action_controls = $requiredActionControls
+            component_types = $componentTypes
+            folder_shortcut_no_run_log = $folderShortcutNoRunLog
+            run_dirs_before_shortcut = $beforeRuns
+            run_dirs_after_shortcut = $afterRuns
+            runtime_state_fixture = $script:StateUiFixturePath
+        }
+        if (
+            $window -and
+            (Test-ScreenshotNonBlank $screenshot) -and
+            $roomShow.exit_code -eq 0 -and
+            $doctor.exit_code -eq 0 -and
+            $dryRun.exit_code -eq 0 -and
+            $folderDryRun.exit_code -eq 0 -and
+            $shortcutsPresent.Count -eq $requiredShortcutIds.Count -and
+            $shortcutTitlesPresent.Count -eq $expectedShortcutTitles.Count -and
+            $shortcutActionControls.Count -eq $requiredActionControls.Count -and
+            $folderShortcutNoRunLog
+        ) {
+            Set-Check "project_room_acceptance" "PASS" "Project Room packaged evidence, Coding Mode Doctor/Dry Run, shortcuts, and no-run-log folder shortcut evidence were recorded." $projectEvidence
+        }
+        else {
+            Set-Check "project_room_acceptance" "FAIL" "Project Room acceptance evidence was incomplete." $projectEvidence
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $projectProcess
+    }
+
+    $supportProcess = Start-AcceptanceProcess $script:RitualistExe @("--canvas", "helpdesk_desktop")
+    try {
+        Start-Sleep -Seconds $ScenarioDwellSeconds
+        $window = Get-WindowByName "Ritualist Canvas" 10
+        $screenshot = Save-Screenshot "support-desk"
+        $windowTree = Save-WindowTree "support-desk" $window
+        $processTree = Save-ProcessTree "support-desk" $supportProcess.Id
+        $zOrder = Save-ZOrderSnapshot "support-desk"
+        $roomShow = Invoke-CapturedCommand "support-desk-show" "python" @("-m", "ritualist", "room", "show", "support_desk", "--json")
+        $diagnosticsDryRun = Invoke-CapturedCommand "support-diagnostics-dry-run" "python" @("-m", "ritualist", "dry-run", "ritualist\sample_recipes\collect_basic_diagnostics.yaml")
+        $audioDryRun = Invoke-CapturedCommand "support-audio-dry-run" "python" @("-m", "ritualist", "dry-run", "ritualist\sample_recipes\meeting_audio_troubleshooting.yaml")
+        $roomPayload = Convert-CommandJson $roomShow
+        $runbookCards = @()
+        if ($roomPayload) {
+            $runbookCards = @(
+                $roomPayload.canvas.components |
+                    Where-Object { $_.type -eq "ritual.card" } |
+                    ForEach-Object { $_.props.title }
+            )
+        }
+        $expectedCards = @("Support Triage", "Collect Basic Diagnostics", "Meeting Audio Troubleshooting", "VPN Repair", "New Hire Setup")
+        $cardsPresent = @($expectedCards | Where-Object { $runbookCards -contains $_ })
+        $vpnText = Get-Content -Path (Join-Path $RepoRoot "ritualist\sample_recipes\vpn_repair_placeholder.yaml") -Raw
+        $newHireText = Get-Content -Path (Join-Path $RepoRoot "ritualist\sample_recipes\new_hire_setup_draft.yaml") -Raw
+        $forbiddenPlaceholderTerms = @("netsh", "ipconfig", "rasdial", "remove-vpnconnection", "set-vpnconnection", "password", "credential", "winget", "msiexec", "choco", "install-package", "new-aduser", "dsadd")
+        $placeholderStaticScan = [ordered]@{
+            vpn_mentions_placeholder = ($vpnText -match "placeholder")
+            new_hire_mentions_draft = ($newHireText -match "draft")
+            forbidden_terms_present = Test-StringContainsAny (($vpnText + "`n" + $newHireText).ToLowerInvariant()) $forbiddenPlaceholderTerms
+            forbidden_terms = $forbiddenPlaceholderTerms
+        }
+        $supportEvidence = @{
+            screenshot = $screenshot
+            window_tree = $windowTree
+            process_tree = $processTree
+            z_order = $zOrder
+            room_show_stdout = $roomShow.stdout
+            room_show_stderr = $roomShow.stderr
+            five_runbook_cards = $runbookCards
+            expected_runbook_cards = $expectedCards
+            diagnostics_dry_run_output = $diagnosticsDryRun.stdout
+            diagnostics_dry_run_stderr = $diagnosticsDryRun.stderr
+            audio_dry_run_output = $audioDryRun.stdout
+            audio_dry_run_stderr = $audioDryRun.stderr
+            placeholder_static_scan = $placeholderStaticScan
+            runtime_state_fixture = $script:StateUiFixturePath
+            log_evidence_basis = "Dry-run command transcripts and runtime-state fixture; no support portal or VPN dependency."
+        }
+        if (
+            $window -and
+            (Test-ScreenshotNonBlank $screenshot) -and
+            $roomShow.exit_code -eq 0 -and
+            $diagnosticsDryRun.exit_code -eq 0 -and
+            $audioDryRun.exit_code -eq 0 -and
+            $cardsPresent.Count -eq $expectedCards.Count -and
+            $placeholderStaticScan.vpn_mentions_placeholder -and
+            $placeholderStaticScan.new_hire_mentions_draft -and
+            -not $placeholderStaticScan.forbidden_terms_present
+        ) {
+            Set-Check "support_desk_acceptance" "PASS" "Support Desk packaged evidence, five runbook cards, dry-runs, placeholder scans, and log evidence were recorded." $supportEvidence
+        }
+        else {
+            Set-Check "support_desk_acceptance" "FAIL" "Support Desk acceptance evidence was incomplete." $supportEvidence
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $supportProcess
+    }
+}
+
+function Set-GamingRoomAggregateEvidence {
+    $roomShow = Invoke-CapturedCommand "gaming-room-show" "python" @("-m", "ritualist", "room", "show", "gaming", "--json")
+    $required = @(
+        "gaming_desktop_renders",
+        "expected_canvas_components_appear",
+        "ritual_card_doctor",
+        "ritual_card_dry_run",
+        "safe_ritual_card_run",
+        "ritual_status_updates",
+        "ritual_controller_pause_resume_stop",
+        "target_card_preview",
+        "recent_activity_updates",
+        "native_confirmation_z_order",
+        "declining_play_stopped",
+        "show_run_declined_confirmation",
+        "hard_kill_repairs_interrupted"
+    )
+    $checkStates = [ordered]@{}
+    foreach ($id in $required) {
+        if ($Results.Contains($id)) {
+            $checkStates[$id] = $Results[$id].status
+        }
+        else {
+            $checkStates[$id] = "MISSING"
+        }
+    }
+    $hasFailure = @($checkStates.Values | Where-Object { $_ -eq "FAIL" -or $_ -eq "MISSING" }).Count -gt 0
+    $hasReview = @($checkStates.Values | Where-Object { $_ -eq "NEEDS_HUMAN_REVIEW" }).Count -gt 0
+    $status = if ($hasFailure) { "FAIL" } elseif ($hasReview) { "NEEDS_HUMAN_REVIEW" } else { "PASS" }
+    $message = if ($status -eq "PASS") {
+        "Gaming Room hero flow evidence is complete across packaged render, Doctor, Dry Run, Run, status, controls, preview, confirmation, recovery, and recent activity checks."
+    }
+    elseif ($status -eq "NEEDS_HUMAN_REVIEW") {
+        "Gaming Room hero flow has machine evidence but one or more checks still need human review."
+    }
+    else {
+        "Gaming Room hero flow evidence has failing or missing required checks."
+    }
+    Set-Check "gaming_room_acceptance" $status $message @{
+        room_show_stdout = $roomShow.stdout
+        room_show_stderr = $roomShow.stderr
+        required_check_statuses = $checkStates
+        visual_artifact_references = @($script:VisualArtifacts | Where-Object { $_.canvas_id -eq "gaming_desktop" } | ForEach-Object { $_.id })
+    }
+}
+
 function New-Fixtures {
     $script:FixtureLocalAppData = Join-Path $FixtureRoot "LOCALAPPDATA"
     $script:FixtureAppData = Join-Path $script:FixtureLocalAppData "Ritualist\Ritualist"
@@ -1026,12 +1536,6 @@ steps:
   - name: Control checkpoint
     action: wait.seconds
     seconds: 8
-  - name: Select Diablo IV
-    action: desktop.click_text
-    text: Diablo IV
-    window_title_contains: "{{ battle_net_window }}"
-    exact: true
-    timeout_seconds: 10
   - name: Ask before clicking Play
     action: desktop.click_text
     text: Play
@@ -1375,9 +1879,15 @@ function Invoke-CanvasStaticActions {
                 }
         )
         $recentActivityVisible = Test-WindowTreeContainsText $tree "Recent Activity"
-        $buttons = @("run", "dry_run", "doctor", "preview_plan") | Where-Object {
-            $window -and (Find-Button $window $_)
-        }
+        $requiredButtons = @(
+            @{ id = "doctor"; names = @("doctor", "Doctor") },
+            @{ id = "dry_run"; names = @("dry_run", "Dry Run") },
+            @{ id = "run"; names = @("run", "Run") },
+            @{ id = "preview_plan"; names = @("preview_plan", "Preview Plan") }
+        )
+        $buttons = @($requiredButtons | Where-Object {
+            $window -and (Find-AnyButton $window $_.names)
+        } | ForEach-Object { $_.id })
         $rendered = $window -and (Test-ScreenshotNonBlank $initial) -and $buttons.Count -ge 4
         $componentsPresent = $rendered -and ($readyEvents.Count -gt 0)
         if ($rendered) {
@@ -1444,7 +1954,7 @@ function Invoke-CanvasStaticActions {
             }
         }
 
-        $doctorInvoked = Invoke-NamedButton $window "doctor" 10
+        $doctorInvoked = Invoke-AnyNamedButton $window @("doctor", "Doctor") 10
         Start-Sleep -Seconds 4
         $doctorShot = Save-Screenshot "canvas-doctor"
         $doctorStatus = Get-CanvasStatusEvents "diablo_night" |
@@ -1467,7 +1977,7 @@ function Invoke-CanvasStaticActions {
             }
         }
 
-        $dryRunInvoked = Invoke-NamedButton $window "dry_run" 10
+        $dryRunInvoked = Invoke-AnyNamedButton $window @("dry_run", "Dry Run") 10
         Start-Sleep -Seconds 8
         $dryRun = Get-LatestRun
         $dryRunJson = if ($dryRun) { Read-RunJson $dryRun.Name } else { $null }
@@ -1602,7 +2112,7 @@ function Invoke-CanvasRunControls {
     try {
         Start-Sleep -Seconds 5
         $window = Get-WindowByName "Ritualist Canvas" 15
-        [void](Invoke-NamedButton $window "run" 10)
+        [void](Invoke-AnyNamedButton $window @("run", "Run") 10)
         [void](Get-WindowByName $FakeBattleNetTitle 20)
         Start-Sleep -Seconds 1
         $runningShot = Save-Screenshot "ui-refresh-running-state"
@@ -1660,7 +2170,7 @@ function Invoke-CanvasRunDecline {
     try {
         Start-Sleep -Seconds 5
         $window = Get-WindowByName "Ritualist Canvas" 15
-        [void](Invoke-NamedButton $window "run" 10)
+        [void](Invoke-AnyNamedButton $window @("run", "Run") 10)
         $confirmation = Get-WindowByName "Ritualist Confirmation Required" 60
         $confirmationShot = Save-Screenshot "confirmation-z-order"
         $confirmationTree = Save-WindowTree "confirmation" $confirmation
@@ -1874,7 +2384,7 @@ function Invoke-HardKillRecovery {
     try {
         Start-Sleep -Seconds 5
         $window = Get-WindowByName "Ritualist Canvas" 15
-        [void](Invoke-NamedButton $window "run" 10)
+        [void](Invoke-AnyNamedButton $window @("run", "Run") 10)
         $confirmation = Get-WindowByName "Ritualist Confirmation Required" 35
         Start-Sleep -Seconds 1
         $newRun = Get-ChildItem -Path $runs -Directory |
@@ -2160,11 +2670,14 @@ try {
     New-Fixtures
     $script:RitualistExe = Resolve-RitualistExe
     Assert-LaunchWindow -Id "packaged_home_visible" -Title "Ritualist Home" -LaunchArguments @() -ScreenshotName "packaged-home"
+    Invoke-RoomPickerEvidence
     Assert-LaunchWindow -Id "packaged_canvas_visible" -Title "Ritualist Canvas" -LaunchArguments @("--canvas", "gaming_desktop") -ScreenshotName "packaged-canvas"
     Assert-LaunchWindow -Id "packaged_classic_gui_visible" -Title "Ritualist" -LaunchArguments @("--classic-gui") -ScreenshotName "packaged-classic-gui"
     Capture-CanvasVisualArtifact -CanvasId "minimal_desktop" -ArtifactId "minimal-room"
     Capture-CanvasVisualArtifact -CanvasId "gaming_desktop" -ArtifactId "gaming-room"
     Capture-CanvasVisualArtifact -CanvasId "helpdesk_desktop" -ArtifactId "support-desk"
+    Invoke-StateUiFixtureEvidence
+    Invoke-HeroRoomEvidence
     Capture-DesktopWorkAreaCanvasArtifact
     Capture-DesktopWorkAreaWindowedFallbackArtifact
     Capture-CanvasEditModeVisualArtifact
@@ -2172,6 +2685,7 @@ try {
     Invoke-CanvasRunControls
     Invoke-CanvasRunDecline
     Invoke-HardKillRecovery
+    Set-GamingRoomAggregateEvidence
     Invoke-PackSafetyChecks
     Invoke-PerformanceChecks
     Set-RemainingReviewChecks

@@ -16,10 +16,12 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "ritualist_release_acceptance.ps1"
 
 EXPECTED_CHECK_IDS = {
     "packaged_home_visible",
+    "room_picker_three_heroes_taskbar_visible",
     "packaged_canvas_visible",
     "packaged_classic_gui_visible",
     "gaming_desktop_renders",
     "expected_canvas_components_appear",
+    "gaming_room_acceptance",
     "ritual_card_doctor",
     "ritual_card_dry_run",
     "safe_ritual_card_run",
@@ -31,6 +33,9 @@ EXPECTED_CHECK_IDS = {
     "declining_play_stopped",
     "show_run_declined_confirmation",
     "hard_kill_repairs_interrupted",
+    "project_room_acceptance",
+    "support_desk_acceptance",
+    "state_ui_fixture_evidence",
     "no_recording_or_preview_capture",
     "canvas_theme_pack_import_export_no_autorun",
     "arbitrary_component_code_rejected",
@@ -82,6 +87,36 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "visual_artifacts",
         "Capture-CanvasVisualArtifact",
         "Capture-CanvasEditModeVisualArtifact",
+        "Invoke-RoomPickerEvidence",
+        "room_picker_three_heroes_taskbar_visible",
+        "promoted_room_ids",
+        "taskbar_visible_by_work_area",
+        "Invoke-HeroRoomEvidence",
+        "project_room_acceptance",
+        "support_desk_acceptance",
+        "gaming_room_acceptance",
+        "Invoke-StateUiFixtureEvidence",
+        "state_ui_fixture_evidence",
+        "ready",
+        "running",
+        "waiting",
+        "confirming",
+        "paused",
+        "failed",
+        "interrupted",
+        "folder_shortcut_no_run_log",
+        "shortcut_control_names",
+        "shortcut_action_controls",
+        "required_shortcut_action_controls",
+        "project_room_shortcuts_ready",
+        "New-ProjectRoomShortcutFixture",
+        "five_runbook_cards",
+        "placeholder_static_scan",
+        "support_triage_workspace",
+        "collect_basic_diagnostics",
+        "meeting_audio_troubleshooting",
+        "vpn_repair_placeholder",
+        "new_hire_setup_draft",
         "Find-NamedElement",
         "edit_mode_builder_visible",
         "edit-unverified",
@@ -149,6 +184,7 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
 
     assert "watch_me_preview_privacy" not in script
     assert 'Invoke-NamedButton $window "Stop Watch Me"' not in script
+    assert "Select Diablo IV" not in script
 
 
 def test_release_acceptance_recording_surface_match_records_fail(tmp_path: Path) -> None:

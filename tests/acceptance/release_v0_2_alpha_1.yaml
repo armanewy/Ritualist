@@ -17,6 +17,15 @@ checks:
       - window_tree
       - e2e_event: home.ready
     pass_when: "Ritualist Home window is visible and process stays alive for the scenario dwell."
+  - id: room_picker_three_heroes_taskbar_visible
+    blocker: "Room picker is windowed, taskbar-preserving, and promotes exactly three hero Rooms."
+    expected_evidence:
+      - screenshot
+      - window_bounds
+      - screen_work_area
+      - room_list_json
+      - room_picker_window_tree
+    pass_when: "Home is not fullscreen, the primary work area leaves taskbar space when observable, and Room metadata lists exactly Gaming Room, Project Room, and Support Desk with no minimal_desktop promotion."
   - id: packaged_canvas_visible
     blocker: "Packaged Canvas Use Mode opens visibly."
     expected_evidence:
@@ -45,6 +54,17 @@ checks:
       - ui_automation_controls
       - canvas_component_names
     pass_when: "category dock, Diablo Night, run status/controller, target card, recent activity, and clock component evidence is present."
+  - id: gaming_room_acceptance
+    blocker: "Gaming Room hero flow has packaged machine evidence."
+    expected_evidence:
+      - screenshot
+      - room_show_json
+      - doctor_evidence
+      - dry_run_evidence
+      - run_control_evidence
+      - confirmation_evidence
+      - recovery_evidence
+    pass_when: "The existing gaming checks for render, Doctor, Dry Run, Run, status, controls, target preview, recent activity, confirmation decline, show-run, and hard-kill recovery all pass or are explicitly recorded."
   - id: ritual_card_doctor
     blocker: "Ritual card Doctor works."
     expected_evidence:
@@ -126,6 +146,39 @@ checks:
       - run_log
       - show_run_output
     pass_when: "Relaunch repairs the abandoned run to interrupted with a clear final message."
+  - id: project_room_acceptance
+    blocker: "Project Room hero loop and shortcut controls have machine evidence."
+    expected_evidence:
+      - screenshot
+      - window_tree
+      - room_show_json
+      - coding_mode_doctor_json
+      - coding_mode_dry_run_output
+      - shortcut_control_names
+      - shortcut_action_controls
+      - shortcut_fixture
+      - folder_shortcut_no_run_log
+      - runtime_state_fixture
+    pass_when: "Packaged Project Room fixture opens, bundled Coding Mode Doctor/Dry Run evidence is captured, folder/editor/terminal/docs shortcut component titles and Open Folder/Launch App/Open URL controls appear, folder shortcut dry-run creates no run log, and ritual status/controller fixture states are recorded."
+  - id: support_desk_acceptance
+    blocker: "Support Desk runbooks and placeholders have machine evidence."
+    expected_evidence:
+      - screenshot
+      - window_tree
+      - room_show_json
+      - five_runbook_cards
+      - diagnostics_dry_run_output
+      - audio_dry_run_output
+      - placeholder_static_scan
+      - runtime_state_fixture
+    pass_when: "Packaged Support Desk opens with five runbook cards, diagnostics/audio dry-runs are captured, VPN/New Hire remain non-mutating placeholders, and status/controller/recent activity/log evidence is recorded."
+  - id: state_ui_fixture_evidence
+    blocker: "Canvas state UI exposes ready, running, waiting, confirming, paused, failed, and interrupted states."
+    expected_evidence:
+      - runtime_model_json
+      - state_fixture_json
+      - visual_artifact_references
+    pass_when: "A test-only runtime model probe records the expected state hierarchy without launching apps, opening browsers, or adding product behavior."
   - id: no_recording_or_preview_capture
     blocker: "Recording or preview-capture surfaces are absent."
     expected_evidence:
