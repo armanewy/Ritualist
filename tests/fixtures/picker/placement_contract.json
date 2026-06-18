@@ -1,0 +1,171 @@
+{
+  "schema_version": "ritualist.picker.placement.v1",
+  "picker": {
+    "logical_width": 420,
+    "logical_height": 520,
+    "logical_margin": 12
+  },
+  "selection_policy": {
+    "prefer_tray_anchor": true,
+    "cursor_fallback": true,
+    "outside_cursor_fallback": "primary_monitor"
+  },
+  "scenarios": [
+    {
+      "id": "primary_bottom_taskbar_100",
+      "scale": 1.0,
+      "taskbar_edge": "bottom",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 0, "width": 1920, "height": 1040}
+        }
+      ],
+      "anchor": {
+        "source": "tray",
+        "rect": {"x": 1812, "y": 1040, "width": 32, "height": 40}
+      },
+      "expected": {
+        "monitor": "primary",
+        "fallback_used": false,
+        "rect": {"x": 1488, "y": 508, "width": 420, "height": 520}
+      }
+    },
+    {
+      "id": "primary_top_taskbar_125",
+      "scale": 1.25,
+      "taskbar_edge": "top",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 40, "width": 1920, "height": 1040}
+        }
+      ],
+      "anchor": {
+        "source": "tray",
+        "rect": {"x": 1800, "y": 0, "width": 32, "height": 40}
+      },
+      "expected": {
+        "monitor": "primary",
+        "fallback_used": false,
+        "rect": {"x": 1380, "y": 55, "width": 525, "height": 650}
+      }
+    },
+    {
+      "id": "secondary_left_taskbar_150",
+      "scale": 1.5,
+      "taskbar_edge": "left",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 0, "width": 1920, "height": 1040}
+        },
+        {
+          "name": "secondary",
+          "primary": false,
+          "monitor_rect": {"x": 1920, "y": 0, "width": 1600, "height": 900},
+          "work_area": {"x": 1980, "y": 0, "width": 1540, "height": 900}
+        }
+      ],
+      "anchor": {
+        "source": "tray",
+        "rect": {"x": 1920, "y": 430, "width": 60, "height": 40}
+      },
+      "expected": {
+        "monitor": "secondary",
+        "fallback_used": false,
+        "rect": {"x": 1998, "y": 60, "width": 630, "height": 780}
+      }
+    },
+    {
+      "id": "secondary_right_taskbar_125",
+      "scale": 1.25,
+      "taskbar_edge": "right",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 0, "width": 1920, "height": 1040}
+        },
+        {
+          "name": "secondary",
+          "primary": false,
+          "monitor_rect": {"x": -1280, "y": 0, "width": 1280, "height": 1024},
+          "work_area": {"x": -1280, "y": 0, "width": 1228, "height": 1024}
+        }
+      ],
+      "anchor": {
+        "source": "tray",
+        "rect": {"x": -52, "y": 940, "width": 52, "height": 40}
+      },
+      "expected": {
+        "monitor": "secondary",
+        "fallback_used": false,
+        "rect": {"x": -592, "y": 359, "width": 525, "height": 650}
+      }
+    },
+    {
+      "id": "secondary_cursor_fallback_150",
+      "scale": 1.5,
+      "taskbar_edge": "bottom",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 0, "width": 1920, "height": 1040}
+        },
+        {
+          "name": "secondary",
+          "primary": false,
+          "monitor_rect": {"x": -1600, "y": 0, "width": 1600, "height": 900},
+          "work_area": {"x": -1600, "y": 0, "width": 1600, "height": 860}
+        }
+      ],
+      "anchor": {
+        "source": "cursor",
+        "point": {"x": -1200, "y": 845}
+      },
+      "expected": {
+        "monitor": "secondary",
+        "fallback_used": true,
+        "rect": {"x": -1515, "y": 62, "width": 630, "height": 780}
+      }
+    },
+    {
+      "id": "outside_cursor_fallback_primary_100",
+      "scale": 1.0,
+      "taskbar_edge": "bottom",
+      "monitors": [
+        {
+          "name": "primary",
+          "primary": true,
+          "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+          "work_area": {"x": 0, "y": 0, "width": 1920, "height": 1040}
+        },
+        {
+          "name": "secondary",
+          "primary": false,
+          "monitor_rect": {"x": 1920, "y": 0, "width": 1600, "height": 900},
+          "work_area": {"x": 1920, "y": 0, "width": 1600, "height": 860}
+        }
+      ],
+      "anchor": {
+        "source": "cursor",
+        "point": {"x": 5000, "y": 5000}
+      },
+      "expected": {
+        "monitor": "primary",
+        "fallback_used": true,
+        "rect": {"x": 1488, "y": 508, "width": 420, "height": 520}
+      }
+    }
+  ]
+}

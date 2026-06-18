@@ -1,0 +1,130 @@
+{
+  "schema_version": "ritualist.picker.accessibility.v1",
+  "surface": {
+    "accessible_name": "Ritualist Picker",
+    "role": "dialog",
+    "modal": false,
+    "initial_focus": "search_box",
+    "dismissal_inputs": ["escape", "hotkey_toggle", "outside_click"],
+    "focus_restoration": "previous_foreground_window"
+  },
+  "target_path": {
+    "entry": "Picker",
+    "route": ["Picker", "Rituals", "Preflight", "Run"],
+    "legacy_target": false
+  },
+  "runtime_boundary": {
+    "requires_gui_runtime": false,
+    "requires_desktop_session": false,
+    "model_fixture_only": true,
+    "live_adapter_calls": []
+  },
+  "hotkey": {
+    "name": "Open Ritualist Picker",
+    "sequence": "Win+Ctrl+R",
+    "toggle_behavior": ["open_picker", "dismiss_picker"],
+    "captures_text": false
+  },
+  "keyboard_flows": [
+    {
+      "id": "escape_dismisses_and_restores_focus",
+      "inputs": ["Escape"],
+      "expected": ["dismiss_picker", "restore_previous_focus"],
+      "keyboard_only": true,
+      "uses_absolute_position": false
+    },
+    {
+      "id": "hotkey_toggles_picker",
+      "inputs": ["Win+Ctrl+R", "Win+Ctrl+R"],
+      "expected": ["open_picker", "dismiss_picker", "restore_previous_focus"],
+      "keyboard_only": true,
+      "uses_absolute_position": false
+    },
+    {
+      "id": "outside_click_dismisses_and_restores_focus",
+      "inputs": ["outside_click"],
+      "expected": ["dismiss_picker", "restore_previous_focus"],
+      "keyboard_only": false,
+      "uses_absolute_position": false
+    },
+    {
+      "id": "keyboard_search_select_preflight",
+      "inputs": ["type:pro", "ArrowDown", "Enter", "Tab", "Enter"],
+      "expected": [
+        "filter_results",
+        "select_project_room",
+        "show_preflight",
+        "confirm_preflight"
+      ],
+      "keyboard_only": true,
+      "uses_absolute_position": false
+    }
+  ],
+  "elements": [
+    {
+      "key": "picker_surface",
+      "accessible_name": "Ritualist Picker",
+      "role": "dialog",
+      "state": {"visible": true, "enabled": true, "focused": false}
+    },
+    {
+      "key": "search_box",
+      "accessible_name": "Find a ritual",
+      "role": "searchbox",
+      "state": {"visible": true, "enabled": true, "focused": true, "required": false}
+    },
+    {
+      "key": "results_list",
+      "accessible_name": "Matching rituals",
+      "role": "listbox",
+      "state": {"visible": true, "enabled": true, "expanded": true}
+    },
+    {
+      "key": "gaming_room",
+      "accessible_name": "Gaming Room",
+      "role": "option",
+      "state": {"visible": true, "enabled": true, "selected": false}
+    },
+    {
+      "key": "project_room",
+      "accessible_name": "Project Room",
+      "role": "option",
+      "state": {"visible": true, "enabled": true, "selected": true}
+    },
+    {
+      "key": "support_desk",
+      "accessible_name": "Support Desk",
+      "role": "option",
+      "state": {"visible": true, "enabled": true, "selected": false}
+    },
+    {
+      "key": "preflight_status",
+      "accessible_name": "Preflight status",
+      "role": "status",
+      "state": {"visible": true, "enabled": true, "busy": false}
+    },
+    {
+      "key": "run_button",
+      "accessible_name": "Run selected ritual",
+      "role": "button",
+      "state": {"visible": true, "enabled": true, "default": true}
+    },
+    {
+      "key": "cancel_button",
+      "accessible_name": "Cancel",
+      "role": "button",
+      "state": {"visible": true, "enabled": true}
+    }
+  ],
+  "risky_action_policy": {
+    "requires_confirmation": true,
+    "confirmation_surface": "preflight",
+    "preview_before_run": true,
+    "allowed_preflight_actions": [
+      "assert.file_exists",
+      "assert.path_exists",
+      "assert.process_running",
+      "confirm.user"
+    ]
+  }
+}
