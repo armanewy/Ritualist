@@ -12,7 +12,13 @@ from ritualist.e2e import enabled as e2e_enabled
 from ritualist.e2e import record_event
 from ritualist.errors import DependencyMissingError, RitualistError
 from ritualist.config import load_app_config
-from ritualist.home.actions import home_event_from_runtime, home_event_from_step_status
+from ritualist.home.actions import (
+    ActivityJournalHook,
+    HomeActionService,
+    create_activity_journal_hook,
+    home_event_from_runtime,
+    home_event_from_step_status,
+)
 from ritualist.home.confirmation import InlineConfirmationPresenter
 from ritualist.home.models import HomeCardStatus, HomeRuntimeEvent
 from ritualist.recipe_loader import discover_recipes
@@ -105,6 +111,7 @@ def run_canvas_use(
             mock: bool,
             recipe_ids: set[str],
             target_ids: set[str],
+            journal_hook: ActivityJournalHook,
         ) -> None:
             super().__init__()
             self._document = document
@@ -123,7 +130,10 @@ def run_canvas_use(
             self._confirmation_event = Event()
             self._confirmation_result = False
             self._confirmation_presenter = _create_confirmation_presenter()
-            self._runtime_controller = CanvasRuntimeController()
+            self._activity_journal = journal_hook
+            self._runtime_controller = CanvasRuntimeController(
+                action_service=HomeActionService(journal_hook=journal_hook)
+            )
             self._heartbeat_start = time.perf_counter()
             self.actionCompleted.connect(self._complete_action)
             self.actionFailed.connect(self._mark_action_failed)
@@ -179,6 +189,12 @@ def run_canvas_use(
                 self._last_event_label = "Another Canvas action is still running"
                 self.metricsChanged.emit()
                 return
+            _record_canvas_component_clicked(
+                self._activity_journal,
+                self._document,
+                component_id,
+                action_id,
+            )
             self._set_action_busy(True)
             self._last_event_label = f"Dispatching {component_id}:{action_id}"
             self.metricsChanged.emit()
@@ -377,6 +393,7 @@ def run_canvas_use(
             if self._executor is not None:
                 self._executor.shutdown(wait=False, cancel_futures=True)
                 self._executor = None
+            self._activity_journal.shutdown(wait=False)
 
         def _payload(self) -> dict[str, object]:
             return build_canvas_use_payload(
@@ -488,6 +505,12 @@ def run_canvas_use(
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(data["path"])))
             reference = _component_reference(self._document, component_id)
             action_id = str(getattr(result, "action_id", "") or "")
+            _record_canvas_shortcut_opened(
+                self._activity_journal,
+                self._document,
+                component_id,
+                result,
+            )
             current = self._runtime_state.get(reference, {})
             ritual_state = (
                 ritual_state_from_action_result(
@@ -553,14 +576,17 @@ def run_canvas_use(
     document = edit_session.document
     recipe_ids = _canvas_recipe_ids(document) if mock else _discover_canvas_recipe_ids()
     target_ids = _canvas_target_ids(document) if mock else _discover_canvas_target_ids()
+    config = load_app_config()
+    journal_hook = create_activity_journal_hook()
     controller = CanvasUseController(
         document,
         CanvasEditUiBridge(edit_session),
         mock=mock,
         recipe_ids=recipe_ids,
         target_ids=target_ids,
+        journal_hook=journal_hook,
     )
-    performance = load_app_config().canvas.performance_settings().to_dict()
+    performance = config.canvas.performance_settings().to_dict()
     host_payload = resolved_host_config.to_dict()
 
     engine = QQmlApplicationEngine()
@@ -602,6 +628,12 @@ def run_canvas_use(
         theme_accessibility_warning_count=int(ready_accessibility.get("warning_count") or 0),
         theme_accessibility_warnings=list(ready_accessibility.get("warnings") or []),
         host=applied_host,
+    )
+    _record_canvas_room_opened(
+        journal_hook,
+        document,
+        host_config=resolved_host_config,
+        mock=mock,
     )
     app.aboutToQuit.connect(controller.shutdown)
     try:
@@ -674,6 +706,105 @@ def _apply_canvas_host(
         }
     )
     return payload
+
+
+def _record_canvas_room_opened(
+    journal: ActivityJournalHook,
+    document: CanvasDocument,
+    *,
+    host_config: CanvasHostConfig,
+    mock: bool,
+) -> bool:
+    payload: dict[str, object] = {
+        "surface": "canvas",
+        "canvas_id": document.id,
+        "canvas_name": document.name,
+        "host": host_config.mode.value,
+        "mock": bool(mock),
+    }
+    room = _room_for_canvas(document.id)
+    if room is not None:
+        payload["room_id"] = str(getattr(room, "room_id", "") or "")
+        payload["room_name"] = str(getattr(room, "name", "") or "")
+    return journal.record("room_opened", **payload)
+
+
+def _record_canvas_component_clicked(
+    journal: ActivityJournalHook,
+    document: CanvasDocument,
+    component_id: str,
+    action_id: str,
+) -> bool:
+    component = _find_canvas_component(document, component_id)
+    payload: dict[str, object] = {
+        "surface": "canvas",
+        "canvas_id": document.id,
+        "component_id": component_id,
+        "component_type": str(getattr(component, "type", "") or ""),
+        "action_id": action_id,
+    }
+    recipe_id = _component_recipe_id(component)
+    if recipe_id:
+        payload["recipe_id"] = recipe_id
+    return journal.record("component_clicked", **payload)
+
+
+def _record_canvas_shortcut_opened(
+    journal: ActivityJournalHook,
+    document: CanvasDocument,
+    component_id: str,
+    result: object,
+) -> bool:
+    if str(getattr(result, "status", "") or "") != "success":
+        return False
+    data = getattr(result, "data", None)
+    if not isinstance(data, dict):
+        return False
+    shortcut = data.get("shortcut")
+    if not isinstance(shortcut, dict):
+        return False
+    component = _find_canvas_component(document, component_id)
+    return journal.record(
+        "shortcut_opened",
+        surface="canvas",
+        canvas_id=document.id,
+        component_id=component_id,
+        component_type=str(getattr(component, "type", "") or ""),
+        action_id=str(getattr(result, "action_id", "") or ""),
+        kind=str(shortcut.get("kind") or ""),
+        target_label=str(shortcut.get("target_label") or ""),
+    )
+
+
+def _find_canvas_component(document: CanvasDocument, component_id: str) -> object | None:
+    for component in document.components:
+        if component.id == component_id:
+            return component
+    return None
+
+
+def _component_recipe_id(component: object | None) -> str:
+    if component is None:
+        return ""
+    binding = getattr(component, "binding", None)
+    if binding is not None and getattr(binding, "kind", None) is CanvasBindingKind.RECIPE:
+        return str(getattr(binding, "reference", "") or "").strip()
+    props_dict = getattr(component, "props_dict", None)
+    props = props_dict() if callable(props_dict) else {}
+    if not isinstance(props, dict):
+        return ""
+    return str(props.get("recipe_id") or "").strip()
+
+
+def _room_for_canvas(canvas_id: str) -> object | None:
+    try:
+        from ritualist.rooms import list_rooms
+    except Exception:  # noqa: BLE001 - room labels are best-effort journal metadata.
+        return None
+    for room in list_rooms():
+        if room.canvas_id == canvas_id:
+            return room
+    return None
 
 
 def _qt_rect_to_dict(rect: object) -> dict[str, int]:

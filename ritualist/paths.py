@@ -140,6 +140,14 @@ def browser_profiles_path() -> Path:
     return app_data_path() / "browser-profiles"
 
 
+def learning_journal_path() -> Path:
+    return app_data_path() / "activity-journal.jsonl"
+
+
+def learning_suggestions_path() -> Path:
+    return app_data_path() / "learning-suggestions.jsonl"
+
+
 def default_log_file() -> Path:
     return logs_dir() / "ritualist.log"
 

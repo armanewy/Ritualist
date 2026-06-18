@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from typing import Any
 
+from ritualist.activity_journal import ActivityJournal
 from ritualist.home.models import HomeCardStatus, HomeLastRunStatus, HomeRuntimeEvent
+from ritualist.learning_config import LocalLearningConfig
 
 
 RecipeReference = str | Path
+RITUALIST_JOURNAL_SOURCE_ID = "ritualist_journal"
+_JOURNAL_DEDUPE_SECONDS = 0.5
 
 
 class HomeCardAction(StrEnum):
@@ -19,6 +26,98 @@ class HomeCardAction(StrEnum):
     DOCTOR = "doctor"
     EDIT_RECIPE = "edit_recipe"
     OPEN_LOGS = "open_logs"
+
+
+@dataclass
+class ActivityJournalHook:
+    journal: ActivityJournal
+    executor: Any | None = None
+    dedupe_seconds: float = _JOURNAL_DEDUPE_SECONDS
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
+    _owned_executor: ThreadPoolExecutor | None = field(default=None, init=False, repr=False)
+    _pending: list[Future[Any]] = field(default_factory=list, init=False, repr=False)
+    _recent: dict[tuple[str, tuple[tuple[str, str], ...]], float] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+
+    def record(self, event_type: str, **payload: Any) -> bool:
+        if not _journal_is_enabled(self.journal):
+            return False
+        key = _journal_dedupe_key(event_type, payload)
+        if self._is_duplicate(key):
+            return False
+        try:
+            future = self._executor().submit(
+                _write_journal_event,
+                self.journal,
+                event_type,
+                dict(payload),
+            )
+        except Exception:  # noqa: BLE001 - journal hooks must never break callers.
+            return False
+        if isinstance(future, Future):
+            with self._lock:
+                self._pending.append(future)
+        return True
+
+    def flush(self, *, timeout: float | None = 2.0) -> None:
+        with self._lock:
+            pending = list(self._pending)
+            self._pending = [future for future in self._pending if not future.done()]
+        for future in pending:
+            try:
+                future.result(timeout=timeout)
+            except Exception:  # noqa: BLE001 - journal failures are nonfatal.
+                pass
+
+    def shutdown(self, *, wait: bool = False) -> None:
+        if self._owned_executor is None:
+            return
+        self._owned_executor.shutdown(wait=wait)
+        self._owned_executor = None
+
+    def _executor(self) -> Any:
+        if self.executor is not None:
+            return self.executor
+        with self._lock:
+            if self._owned_executor is None:
+                self._owned_executor = ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="ritualist-activity-journal",
+                )
+            return self._owned_executor
+
+    def _is_duplicate(self, key: tuple[str, tuple[tuple[str, str], ...]]) -> bool:
+        if self.dedupe_seconds <= 0:
+            return False
+        now = monotonic()
+        cutoff = now - self.dedupe_seconds
+        with self._lock:
+            self._recent = {
+                recent_key: seen_at
+                for recent_key, seen_at in self._recent.items()
+                if seen_at >= cutoff
+            }
+            if key in self._recent:
+                return True
+            self._recent[key] = now
+        return False
+
+
+def create_activity_journal_hook(
+    config: LocalLearningConfig | None = None,
+    *,
+    journal: ActivityJournal | None = None,
+    journal_path: Path | None = None,
+) -> ActivityJournalHook:
+    enabled = (
+        config.is_source_enabled(RITUALIST_JOURNAL_SOURCE_ID)
+        if config is not None
+        else _current_journal_source_enabled
+    )
+    return ActivityJournalHook(journal or ActivityJournal(path=journal_path, enabled=enabled))
 
 
 @dataclass(frozen=True)
@@ -38,7 +137,9 @@ class HomeActionService:
     recipe_path_resolver: Callable[[RecipeReference], Path] | None = None
     runs_path_resolver: Callable[[], Path] | None = None
     overlay_controller: Any | None = None
+    journal_hook: ActivityJournalHook | None = None
     _last_executor: Any | None = field(default=None, init=False, repr=False)
+    _default_journal_hook: ActivityJournalHook | None = field(default=None, init=False, repr=False)
 
     def run_recipe(
         self,
@@ -50,6 +151,20 @@ class HomeActionService:
         confirmer: Callable[[Any], bool] | None = None,
         control: Any | None = None,
     ) -> Any:
+        if dry_run:
+            self.record_journal_event(
+                "recipe_dry_run",
+                surface="runtime",
+                component_type="recipe",
+                action_id="dry_run",
+                recipe_id=recipe_ref,
+            )
+        runtime_event_callback = _runtime_journal_callback(
+            self._activity_journal(),
+            runtime_event_callback,
+            recipe_ref=recipe_ref,
+            dry_run=dry_run,
+        )
         if self.runtime_runner is not None:
             return self.runtime_runner(
                 recipe_ref,
@@ -95,6 +210,13 @@ class HomeActionService:
         return bool(close())
 
     def doctor_recipe(self, recipe_ref: RecipeReference) -> Any:
+        self.record_journal_event(
+            "recipe_doctor_run",
+            surface="runtime",
+            component_type="recipe",
+            action_id="doctor",
+            recipe_id=recipe_ref,
+        )
         if self.doctor_runner is not None:
             return self.doctor_runner(recipe_ref)
 
@@ -120,6 +242,19 @@ class HomeActionService:
 
         return runs_dir()
 
+    def record_journal_event(self, event_type: str, **payload: Any) -> bool:
+        try:
+            return self._activity_journal().record(event_type, **payload)
+        except Exception:  # noqa: BLE001 - journaling must never affect runtime actions.
+            return False
+
+    def _activity_journal(self) -> ActivityJournalHook:
+        if self.journal_hook is not None:
+            return self.journal_hook
+        if self._default_journal_hook is None:
+            self._default_journal_hook = create_activity_journal_hook()
+        return self._default_journal_hook
+
 
 @dataclass
 class HomeActionDispatcher:
@@ -138,6 +273,14 @@ class HomeActionDispatcher:
     ) -> HomeActionOutcome:
         parsed = HomeCardAction(action)
         recipe_ref = self.recipe_reference(card_id)
+        self.service.record_journal_event(
+            "component_clicked",
+            surface="home",
+            component_id=card_id,
+            component_type="ritual.card",
+            action_id=parsed.value,
+            recipe_id=recipe_ref,
+        )
 
         if parsed is HomeCardAction.RUN:
             result = self.service.run_recipe(
@@ -349,6 +492,108 @@ def home_event_from_step_status(card_id: str, event: Any) -> HomeRuntimeEvent:
         description=str(getattr(event, "step_name", "") or ""),
         **_clear_wait_fields(),
     )
+
+
+def _runtime_journal_callback(
+    journal: ActivityJournalHook,
+    callback: Callable[[Any], None] | None,
+    *,
+    recipe_ref: RecipeReference,
+    dry_run: bool,
+) -> Callable[[Any], None]:
+    def wrapped(event: Any) -> None:
+        _record_runtime_journal_event(
+            journal,
+            event,
+            recipe_ref=recipe_ref,
+            dry_run=dry_run,
+        )
+        if callback is not None:
+            callback(event)
+
+    return wrapped
+
+
+def _record_runtime_journal_event(
+    journal: ActivityJournalHook,
+    event: Any,
+    *,
+    recipe_ref: RecipeReference,
+    dry_run: bool,
+) -> bool:
+    event_type = str(getattr(event, "type", "") or "")
+    if event_type == "run.started":
+        return journal.record(
+            "recipe_run_started",
+            recipe_id=str(getattr(event, "recipe_id", "") or recipe_ref),
+            recipe_name=str(getattr(event, "recipe_name", "") or ""),
+            run_id=str(getattr(event, "run_id", "") or ""),
+            dry_run=bool(getattr(event, "dry_run", dry_run)),
+            steps_total=getattr(event, "steps_total", None),
+        )
+    if event_type == "run.finished":
+        return journal.record(
+            "recipe_run_finished",
+            recipe_id=recipe_ref,
+            run_id=str(getattr(event, "run_id", "") or ""),
+            status=_event_value(getattr(event, "state", "")),
+            success=bool(getattr(event, "success", False)),
+            dry_run=dry_run,
+            duration_seconds=getattr(event, "duration_seconds", None),
+        )
+    return False
+
+
+def _write_journal_event(journal: ActivityJournal, event_type: str, payload: dict[str, Any]) -> bool:
+    try:
+        return bool(journal.write(event_type, **payload))
+    except Exception:  # noqa: BLE001 - activity journal writes are best-effort.
+        return False
+
+
+def _journal_is_enabled(journal: ActivityJournal) -> bool:
+    try:
+        return bool(journal.enabled)
+    except Exception:  # noqa: BLE001 - opt-in checks must be nonfatal.
+        return False
+
+
+def _journal_dedupe_key(
+    event_type: str,
+    payload: Mapping[str, Any],
+) -> tuple[str, tuple[tuple[str, str], ...]]:
+    return (
+        str(event_type),
+        tuple(sorted((str(key), _journal_dedupe_value(value)) for key, value in payload.items())),
+    )
+
+
+def _journal_dedupe_value(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return repr(
+            tuple(
+                sorted(
+                    (str(key), _journal_dedupe_value(item))
+                    for key, item in value.items()
+                )
+            )
+        )
+    if isinstance(value, list | tuple):
+        return repr(tuple(_journal_dedupe_value(item) for item in value))
+    return str(value)
+
+
+def _load_local_learning_config() -> LocalLearningConfig:
+    try:
+        from ritualist.config import load_app_config
+
+        return load_app_config().learning
+    except Exception:  # noqa: BLE001 - config failures must disable journal writes.
+        return LocalLearningConfig()
+
+
+def _current_journal_source_enabled() -> bool:
+    return _load_local_learning_config().is_source_enabled(RITUALIST_JOURNAL_SOURCE_ID)
 
 
 def _recipe_event_description(event: Any) -> str:

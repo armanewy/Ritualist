@@ -55,6 +55,17 @@ from .intent_planner import (
     compile_plan_reference,
     plan_preview_payload,
 )
+from .learning_service import (
+    FORBIDDEN_CAPABILITY_SUMMARY,
+    LOCAL_ONLY_EXPLANATION,
+    delete_learning_data,
+    disable_learning,
+    enable_learning,
+    learning_journal_payload,
+    learning_scan_payload,
+    learning_sources_payload,
+    learning_status_payload,
+)
 from .logging_setup import setup_logging
 from .overlay import format_confirmation_request
 from .packs import (
@@ -77,6 +88,8 @@ from .paths import (
     imported_packs_dir,
     imported_packs_path,
     imported_theme_packs_dir,
+    learning_journal_path,
+    learning_suggestions_path,
     logs_dir,
     recipes_dir,
     runs_dir,
@@ -126,6 +139,7 @@ policy_app = typer.Typer(help="Inspect primitive policy and local pack governanc
 diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts.")
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
+learning_app = typer.Typer(help="Manage local, opt-in learning data.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
 canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
 canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.")
@@ -138,6 +152,7 @@ app.add_typer(policy_app, name="policy")
 app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
+app.add_typer(learning_app, name="learning")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(theme_app, name="theme")
 app.add_typer(room_app, name="room")
@@ -196,6 +211,8 @@ def paths() -> None:
             "logs": logs_dir(),
             "runs": runs_dir(),
             "browser_profiles": browser_profiles_dir(),
+            "learning_journal": learning_journal_path(),
+            "learning_suggestions": learning_suggestions_path(),
         }
     )
 
@@ -338,6 +355,285 @@ def primitive_run(
     _print_primitive_result(result)
     if result.status == "failed":
         raise typer.Exit(1)
+
+
+@learning_app.command("status")
+def learning_status(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Local Learning status."),
+    ] = False,
+) -> None:
+    """Show Local Learning enablement, sources, and local data paths."""
+    payload = learning_status_payload()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_learning_status(payload)
+
+
+@learning_app.command("enable")
+def learning_enable(
+    source_ids: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--source",
+            "-s",
+            help="Explicitly select an allowed source: ritualist_journal, open_windows, or recent_items.",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Local Learning status."),
+    ] = False,
+) -> None:
+    """Enable local-only learning for explicitly selected sources."""
+    try:
+        payload = enable_learning(source_ids or [])
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print("[green]Local Learning enabled.[/]")
+    _print_learning_status(payload)
+
+
+@learning_app.command("disable")
+def learning_disable(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Local Learning status."),
+    ] = False,
+) -> None:
+    """Disable future Local Learning writes while preserving existing data."""
+    try:
+        payload = disable_learning()
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print("[green]Local Learning disabled.[/]")
+    console.print("Existing local learning data was preserved.")
+    _print_learning_status(payload)
+
+
+@learning_app.command("sources")
+def learning_sources(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable Local Learning source metadata."),
+    ] = False,
+) -> None:
+    """List allowed Local Learning sources and current source consent state."""
+    payload = learning_sources_payload()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_learning_sources(payload)
+
+
+@learning_app.command("scan")
+def learning_scan(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=0, help="Maximum on-demand activity signals to return."),
+    ] = 50,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable on-demand scan results."),
+    ] = False,
+) -> None:
+    """Run a one-shot Local Learning scan without starting background collection."""
+    payload = learning_scan_payload(max_signals=limit)
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_learning_scan(payload)
+
+
+@learning_app.command("journal")
+def learning_journal(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=0, help="Maximum Local Learning journal events to return."),
+    ] = 100,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable journal events."),
+    ] = False,
+) -> None:
+    """Show local Ritualist-owned learning journal events."""
+    payload = learning_journal_payload(limit=limit)
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_learning_journal(payload)
+
+
+@learning_app.command("delete-data")
+def learning_delete_data(
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Delete local learning data without an interactive prompt."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable deletion results."),
+    ] = False,
+) -> None:
+    """Delete local journal and suggestion data files."""
+    if not yes and not typer.confirm(
+        "Delete local learning journal and suggestion data?",
+        default=False,
+    ):
+        console.print("Cancelled.")
+        raise typer.Exit(1)
+    payload = delete_learning_data()
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_learning_delete(payload)
+
+
+def _print_learning_status(payload: dict[str, object]) -> None:
+    table = Table(title="Local Learning")
+    table.add_column("Field", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    rows = {
+        "enabled": payload.get("enabled"),
+        "effective_enabled": payload.get("effective_enabled"),
+        "selected_sources": ", ".join(str(item) for item in payload.get("selected_sources", [])) or "none",
+        "enabled_sources": ", ".join(str(item) for item in payload.get("enabled_sources", [])) or "none",
+        "consent_version": payload.get("consent_version") or "none",
+        "consent_timestamp": payload.get("consent_timestamp") or "none",
+        "local_only": payload.get("local_only"),
+        "background_collection": payload.get("background_collection"),
+        "config_path": payload.get("config_path"),
+    }
+    for key, value in rows.items():
+        table.add_row(escape(key), escape(str(value)))
+    data_paths = payload.get("data_paths")
+    if isinstance(data_paths, dict):
+        for name, item in data_paths.items():
+            if not isinstance(item, dict):
+                continue
+            exists = "exists" if item.get("exists") else "missing"
+            table.add_row(
+                f"data:{escape(str(name))}",
+                f"{escape(str(item.get('path', '')))} ({escape(exists)})",
+            )
+    console.print(table)
+    console.print(escape(str(payload.get("local_only_explanation") or LOCAL_ONLY_EXPLANATION)))
+    console.print(escape(str(payload.get("forbidden_capability_summary") or FORBIDDEN_CAPABILITY_SUMMARY)))
+
+
+def _print_learning_sources(payload: dict[str, object]) -> None:
+    table = Table(title="Local Learning Sources")
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Enabled", no_wrap=True)
+    table.add_column("Selected", no_wrap=True)
+    table.add_column("Consented", no_wrap=True)
+    table.add_column("Description", overflow="fold")
+    sources = payload.get("sources")
+    source_rows = sources if isinstance(sources, list) else []
+    for source in source_rows:
+        if not isinstance(source, dict):
+            continue
+        table.add_row(
+            escape(str(source.get("id", ""))),
+            "yes" if source.get("enabled") else "no",
+            "yes" if source.get("selected") else "no",
+            "yes" if source.get("consented") else "no",
+            escape(str(source.get("description", ""))),
+        )
+    console.print(table)
+    console.print("Sources are disabled by default and require explicit selection.")
+    console.print(escape(LOCAL_ONLY_EXPLANATION))
+
+
+def _print_learning_scan(payload: dict[str, object]) -> None:
+    console.print("On-demand scan only; background collection remains disabled.")
+    collection = payload.get("collection")
+    if not isinstance(collection, dict):
+        return
+    signals = collection.get("signals")
+    signal_rows = signals if isinstance(signals, list) else []
+    if signal_rows:
+        table = Table(title="Activity Signals")
+        table.add_column("Kind", no_wrap=True)
+        table.add_column("Source", no_wrap=True)
+        table.add_column("Label", overflow="fold")
+        table.add_column("Value", overflow="fold")
+        for signal in signal_rows:
+            if not isinstance(signal, dict):
+                continue
+            table.add_row(
+                escape(str(signal.get("kind", ""))),
+                escape(str(signal.get("source_id", ""))),
+                escape(str(signal.get("label", ""))),
+                escape(str(signal.get("value", ""))),
+            )
+        console.print(table)
+    else:
+        console.print("No activity signals collected.")
+
+    warnings = collection.get("warnings")
+    warning_rows = warnings if isinstance(warnings, list) else []
+    if warning_rows:
+        console.print("[bold]Warnings[/]")
+        for warning in warning_rows:
+            if isinstance(warning, dict):
+                console.print(
+                    "- "
+                    f"{escape(str(warning.get('code', '')))}: "
+                    f"{escape(str(warning.get('message', '')))}"
+                )
+
+
+def _print_learning_journal(payload: dict[str, object]) -> None:
+    console.print(f"Journal: {escape(str(payload.get('path', '')))}")
+    events = payload.get("events")
+    event_rows = events if isinstance(events, list) else []
+    if not event_rows:
+        console.print("No local learning journal events found.")
+        return
+    table = Table(title=f"Journal Events ({len(event_rows)})")
+    table.add_column("Event", no_wrap=True)
+    table.add_column("Payload", overflow="fold")
+    for event in event_rows:
+        if not isinstance(event, dict):
+            continue
+        table.add_row(
+            escape(str(event.get("event_type", ""))),
+            escape(_format_metadata_value(event.get("payload", {}))),
+        )
+    console.print(table)
+
+
+def _print_learning_delete(payload: dict[str, object]) -> None:
+    table = Table(title="Deleted Local Learning Data")
+    table.add_column("Name", no_wrap=True)
+    table.add_column("Existed", no_wrap=True)
+    table.add_column("Deleted", no_wrap=True)
+    table.add_column("Path", overflow="fold")
+    table.add_column("Error", overflow="fold")
+    paths = payload.get("paths")
+    path_rows = paths.items() if isinstance(paths, dict) else []
+    for name, item in path_rows:
+        if not isinstance(item, dict):
+            continue
+        table.add_row(
+            escape(str(name)),
+            "yes" if item.get("existed") else "no",
+            "yes" if item.get("deleted") else "no",
+            escape(str(item.get("path", ""))),
+            escape(str(item.get("error", ""))),
+        )
+    console.print(table)
 
 
 def _print_primitive_spec(spec: PrimitiveSpec) -> None:
