@@ -13,6 +13,7 @@ tokens:
   color.text: "#24211c"
   color.text_muted: "#675f53"
   color.border: "#d8d0c3"
+  color.focus_ring: "#1d5f99"
   color.accent: "#3b7668"
   color.on_accent: "#ffffff"
   color.success: "#2f7d57"

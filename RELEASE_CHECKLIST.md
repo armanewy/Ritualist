@@ -873,3 +873,69 @@ Release recommendation:
 - This entry recommends taggable based on the local packaged acceptance evidence
   above, but no tag was created.
 - No release tag was created.
+
+## 2026-06-18 UI/UX convergence Phase 6 evidence
+
+Scope:
+
+- Added focus-ring contrast checks to theme accessibility validation.
+- Added accessible names/roles to shared Canvas controls and static
+  keyboard/accessibility contract tests.
+- Recorded current 100/300 component performance command output after the
+  UI/UX convergence changes.
+- Rebuilt the packaged app and reran packaged acceptance with screen evidence.
+
+Validation commands:
+
+- Focused UI/UX checks:
+  `python -m pytest -q tests/test_themes.py tests/test_canvas_theme_bridge.py tests/test_canvas_state_ui.py tests/test_ui_ux_convergence.py tests/test_canvas_performance.py`
+  passed with `49 passed`.
+- Full test suite: `python -m pytest -q` passed with
+  `1192 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 41 managed files.
+- `.\scripts\build_windows_app.ps1`: passed and rebuilt
+  `dist\Ritualist\Ritualist.exe`.
+- Final packaged acceptance:
+  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-ui-phase6`
+  passed with `31 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
+
+Fresh performance command output:
+
+- `python -m ritualist perf canvas-model --mock-components 100 --json`:
+  `2.394 ms`, no top-level warnings, advisory budget `250 ms`.
+- `python -m ritualist perf canvas-model --mock-components 300 --json`:
+  `4.765 ms`, no top-level warnings, advisory budget `250 ms`.
+- `python -m ritualist perf canvas-runtime --mock-components 100 --json`:
+  `5.049 ms`, no top-level warnings, advisory budget `250 ms`.
+- `python -m ritualist perf canvas-runtime --mock-components 300 --json`:
+  `11.783 ms`, no top-level warnings, advisory budget `250 ms`.
+- `python -m ritualist perf canvas-use --mock-components 100 --json`:
+  `5.895 ms`, no top-level warnings, advisory budget `250 ms`.
+- `python -m ritualist perf canvas-use --mock-components 300 --json`:
+  `21.610 ms`, no top-level warnings, advisory budget `250 ms`;
+  visual diagnostics remain honestly high-cost with 3 advisory warnings for
+  `217` live widgets, `217` animated components, and high estimated visual
+  cost.
+- `python -m ritualist perf home-model --mock-cards 100 --json`:
+  `0.998 ms`, no warnings, advisory budget `250 ms`.
+- `python -m ritualist perf home-model --mock-cards 300 --json`:
+  `2.879 ms`, no warnings, advisory budget `250 ms`.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance-ui-phase6\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance-ui-phase6\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance-ui-phase6\evidence`
+
+Release recommendation:
+
+- The generated summary reports `taggable: true` and `tag_created: false`.
+- The 300-component CLI build/model paths are within budget; visual smoothness
+  remains backed by packaged heartbeat/frame evidence rather than a subjective
+  claim.
+- No release tag was created.

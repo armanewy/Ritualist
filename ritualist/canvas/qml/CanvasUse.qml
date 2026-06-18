@@ -884,6 +884,8 @@ ApplicationWindow {
         font.family: root.token("font_family", "Segoe UI")
         font.pixelSize: root.token("font_size_body", 13)
         focusPolicy: Qt.StrongFocus
+        Accessible.name: text
+        Accessible.role: Accessible.Button
 
         contentItem: Text {
             text: control.text
@@ -912,6 +914,8 @@ ApplicationWindow {
         selectionColor: root.token("accent", "#3dd6a5")
         font.family: root.token("font_family", "Segoe UI")
         font.pixelSize: root.token("font_size_body", 13)
+        Accessible.name: placeholderText || text || "Text field"
+        Accessible.role: Accessible.EditableText
         leftPadding: root.spaceSm
         rightPadding: root.spaceSm
         background: Rectangle {
@@ -927,6 +931,8 @@ ApplicationWindow {
         implicitHeight: 34
         font.family: root.token("font_family", "Segoe UI")
         font.pixelSize: root.token("font_size_body", 13)
+        Accessible.name: currentText || "Option selector"
+        Accessible.role: Accessible.ComboBox
         contentItem: Text {
             text: combo.displayText
             color: combo.enabled ? root.token("foreground", "#f4f7fb") : root.token("muted", "#91a2b8")

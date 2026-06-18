@@ -75,6 +75,7 @@ APP_DEFAULT_TOKENS: dict[str, str | int | float] = {
     "color.text": "#f5f7fb",
     "color.text_muted": "#91a2b8",
     "color.border": "#203044",
+    "color.focus_ring": "#7fb8ff",
     "color.accent": "#3dd6a5",
     "color.on_accent": "#08120f",
     "color.success": "#3dd6a5",
@@ -106,6 +107,8 @@ CONTRAST_LARGE_TEXT_TARGET = 3.0
 _CONTRAST_CHECKS = (
     ("text_on_surface", "color.text", "color.surface", CONTRAST_NORMAL_TEXT_TARGET),
     ("muted_text_on_surface", "color.text_muted", "color.surface", CONTRAST_NORMAL_TEXT_TARGET),
+    ("focus_ring_on_surface", "color.focus_ring", "color.surface", CONTRAST_LARGE_TEXT_TARGET),
+    ("focus_ring_on_background", "color.focus_ring", "color.background", CONTRAST_LARGE_TEXT_TARGET),
     ("text_on_accent", "color.on_accent", "color.accent", CONTRAST_NORMAL_TEXT_TARGET),
     ("success_badge_text", "color.on_success", "color.success", CONTRAST_LARGE_TEXT_TARGET),
     ("warning_badge_text", "color.on_warning", "color.warning", CONTRAST_LARGE_TEXT_TARGET),

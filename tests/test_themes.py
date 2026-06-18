@@ -25,6 +25,9 @@ def test_bundled_ritualist_paper_theme_validates() -> None:
     assert result.errors == ()
     assert not [warning for warning in result.warnings if warning.startswith("accessibility:")]
     assert result.accessibility["warning_count"] == 0
+    checks = {check["id"]: check for check in result.accessibility["checks"]}
+    assert checks["focus_ring_on_surface"]["passed"] is True
+    assert checks["focus_ring_on_background"]["passed"] is True
 
 
 def test_invalid_theme_color_fails(tmp_path: Path) -> None:
@@ -168,6 +171,7 @@ tokens:
   color.surface: "#ffffff"
   color.text: "#fefefe"
   color.text_muted: "#fdfdfd"
+  color.focus_ring: "#fefefe"
   color.accent: "#ffffff"
   color.on_accent: "#fefefe"
 """,
@@ -178,6 +182,27 @@ tokens:
     assert result.valid is True
     assert any("accessibility:" in warning for warning in result.warnings)
     assert result.accessibility["warning_count"] >= 1
+
+
+def test_focus_ring_low_contrast_emits_accessibility_warning(tmp_path: Path) -> None:
+    path = _theme_path(
+        tmp_path,
+        """
+schema: ritualist.theme.v1
+id: low.focus
+name: Low Focus
+tokens:
+  color.background: "#ffffff"
+  color.surface: "#ffffff"
+  color.focus_ring: "#fefefe"
+""",
+    )
+
+    result = validate_theme(path)
+
+    assert result.valid is True
+    assert any("focus_ring_on_surface" in warning for warning in result.warnings)
+    assert any("focus_ring_on_background" in warning for warning in result.warnings)
 
 
 def test_missing_accessibility_colors_fall_back_before_contrast_check(tmp_path: Path) -> None:

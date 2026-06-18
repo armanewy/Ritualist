@@ -150,3 +150,21 @@ The fifth implementation milestone is Support Desk Editorial Ledger:
 - keep `Open Logs` as the existing explicit action for deeper evidence;
 - do not add recovery buttons, approval controls, automation actions, or new
   run semantics inside the Room.
+
+## Sixth Milestone
+
+The sixth implementation milestone is accessibility, performance, and wallpaper
+dogfood validation:
+
+- verify focus-ring contrast, readable matte surfaces, and keyboard-visible controls
+  across the shared design system;
+- keep reduced motion tied to the existing low performance mode and tokenized
+  motion settings;
+- record 100 and 300 component performance output before adding heavier visual
+  effects;
+- keep wallpaper coexistence honest: Desktop Work-Area may layer over system
+  wallpaper, but blank-area click-through remains `NEEDS_HUMAN_REVIEW` until
+  native hit-test evidence proves it;
+- prove Quiet Instrument, Spatial Field, and Editorial Ledger share tokens,
+  controls, accessibility behavior, and safety language rather than becoming
+  separate products or themes.
