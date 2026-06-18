@@ -30,6 +30,8 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "themes;themes" in script
     assert "--copy-metadata" not in script
     assert "copy_metadata" not in script
+    assert "$LASTEXITCODE" in script
+    assert "PyInstaller failed" in script
     assert "dist\\Ritualist\\Ritualist.exe" in script
 
 

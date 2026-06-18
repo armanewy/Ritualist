@@ -30,5 +30,8 @@ if (-not $NoClean) {
 }
 
 python -m PyInstaller @pyinstallerArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Built dist\Ritualist\Ritualist.exe"
