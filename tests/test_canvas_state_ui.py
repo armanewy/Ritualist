@@ -52,8 +52,9 @@ def test_canvas_use_qml_renders_structured_ritual_state_hierarchy() -> None:
         "root.currentStepTitle(componentData)",
         "Waiting for",
         "root.waitSummary(componentData)",
-        "Native confirmation required",
+        "Room held for native confirmation",
         "root.confirmationSummary(componentData)",
+        "root.confirmationHoldSummary(componentData)",
         "Paused:",
         "Failed step",
         "Repaired interrupted run",
@@ -111,6 +112,24 @@ def test_canvas_use_qml_uses_existing_ritual_actions_with_state_specific_labels(
         assert f'"{action_id}"' not in qml
 
 
+def test_canvas_use_qml_confirmation_hold_keeps_native_dialog_authoritative() -> None:
+    qml = _qml()
+
+    for snippet in (
+        "function confirmationHoldSummary(component)",
+        "Downstream steps are held until you decide in the native dialog.",
+        "Room held for native confirmation",
+        "root.confirmationHoldSummary(componentData)",
+    ):
+        assert snippet in qml
+
+    confirmation_section = qml[qml.index("id: confirmationPanel") : qml.index("id: pausedPanel")]
+    assert "approved" not in confirmation_section.casefold()
+    assert "approve" not in confirmation_section.casefold()
+    assert "onClicked" not in confirmation_section
+    assert "root.dispatch" not in confirmation_section
+
+
 def test_canvas_use_qml_gives_shortcuts_distinct_instant_action_visuals() -> None:
     qml = _qml()
 
@@ -143,6 +162,24 @@ def test_canvas_use_qml_gives_target_cards_dedicated_readiness_surface() -> None
         "root.dispatch(componentData.id, modelData)",
     ):
         assert snippet in qml
+
+
+def test_canvas_use_qml_recent_activity_adds_ledger_context_without_paths() -> None:
+    qml = _qml()
+
+    for snippet in (
+        "function activityLedgerSummary(item)",
+        "Declined confirmation",
+        "Cleanup available",
+        "Cleanup: \" + root.formatLedgerToken(item.cleanup_choice)",
+        "Ritualist-opened resource",
+        "root.activityLedgerSummary(modelData)",
+    ):
+        assert snippet in qml
+
+    ledger_section = qml[qml.index("function activityLedgerSummary(item)") : qml.index("function delegateFor")]
+    assert "item.path" not in ledger_section
+    assert "run_log_path" not in ledger_section
 
 
 def test_shortcut_components_stay_separate_from_ritual_state_controls(tmp_path: Path) -> None:

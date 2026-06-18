@@ -100,3 +100,16 @@ The first implementation milestone is QML-only:
   dashboard wall;
 - keep Edit Mode layout unchanged;
 - preserve existing action IDs and explicit confirmation gates.
+
+## Second Milestone
+
+The second implementation milestone remains QML-only:
+
+- make confirmation read as a held Room state while the native confirmation
+  dialog remains authoritative;
+- surface exact target/action/consequence language already present in runtime
+  state;
+- make recent activity more ledger-like with existing stopped, cleanup,
+  ownership, and last-step metadata;
+- avoid raw run paths, new action IDs, approval buttons inside the Room, or any
+  new capture/automation behavior.

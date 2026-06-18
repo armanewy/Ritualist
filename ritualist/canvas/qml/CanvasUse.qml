@@ -457,6 +457,13 @@ ApplicationWindow {
         return "Target: " + target + " | " + targetType
     }
 
+    function confirmationHoldSummary(component) {
+        var confirmation = root.activeRun(component).confirmation || {}
+        var action = confirmation.action || "pending action"
+        var message = confirmation.message || "Downstream steps are held until you decide in the native dialog."
+        return "Action: " + action + " | " + message
+    }
+
     function lastRunSummary(component) {
         var last = root.lastRun(component)
         if (!last || !last.state || last.state === "none") {
@@ -485,6 +492,34 @@ ApplicationWindow {
             return "Artifacts: run log"
         }
         return names.length ? "Artifacts: " + names.join(", ") : ""
+    }
+
+    function formatLedgerToken(value) {
+        return String(value || "").replace(/_/g, " ").trim()
+    }
+
+    function activityLedgerSummary(item) {
+        var details = []
+        if (item.last_step) {
+            details.push("Last: " + item.last_step)
+        }
+        if (item.stopped_reason) {
+            if (item.stopped_reason === "stopped_user_declined_confirmation") {
+                details.push("Declined confirmation")
+            } else {
+                details.push(root.formatLedgerToken(item.stopped_reason))
+            }
+        }
+        if (item.cleanup_available === true) {
+            details.push("Cleanup available")
+        }
+        if (item.cleanup_choice) {
+            details.push("Cleanup: " + root.formatLedgerToken(item.cleanup_choice))
+        }
+        if (item.ownership_count !== undefined && item.ownership_count !== null && Number(item.ownership_count) > 0) {
+            details.push(Number(item.ownership_count) + " Ritualist-opened resource" + (Number(item.ownership_count) === 1 ? "" : "s"))
+        }
+        return details.join(" | ")
     }
 
     function delegateFor(typeName) {
@@ -1792,7 +1827,7 @@ ApplicationWindow {
             Rectangle {
                 id: confirmationPanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: 58
+                Layout.preferredHeight: 86
                 radius: root.radiusMd
                 color: root.token("warning_panel", "#252014")
                 border.color: root.token("warning", "#f5c45b")
@@ -1804,7 +1839,7 @@ ApplicationWindow {
                     spacing: 2
 
                     Text {
-                        text: "Native confirmation required"
+                        text: "Room held for native confirmation"
                         color: root.token("warning", "#f5c45b")
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
@@ -1814,6 +1849,16 @@ ApplicationWindow {
                     Text {
                         text: root.confirmationSummary(componentData)
                         color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.confirmationHoldSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                         maximumLineCount: 2
@@ -2467,22 +2512,38 @@ ApplicationWindow {
             Repeater {
                 model: componentData.data && componentData.data.items ? componentData.data.items.slice(0, 5) : []
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: root.spaceSm
+                    spacing: 2
 
-                    Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        color: root.borderColor(modelData.status)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: root.spaceSm
+
+                        Rectangle {
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: root.borderColor(modelData.status)
+                        }
+
+                        Text {
+                            text: (modelData.recipe_id || "recipe") + ": " + (modelData.message || modelData.status || "")
+                            color: root.token("muted", "#91a2b8")
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
                     }
 
                     Text {
-                        text: (modelData.recipe_id || "recipe") + ": " + (modelData.message || modelData.status || "")
+                        text: root.activityLedgerSummary(modelData)
                         color: root.token("muted", "#91a2b8")
-                        font.pixelSize: 12
+                        opacity: 0.78
+                        font.pixelSize: 10
                         elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.leftMargin: 18
                         Layout.fillWidth: true
                     }
                 }
