@@ -1,0 +1,164 @@
+schema: ritualist.ui_release_truth.v1
+release: v0.2.0-alpha.1
+baseline:
+  head: 4789b4c1b1795b89d91d109050c9153b9e41f13a
+  product_goal:
+    retain_unused_legacy_behavior: false
+status_values:
+  - PASS
+  - FAIL
+  - NOT_RUN
+  - NEEDS_HUMAN_REVIEW
+functionality_baseline:
+  source: 2026-06-18 Set 2 Wave F2 functionality recovery evidence
+  engine_tests_pass:
+    status: PASS
+    evidence:
+      - python -m pytest -q passed with 1270 passed, 1 skipped
+      - focused Wave F2 checks passed with 301 passed
+  simulated_acceptance_pass:
+    status: PASS
+    evidence:
+      - artifacts/release-acceptance-set2-f2/acceptance-summary.json
+      - artifacts/release-acceptance-set2-f2/acceptance-summary.md
+      - packaged simulated acceptance passed with 32 PASS, 0 FAIL, 0 NEEDS_HUMAN_REVIEW
+  live_integration_pass:
+    status: NOT_RUN
+    evidence: []
+    reason: Live Gaming acceptance requires explicit live initiation and was not run.
+ui_gates:
+  shell_architecture_pass:
+    status: FAIL
+    current_blockers:
+      - Ritualist.exe still opens Home by default at the baseline.
+      - Home still owns the default shell during this migration point.
+    pass_requires:
+      - tray-first startup with no visible window at rest
+      - one resident per-user Agent
+      - one attended ritual per Windows user
+      - no independent Home or Canvas runtime shell in the default path
+    grant_policy:
+      machine_structure_tests_may_grant: true
+      required_evidence:
+        - packaged_process_tree
+        - packaged_window_tree
+        - taskbar_and_alt_tab_observation
+  visual_contract_pass:
+    status: NEEDS_HUMAN_REVIEW
+    current_blockers:
+      - No explicit human visual review has accepted the Quiet Instrument contract.
+    pass_requires:
+      - explicit visual review decision
+      - evidence that the UI follows the light, warm, opaque Quiet Instrument direction
+      - evidence that the UI avoids dashboard/card-wall/neon styling
+      - screenshot or screen-recording references for reviewed states
+    grant_policy:
+      screenshots_alone_may_grant: false
+      screenshots_are_supporting_evidence: true
+      requires_explicit_review: true
+      required_evidence:
+        - explicit_visual_review_decision
+        - reviewed_visual_artifacts
+  dpi_pass:
+    status: NOT_RUN
+    current_blockers:
+      - No UI migration DPI matrix evidence has been recorded.
+    pass_requires:
+      - no clipping at 100 percent scaling
+      - no clipping at 125 percent scaling
+      - no clipping at 150 percent scaling
+      - correct work-area placement on target monitors
+    grant_policy:
+      machine_structure_tests_may_grant: true
+      required_evidence:
+        - dpi_matrix
+        - bounds_checks
+        - clipping_checks
+  keyboard_accessibility_pass:
+    status: NOT_RUN
+    current_blockers:
+      - No keyboard-only critical-path evidence has been recorded for the migrated UI.
+    pass_requires:
+      - keyboard-only Picker, preflight, run, confirmation, recovery, Settings, Builder, and Exit paths
+      - no keyboard traps
+      - focus is visible and recoverable
+    grant_policy:
+      machine_structure_tests_may_grant: true
+      required_evidence:
+        - keyboard_path_log
+        - focus_order_evidence
+  narrator_pass:
+    status: NOT_RUN
+    current_blockers:
+      - No Narrator pass has been recorded for the migrated UI.
+    pass_requires:
+      - accessible names, roles, states, and values for critical controls
+      - state changes are announced without excessive chatter
+      - no required information exists only in color or tooltip text
+    grant_policy:
+      machine_structure_tests_may_grant: true
+      required_evidence:
+        - accessibility_tree
+        - narrator_review_notes
+  focus_lifecycle_pass:
+    status: NOT_RUN
+    current_blockers:
+      - No migrated focus lifecycle evidence has been recorded.
+    pass_requires:
+      - idle user invocation may focus the Picker
+      - background progress does not steal focus
+      - background confirmation opens Review through notification only
+      - closing transient surfaces restores prior focus
+      - Exit remains explicit
+    grant_policy:
+      machine_structure_tests_may_grant: true
+      required_evidence:
+        - focus_event_log
+        - fullscreen_app_observation
+        - notification_action_log
+  human_usability_pass:
+    status: NOT_RUN
+    current_blockers:
+      - No human usability decision has been recorded.
+    pass_requires:
+      - explicit human usability decision for the migrated UI
+      - recorded participant or reviewer evidence
+      - release owner acceptance of any remaining severity findings
+    grant_policy:
+      initial_status: NOT_RUN
+      machine_structure_tests_may_grant: false
+      automated_tests_may_grant: false
+      screenshots_alone_may_grant: false
+      required_evidence:
+        - explicit_human_usability_decision
+        - usability_findings
+release_decision:
+  release_pass:
+    status: NOT_RUN
+    passed: false
+    reason: UI release cannot pass while human_usability_pass is NOT_RUN or FAIL.
+  human_usability_blocking_statuses:
+    - NOT_RUN
+    - FAIL
+  requires_pass:
+    - functionality_baseline.engine_tests_pass
+    - functionality_baseline.simulated_acceptance_pass
+    - functionality_baseline.live_integration_pass
+    - ui_gates.shell_architecture_pass
+    - ui_gates.visual_contract_pass
+    - ui_gates.dpi_pass
+    - ui_gates.keyboard_accessibility_pass
+    - ui_gates.narrator_pass
+    - ui_gates.focus_lifecycle_pass
+    - ui_gates.human_usability_pass
+  taggable: false
+  taggable_is_alias_of_release_pass_passed: true
+historical_claim_policy:
+  taggable_claims_may_override_current_truth_model: false
+  acceptance_summaries:
+    - source: artifacts/release-acceptance-wave14c
+      claimed_taggable: true
+      may_override_current_truth_model: false
+    - source: artifacts/release-acceptance-set2-f2
+      claimed_taggable: false
+      may_override_current_truth_model: false

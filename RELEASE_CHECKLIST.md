@@ -1093,3 +1093,37 @@ Release recommendation:
 - `v0.2.0-alpha.1` is still not taggable until the explicitly opted-in live
   Gaming integration pass and human UX approval are recorded.
 - No release tag was created.
+
+## 2026-06-18 UX0C UI release truth gates
+
+Scope:
+
+- Added `tests\acceptance\ui_release_truth.yaml` as the explicit UI release
+  gate contract for the tray-first Quiet Instrument migration.
+- Added `tests\test_ui_release_truth.py` to parse that YAML and assert the
+  release truth-model rules.
+- No production behavior was changed.
+
+Current UI gate truth:
+
+- `shell_architecture_pass`: `FAIL`; the current baseline still opens Home by
+  default and does not yet prove the tray-first resident Agent architecture.
+- `visual_contract_pass`: `NEEDS_HUMAN_REVIEW`; screenshots are supporting
+  evidence only and cannot grant this gate without explicit visual review.
+- `dpi_pass`: `NOT_RUN`.
+- `keyboard_accessibility_pass`: `NOT_RUN`.
+- `narrator_pass`: `NOT_RUN`.
+- `focus_lifecycle_pass`: `NOT_RUN`.
+- `human_usability_pass`: `NOT_RUN`; machine structure tests, automated tests,
+  and screenshots cannot grant this gate.
+
+Current release decision:
+
+- The Set 2 Wave F2 `engine_tests_pass` and `simulated_acceptance_pass`
+  evidence remains valid.
+- `live_integration_pass` remains `NOT_RUN`.
+- `release_pass.passed`: `false` while `human_usability_pass` is `NOT_RUN` or
+  `FAIL`.
+- `taggable`: `false`.
+- Older acceptance summaries that claimed `taggable: true` do not override this
+  truth model.
