@@ -1,0 +1,121 @@
+schema: ritualist.ui_migration_baseline.v1
+baseline_head: 4789b4c1b1795b89d91d109050c9153b9e41f13a
+scope: current_before_state_only
+product_goal_note: "Legacy surfaces are recorded factually as before-state only; this baseline does not retain legacy UI as a product goal."
+semantics:
+  CAPTURED: "Requested evidence was written, but visual interpretation still requires review where noted."
+  NOT_CAPTURED: "The harness could not safely or truthfully capture the item on this host/run."
+  NEEDS_HUMAN_REVIEW: "Evidence is partial, subjective, unavailable on this host, or requires human visual judgment."
+  FAIL: "Machine evidence contradicts the baseline contract or the harness command failed."
+truth_model:
+  shell_architecture_pass: NOT_RUN
+  visual_contract_pass: NOT_RUN
+  dpi_pass: NOT_RUN
+  keyboard_accessibility_pass: NOT_RUN
+  narrator_pass: NOT_RUN
+  focus_lifecycle_pass: NOT_RUN
+  human_usability_pass: NOT_RUN
+  release_pass: false
+  ux_pass_assigned: false
+artifact_contract:
+  baseline_summary_json: artifacts/ui-migration-baseline/baseline-summary.json
+  baseline_summary_md: artifacts/ui-migration-baseline/baseline-summary.md
+  screenshots_dir: artifacts/ui-migration-baseline/screenshots
+  process_tree_json: artifacts/ui-migration-baseline/process-tree.json
+  window_tree_json: artifacts/ui-migration-baseline/window-tree.json
+safety_contract:
+  - "Packaged desktop screenshot capture is explicit opt-in evidence collection only; no product screenshot capability is added."
+  - "No coordinate clicks."
+  - "No OCR."
+  - "No keylogging."
+  - "No macro replay."
+  - "No remote execution or network command channel."
+  - "No gameplay automation."
+  - "No password or credential automation."
+  - "No arbitrary recipe Python, JavaScript, PowerShell, shell snippets, QML, or HTML."
+  - "Notifications or prompts may never approve consequential actions."
+requested_scales:
+  - 100
+  - 125
+  - 150
+dpi_policy:
+  switching_allowed: false
+  missing_scale_status: NEEDS_HUMAN_REVIEW
+  missing_scale_capture_status: NOT_CAPTURED
+  rule: "If Windows DPI switching is not safely available, record host scale and mark other requested scales as not captured."
+required_observations:
+  - process_tree_after_launch
+  - window_tree
+  - visible_window_count
+  - taskbar_entries_where_observable
+  - alt_tab_entries_where_observable
+  - home_remains_open_after_room_launch
+  - spawned_process_count
+  - clipped_or_overlapping_controls
+  - leaked_internal_ids
+  - selected_theme
+  - minimum_window_sizes
+  - actual_window_sizes
+surfaces:
+  - id: home
+    label: Home
+    required: true
+    expected_evidence:
+      - screenshot
+      - window_tree
+      - process_tree
+  - id: gaming_room
+    label: Gaming Room
+    required: true
+    expected_evidence:
+      - screenshot
+      - window_tree
+      - process_tree
+  - id: active_running
+    label: Active running
+    required: true
+    expected_evidence:
+      - screenshot
+      - runtime_or_window_state
+  - id: waiting
+    label: Waiting
+    required: true
+    expected_evidence:
+      - screenshot
+      - runtime_or_window_state
+  - id: confirmation
+    label: Confirmation
+    required: true
+    expected_evidence:
+      - screenshot
+      - owned_dialog_or_window_state
+  - id: blocked
+    label: Blocked
+    required: true
+    expected_evidence:
+      - screenshot
+      - blocked_reason_text
+  - id: failed
+    label: Failed
+    required: true
+    expected_evidence:
+      - screenshot
+      - failure_state_text
+  - id: interrupted_history
+    label: Interrupted history
+    required: true
+    expected_evidence:
+      - screenshot
+      - repaired_or_interrupted_history_text
+  - id: settings_privacy_disclosure
+    label: Settings/privacy disclosure
+    required: false
+    expected_evidence:
+      - screenshot_if_available
+      - privacy_text_if_available
+review_rules:
+  - "Do not assign a UX pass from this baseline."
+  - "Screenshots alone do not grant visual_contract_pass."
+  - "Ambiguous visual checks are NEEDS_HUMAN_REVIEW."
+  - "Unavailable scale states are NEEDS_HUMAN_REVIEW with capture status NOT_CAPTURED."
+  - "Current Home and Canvas surfaces are before-state evidence only, not retained target behavior."
