@@ -7,6 +7,7 @@ from typing import Any, Callable
 from ritualist.errors import RitualistError
 from ritualist.home.actions import HomeActionService
 from ritualist.runtime_control import RuntimeControl
+from ritualist.shortcuts import ShortcutService, shortcut_kind_for_component, shortcut_request_from_component
 from ritualist.target_resolution import (
     build_target_plan_summary,
     compile_target_start_plan,
@@ -24,6 +25,7 @@ from .storage import load_canvas
 @dataclass
 class CanvasRuntimeController:
     action_service: HomeActionService = field(default_factory=HomeActionService)
+    shortcut_service: ShortcutService = field(default_factory=ShortcutService)
     context: CanvasRuntimeContext = field(default_factory=CanvasRuntimeContext)
     runtime_controls: dict[str, RuntimeControl] = field(default_factory=dict)
 
@@ -66,6 +68,8 @@ class CanvasRuntimeController:
             return self._dispatch_controller_action(component, action)
         if component.type in {"target.card", "target.status"}:
             return self._dispatch_target_action(component, action)
+        if shortcut_kind_for_component(component.type) is not None:
+            return self._dispatch_shortcut_action(component, action)
         if component.type == "recent.activity" and action == "open_logs":
             path = self.action_service.resolve_runs_path()
             return _success(component, action, f"run logs path resolved: {path}", {"path": str(path)})
@@ -161,6 +165,23 @@ class CanvasRuntimeController:
                 "target_summary": summary.to_dict(),
                 "target_plan": target_plan_payload(resolution, plan, doctor),
             },
+        )
+
+    def _dispatch_shortcut_action(
+        self,
+        component: CanvasComponent,
+        action: str,
+    ) -> CanvasComponentActionResult:
+        request = shortcut_request_from_component(component)
+        if action != request.action_id:
+            raise RitualistError(f"{component.id}: unsupported shortcut action '{action}'")
+        result = self.shortcut_service.open(request)
+        return CanvasComponentActionResult(
+            component.id,
+            action,
+            result.status,
+            result.message,
+            data={"shortcut": result.to_dict()},
         )
 
 

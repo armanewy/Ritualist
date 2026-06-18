@@ -236,6 +236,12 @@ def bundled_canvas_ids() -> tuple[str, ...]:
 def _mock_props(type_id: str) -> dict[str, object]:
     if type_id in {"ritual.card", "target.card", "app.launcher", "window.layout_button"}:
         return {"title": f"Mock {type_id}", "subtitle": "Generated component"}
+    if type_id == "shortcut.folder":
+        return {"title": "Mock folder shortcut", "path": "C:/Ritualist/MockFolder"}
+    if type_id == "shortcut.app":
+        return {"title": "Mock app shortcut", "path": "C:/Ritualist/MockApp.exe"}
+    if type_id == "shortcut.url":
+        return {"title": "Mock URL shortcut", "url": "https://example.com/docs"}
     if type_id == "text.label":
         return {"text": "Mock label"}
     if type_id == "image":
@@ -258,6 +264,12 @@ def _mock_binding(type_id: str) -> CanvasComponentBinding | None:
         return CanvasComponentBinding(kind=CanvasBindingKind.RECENT_RUNS, id="local")
     if type_id == "app.launcher":
         return CanvasComponentBinding(kind=CanvasBindingKind.APP_LAUNCHER, id="local_app")
+    if type_id == "shortcut.folder":
+        return CanvasComponentBinding(kind=CanvasBindingKind.SHORTCUT_FOLDER, path="C:/Ritualist/MockFolder")
+    if type_id == "shortcut.app":
+        return CanvasComponentBinding(kind=CanvasBindingKind.SHORTCUT_APP, path="C:/Ritualist/MockApp.exe")
+    if type_id == "shortcut.url":
+        return CanvasComponentBinding(kind=CanvasBindingKind.SHORTCUT_URL, url="https://example.com/docs")
     if type_id == "window.layout_button":
         return CanvasComponentBinding(kind=CanvasBindingKind.WINDOW_LAYOUT, id="layout_preview")
     return None

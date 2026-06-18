@@ -29,6 +29,9 @@ class CanvasBindingKind(StrEnum):
     TARGET_START = "target.start"
     PRIMITIVE_PLAN_PREVIEW = "primitive_plan_preview"
     APP_LAUNCHER = "app.launcher"
+    SHORTCUT_FOLDER = "shortcut.folder"
+    SHORTCUT_APP = "shortcut.app"
+    SHORTCUT_URL = "shortcut.url"
     WINDOW_LAYOUT = "window.layout"
     RUNTIME_STATE = "runtime_state"
     DOCTOR_STATUS = "doctor_status"
@@ -79,6 +82,9 @@ class CanvasPropType(StrEnum):
     ENUM = "enum"
     COLOR = "color"
     LOCAL_ASSET_PATH = "local_asset_path"
+    LOCAL_FOLDER_PATH = "local_folder_path"
+    LOCAL_APP_PATH = "local_app_path"
+    URL = "url"
     RECIPE_ID = "recipe_id"
     TARGET_ID = "target_id"
 
@@ -283,6 +289,8 @@ class CanvasComponentBinding(BaseModel):
     intent_id: str | None = None
     target: str | None = None
     target_id: str | None = None
+    path: str | None = None
+    url: str | None = None
     primitive_plan_id: str | None = None
     runtime_run_id: str | None = None
     category: str | None = None
@@ -294,6 +302,8 @@ class CanvasComponentBinding(BaseModel):
         "intent_id",
         "target",
         "target_id",
+        "path",
+        "url",
         "primitive_plan_id",
         "runtime_run_id",
         "category",
@@ -315,6 +325,10 @@ class CanvasComponentBinding(BaseModel):
             return self.target or self.target_id or self.id or ""
         if self.kind is CanvasBindingKind.PRIMITIVE_PLAN_PREVIEW:
             return self.primitive_plan_id or self.id or ""
+        if self.kind in {CanvasBindingKind.SHORTCUT_FOLDER, CanvasBindingKind.SHORTCUT_APP}:
+            return self.path or self.id or ""
+        if self.kind is CanvasBindingKind.SHORTCUT_URL:
+            return self.url or self.id or ""
         if self.kind is CanvasBindingKind.RUNTIME_STATE:
             return self.runtime_run_id or self.id or ""
         if self.kind is CanvasBindingKind.CATEGORY:

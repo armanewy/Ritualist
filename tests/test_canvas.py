@@ -502,7 +502,10 @@ def test_triggering_components_declare_policy_implications() -> None:
     assert triggering
     assert all(component.requires_policy_or_doctor_state for component in triggering)
     assert all(component.actions for component in triggering)
-    assert all(component.allowed_in_untrusted_packs is False for component in triggering)
+    assert all(
+        component.allowed_in_untrusted_packs is False or component.type_id.startswith("shortcut.")
+        for component in triggering
+    )
 
 
 def test_imported_canvas_policy_blocks_triggering_components() -> None:

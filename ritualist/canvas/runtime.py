@@ -7,10 +7,17 @@ from enum import StrEnum
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+from urllib.parse import urlparse
 
 from ritualist.intent_planner import build_plan_doctor_report
 from ritualist.recipe_loader import discover_recipes
 from ritualist.run_logs import RunRecord, list_recent_runs, summarize_run_record
+from ritualist.shortcuts import (
+    ShortcutKind,
+    shortcut_kind_for_component,
+    shortcut_request_from_component,
+    shortcut_setup_issue,
+)
 from ritualist.target_resolution import (
     TargetResolutionResult,
     build_target_plan_summary,
@@ -37,6 +44,8 @@ class CanvasComponentAction(StrEnum):
     RESUME = "resume"
     STOP = "stop"
     PREVIEW_PLAN = "preview_plan"
+    OPEN = "open"
+    LAUNCH = "launch"
 
 
 class CanvasRuntimeCommand(StrEnum):
@@ -244,6 +253,16 @@ def _component_runtime_state(
     title = str(props.get("title") or component.id)
     warnings: list[str] = []
 
+    shortcut_kind = shortcut_kind_for_component(component.type)
+    if shortcut_kind is not None:
+        return _shortcut_runtime_state(
+            component,
+            kind=shortcut_kind,
+            title=title,
+            binding_kind=binding_kind,
+            reference=reference,
+        )
+
     if component.type == "ritual.card":
         reference = reference or str(props.get("recipe_id") or component.id)
         warnings.extend(_unresolved_recipe_warnings(component.id, reference, recipe_ids))
@@ -377,6 +396,42 @@ def _component_runtime_state(
     )
 
 
+def _shortcut_runtime_state(
+    component: CanvasComponent,
+    *,
+    kind: ShortcutKind,
+    title: str,
+    binding_kind: CanvasBindingKind,
+    reference: str,
+) -> CanvasComponentRuntimeState:
+    request = shortcut_request_from_component(component)
+    action = request.action_id
+    issue = shortcut_setup_issue(request)
+    disabled = (action,) if issue else ()
+    enabled = () if issue else (action,)
+    state = "needs_setup" if issue else "ready"
+    return CanvasComponentRuntimeState(
+        component.id,
+        component.type,
+        state=state,
+        status="warning" if issue else "ready",
+        title=title,
+        message=issue or f"{kind.value} shortcut ready",
+        binding_kind=binding_kind.value,
+        binding_reference=reference or request.target,
+        enabled_actions=enabled,
+        disabled_actions=disabled,
+        warnings=(issue,) if issue else (),
+        data={
+            "shortcut": {
+                "kind": kind.value,
+                "action": action,
+                "target_label": _shortcut_target_label(request),
+            }
+        },
+    )
+
+
 def _recipe_ids(context: CanvasRuntimeContext) -> set[str]:
     if context.recipe_ids is not None:
         return set(context.recipe_ids)
@@ -503,6 +558,20 @@ def _display_data(component: CanvasComponent, context: CanvasRuntimeContext) -> 
     if component.type in {"text.label", "image", "shape", "spacer/divider"}:
         return props
     return props
+
+
+def _shortcut_target_label(request: Any) -> str:
+    target = str(getattr(request, "target", "") or "")
+    if getattr(request, "kind", None) is ShortcutKind.URL:
+        return urlparse(target).netloc or target
+    if target:
+        return Path(target).name or target
+    return str(
+        getattr(request, "app_id", "")
+        or getattr(request, "title", "")
+        or getattr(request, "component_id", "")
+        or ""
+    )
 
 
 def _unresolved_recipe_warnings(component_id: str, reference: str, recipe_ids: set[str]) -> tuple[str, ...]:

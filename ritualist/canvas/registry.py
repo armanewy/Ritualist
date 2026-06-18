@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 from ritualist.recipe_loader import discover_recipes
+from ritualist.shortcuts import validate_shortcut_props
 from ritualist.target_resolution import builtin_target_catalog
 
 from .models import (
@@ -217,6 +218,14 @@ def _validate_component_against_spec(
     _validate_no_arbitrary_code(component, props, errors)
     _validate_no_auto_run(component, props, errors)
     _validate_image_path(component, props, canvas_dir, errors)
+    shortcut_errors, shortcut_warnings = validate_shortcut_props(
+        component.id,
+        component.type,
+        props,
+        imported=imported,
+    )
+    errors.extend(shortcut_errors)
+    warnings.extend(shortcut_warnings)
 
     if imported and (
         not spec.allowed_in_untrusted_packs
@@ -375,10 +384,16 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             "app.launcher",
             "App Launcher",
             "launcher",
-            "Structured launcher button for a configured local app.",
-            supported=(CanvasBindingKind.APP_LAUNCHER,),
+            "Legacy structured launcher alias for a configured local app shortcut.",
+            supported=(CanvasBindingKind.APP_LAUNCHER, CanvasBindingKind.SHORTCUT_APP),
             required=("title",),
-            optional=("command", "app_id"),
+            optional=("path", "command", "app_id"),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("path", CanvasPropType.LOCAL_APP_PATH, hint="local_app_picker"),
+                _prop("command", CanvasPropType.LOCAL_APP_PATH, hint="legacy_local_app_picker"),
+                _prop("app_id", CanvasPropType.STRING, hint="single_line"),
+            ),
             size=(220, 96),
             minimum=(160, 64),
             behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
@@ -388,6 +403,75 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             requires_policy=True,
             actions=("launch",),
             untrusted=False,
+        ),
+        _component(
+            "shortcut.folder",
+            "Folder Shortcut",
+            "shortcut",
+            "Instant native handoff that opens a reviewed local folder.",
+            supported=(CanvasBindingKind.SHORTCUT_FOLDER, CanvasBindingKind.STATIC),
+            required=("title",),
+            optional=("path", "folder"),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("path", CanvasPropType.LOCAL_FOLDER_PATH, hint="local_folder_picker"),
+                _prop("folder", CanvasPropType.LOCAL_FOLDER_PATH, hint="legacy_local_folder_picker"),
+            ),
+            size=(240, 96),
+            minimum=(160, 64),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.LAUNCHES_APP,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("open",),
+            untrusted=True,
+        ),
+        _component(
+            "shortcut.app",
+            "App Shortcut",
+            "shortcut",
+            "Instant native handoff that launches a reviewed local executable or shortcut.",
+            supported=(CanvasBindingKind.SHORTCUT_APP, CanvasBindingKind.APP_LAUNCHER, CanvasBindingKind.STATIC),
+            required=("title",),
+            optional=("path", "command", "app_id"),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("path", CanvasPropType.LOCAL_APP_PATH, hint="local_app_picker"),
+                _prop("command", CanvasPropType.LOCAL_APP_PATH, hint="legacy_local_app_picker"),
+                _prop("app_id", CanvasPropType.STRING, hint="single_line"),
+            ),
+            size=(240, 96),
+            minimum=(160, 64),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.LAUNCHES_APP,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("launch",),
+            untrusted=True,
+        ),
+        _component(
+            "shortcut.url",
+            "URL Shortcut",
+            "shortcut",
+            "Instant native handoff that opens an http or https URL in the default browser.",
+            supported=(CanvasBindingKind.SHORTCUT_URL, CanvasBindingKind.STATIC),
+            required=("title", "url"),
+            optional=(),
+            props=(
+                _prop("title", CanvasPropType.STRING, required=True, hint="single_line"),
+                _prop("url", CanvasPropType.URL, required=True, hint="url"),
+            ),
+            size=(240, 96),
+            minimum=(160, 64),
+            behavior=CanvasUpdateBehavior.USER_INTERACTION_ONLY,
+            risk=CanvasComponentRisk.LAUNCHES_APP,
+            can_trigger=True,
+            display_only=False,
+            requires_policy=True,
+            actions=("open",),
+            untrusted=True,
         ),
         _component(
             "window.layout_button",
@@ -605,6 +689,10 @@ def _binding_for(kind: CanvasBindingKind, reference: str) -> CanvasComponentBind
         return CanvasComponentBinding(kind=kind, intent_id=reference)
     if kind is CanvasBindingKind.APP_LAUNCHER:
         return CanvasComponentBinding(kind=kind, id=reference)
+    if kind in {CanvasBindingKind.SHORTCUT_FOLDER, CanvasBindingKind.SHORTCUT_APP}:
+        return CanvasComponentBinding(kind=kind, path=reference)
+    if kind is CanvasBindingKind.SHORTCUT_URL:
+        return CanvasComponentBinding(kind=kind, url=reference)
     return CanvasComponentBinding(kind=kind, id=reference)
 
 
@@ -613,6 +701,14 @@ def _legacy_binding_kind(component: CanvasComponent, props: dict[str, object]) -
         return CanvasBindingKind.RECIPE
     if "target" in props or "target_id" in props:
         return CanvasBindingKind.TARGET_START
+    if component.type == "shortcut.folder" and ("path" in props or "folder" in props):
+        return CanvasBindingKind.SHORTCUT_FOLDER
+    if component.type in {"shortcut.app", "app.launcher"} and (
+        "path" in props or "command" in props or "app_id" in props
+    ):
+        return CanvasBindingKind.SHORTCUT_APP
+    if component.type == "shortcut.url" and "url" in props:
+        return CanvasBindingKind.SHORTCUT_URL
     if component.type in {"clock", "text.label", "image", "shape", "spacer/divider", "category.dock"}:
         return CanvasBindingKind.STATIC
     return None
@@ -624,7 +720,13 @@ def _legacy_binding_reference(kind: CanvasBindingKind, props: dict[str, object])
     if kind is CanvasBindingKind.TARGET_START:
         return str(props.get("target") or props.get("target_id") or "").strip()
     if kind is CanvasBindingKind.APP_LAUNCHER:
-        return str(props.get("app_id") or props.get("command") or "").strip()
+        return str(props.get("path") or props.get("command") or props.get("app_id") or "").strip()
+    if kind is CanvasBindingKind.SHORTCUT_FOLDER:
+        return str(props.get("path") or props.get("folder") or "").strip()
+    if kind is CanvasBindingKind.SHORTCUT_APP:
+        return str(props.get("path") or props.get("command") or "").strip()
+    if kind is CanvasBindingKind.SHORTCUT_URL:
+        return str(props.get("url") or "").strip()
     return ""
 
 
