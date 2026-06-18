@@ -51,6 +51,18 @@ def test_project_room_canvas_validates_and_binds_hero_loop() -> None:
     canvas = load_bundled_canvas("project_room")
     result = validate_canvas(CANVAS_PATH)
     components = {component.id: component for component in canvas.components}
+    model = build_canvas_runtime_model(
+        canvas,
+        context=CanvasRuntimeContext(recipe_ids={"coding_mode"}),
+    )
+    spatial_ids = {
+        "spatial_field_shell",
+        "editor_ghost_zone",
+        "terminal_ghost_zone",
+        "docs_ghost_zone",
+        "optional_tracker_ghost_zone",
+        "spatial_preflight_note",
+    }
 
     assert result.valid, result.errors
     assert components["coding_mode_card"].type == "ritual.card"
@@ -67,6 +79,19 @@ def test_project_room_canvas_validates_and_binds_hero_loop() -> None:
     assert components["docs_shortcut"].type == "shortcut.url"
     assert components["tracker_shortcut"].type == "shortcut.url"
     assert not any(component.type == "app.launcher" for component in canvas.components)
+    assert {components[component_id].type for component_id in spatial_ids} == {
+        "shape",
+        "text.label",
+    }
+    for component_id in spatial_ids:
+        component = components[component_id]
+        state = model.component_state(component_id)
+        assert component.binding is None
+        assert state.enabled_actions == ()
+        assert state.binding_kind == "static"
+        assert state.data
+    assert components["spatial_field_shell"].z < components["project_folder"].z
+    assert components["spatial_preflight_note"].z < components["tracker_shortcut"].z
 
 
 def test_coding_mode_recipe_stays_within_safe_workspace_actions() -> None:

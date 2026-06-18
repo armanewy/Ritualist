@@ -46,6 +46,76 @@ components:
         - Shortcuts
         - Runtime
         - Reference
+  - id: spatial_field_shell
+    type: shape
+    x: 612
+    y: 124
+    width: 384
+    height: 296
+    z: 4
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 8
+  - id: editor_ghost_zone
+    type: shape
+    x: 804
+    y: 124
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.focus_ring}"
+      border_width: 1
+      radius: 6
+  - id: terminal_ghost_zone
+    type: shape
+    x: 616
+    y: 220
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 6
+  - id: docs_ghost_zone
+    type: shape
+    x: 804
+    y: 220
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 6
+  - id: optional_tracker_ghost_zone
+    type: shape
+    x: 804
+    y: 316
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.warning}"
+      border_width: 1
+      radius: 6
+  - id: spatial_preflight_note
+    type: text.label
+    x: 624
+    y: 328
+    width: 172
+    height: 80
+    z: 6
+    props:
+      text: Preflight shows intended editor, terminal, docs, and optional tracker zones. Existing windows stay user-owned.
+      size: 11
   - id: coding_mode_card
     type: ritual.card
     x: 56

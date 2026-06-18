@@ -55,6 +55,12 @@ def test_project_room_composition_keeps_preflight_shortcuts_in_first_viewport() 
             "coding_mode_card",
             "coding_status",
             "coding_controller",
+            "spatial_field_shell",
+            "editor_ghost_zone",
+            "terminal_ghost_zone",
+            "docs_ghost_zone",
+            "optional_tracker_ghost_zone",
+            "spatial_preflight_note",
             "project_folder",
             "editor_shortcut",
             "terminal_shortcut",
@@ -85,6 +91,11 @@ def test_project_room_composition_keeps_preflight_shortcuts_in_first_viewport() 
         ("coding_mode_card", "coding_status", "coding_controller"),
     )
     assert components["coding_mode_card"].x < components["project_folder"].x
+    assert components["spatial_field_shell"].z < components["project_folder"].z
+    assert components["editor_ghost_zone"].z < components["editor_shortcut"].z
+    assert components["terminal_ghost_zone"].z < components["terminal_shortcut"].z
+    assert components["docs_ghost_zone"].z < components["docs_shortcut"].z
+    assert components["optional_tracker_ghost_zone"].z < components["tracker_shortcut"].z
     assert components["project_folder"].y == components["editor_shortcut"].y
     assert components["terminal_shortcut"].y == components["docs_shortcut"].y
     assert components["recent_activity"].y > components["coding_status"].y
