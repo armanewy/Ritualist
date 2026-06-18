@@ -137,6 +137,11 @@ ApplicationWindow {
                status === "confirming" || status === "confirmation"
     }
 
+    function stateIsRest(status) {
+        return status === "" || status === "ready" || status === "idle" ||
+               status === "success" || status === "stopped" || status === "compatible"
+    }
+
     function stateIsSuccess(status) {
         return status === "success" || status === "compatible"
     }
@@ -257,6 +262,68 @@ ApplicationWindow {
             }
         }
         return false
+    }
+
+    function componentIsAmbientRestSurface(component) {
+        if (!component || root.editMode || root.quietInstrumentEngaged()) {
+            return false
+        }
+        if (!root.stateIsRest(root.activeState(component))) {
+            return false
+        }
+        var typeName = component.type || ""
+        return typeName === "text.label" || typeName === "clock" ||
+               typeName === "category.dock" || typeName === "shape" ||
+               typeName === "divider" || typeName === "spacer/divider"
+    }
+
+    function componentIsSupportingRestSurface(component) {
+        if (!component || root.editMode || root.quietInstrumentEngaged()) {
+            return false
+        }
+        if (!root.stateIsRest(root.activeState(component))) {
+            return false
+        }
+        var typeName = component.type || ""
+        return typeName === "ritual.status" || typeName === "ritual.controller" ||
+               typeName === "recent.activity" || typeName === "doctor.badge" ||
+               typeName === "target.card" || typeName === "target.status"
+    }
+
+    function componentFrameColor(component, status, ambientRestSurface, supportingRestSurface) {
+        if (ambientRestSurface) {
+            return "transparent"
+        }
+        if (supportingRestSurface) {
+            return root.token("panel_alt", "#0e151f")
+        }
+        return root.componentColor(status, component.type)
+    }
+
+    function componentFrameBorderColor(component, status, selected, ambientRestSurface, supportingRestSurface) {
+        if (selected) {
+            return root.token("accent", "#3dd6a5")
+        }
+        if (ambientRestSurface) {
+            return "transparent"
+        }
+        if (supportingRestSurface) {
+            return root.token("border", "#203044")
+        }
+        return root.borderColor(status)
+    }
+
+    function componentShadowOpacity(receded, ambientRestSurface, supportingRestSurface) {
+        if (receded) {
+            return 0.04
+        }
+        if (ambientRestSurface) {
+            return 0
+        }
+        if (supportingRestSurface) {
+            return 0.06
+        }
+        return root.shadowMode === "rich" ? 0.22 : 0.12
     }
 
     function ritualState(component) {
@@ -1151,6 +1218,8 @@ ApplicationWindow {
                             property string componentVisualState: root.activeState(modelData)
                             property bool quietInstrument: root.componentIsQuietInstrument(modelData)
                             property bool receded: !quietInstrument && root.quietInstrumentEngaged()
+                            property bool ambientRestSurface: root.componentIsAmbientRestSurface(modelData)
+                            property bool supportingRestSurface: root.componentIsSupportingRestSurface(modelData)
                             property real quietAvailableWidth: Math.max(320, scroll.width - root.spaceLg * 2)
                             property real quietWidth: Math.min(quietAvailableWidth, Math.max(520, Math.round(scroll.width * 0.36)), 640)
                             property real quietHeight: Math.min(Math.max(280, modelData.height), Math.max(280, scroll.height - root.spaceLg * 2), 360)
@@ -1190,7 +1259,11 @@ ApplicationWindow {
                                 height: parent.height
                                 radius: root.radiusLg
                                 color: root.token("border", "#203044")
-                                opacity: componentShell.receded ? 0.04 : (root.shadowMode === "rich" ? 0.22 : 0.12)
+                                opacity: root.componentShadowOpacity(
+                                    componentShell.receded,
+                                    componentShell.ambientRestSurface,
+                                    componentShell.supportingRestSurface
+                                )
                                 visible: root.shadowMode !== "none" && index < root.maxAnimatedComponents
                             }
 
@@ -1201,8 +1274,19 @@ ApplicationWindow {
 
                             anchors.fill: parent
                             radius: root.radiusLg
-                            color: root.componentColor(componentShell.componentVisualState, modelData.type)
-                            border.color: selected ? root.token("accent", "#3dd6a5") : root.borderColor(componentShell.componentVisualState)
+                            color: root.componentFrameColor(
+                                modelData,
+                                componentShell.componentVisualState,
+                                componentShell.ambientRestSurface,
+                                componentShell.supportingRestSurface
+                            )
+                            border.color: root.componentFrameBorderColor(
+                                modelData,
+                                componentShell.componentVisualState,
+                                selected,
+                                componentShell.ambientRestSurface,
+                                componentShell.supportingRestSurface
+                            )
                             border.width: selected ? 3 : 1
                             opacity: componentShell.receded ? 0.46 : (root.actionBusy && !selected ? 0.92 : 1.0)
 

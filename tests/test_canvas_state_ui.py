@@ -89,6 +89,38 @@ def test_canvas_use_qml_has_quiet_instrument_active_run_layout() -> None:
         assert snippet in qml
 
 
+def test_canvas_use_qml_uses_ambient_rest_chrome_without_changing_actions() -> None:
+    qml = _qml()
+
+    for snippet in (
+        "function stateIsRest(status)",
+        "function componentIsAmbientRestSurface(component)",
+        "function componentIsSupportingRestSurface(component)",
+        "function componentFrameColor(component, status, ambientRestSurface, supportingRestSurface)",
+        "function componentFrameBorderColor(component, status, selected, ambientRestSurface, supportingRestSurface)",
+        "function componentShadowOpacity(receded, ambientRestSurface, supportingRestSurface)",
+        "if (!root.stateIsRest(root.activeState(component)))",
+        'typeName === "text.label"',
+        'typeName === "clock"',
+        'typeName === "category.dock"',
+        'typeName === "ritual.status"',
+        'typeName === "ritual.controller"',
+        'typeName === "recent.activity"',
+        'typeName === "target.card"',
+        "property bool ambientRestSurface: root.componentIsAmbientRestSurface(modelData)",
+        "property bool supportingRestSurface: root.componentIsSupportingRestSurface(modelData)",
+        'return "transparent"',
+        'return root.token("panel_alt", "#0e151f")',
+        'return root.token("border", "#203044")',
+    ):
+        assert snippet in qml
+
+    ambient_section = qml[qml.index("function componentIsAmbientRestSurface") : qml.index("function ritualState")]
+    assert "root.dispatch" not in ambient_section
+    assert "onClicked" not in ambient_section
+    assert "actionId" not in ambient_section
+
+
 def test_canvas_use_qml_uses_existing_ritual_actions_with_state_specific_labels() -> None:
     qml = _qml()
 

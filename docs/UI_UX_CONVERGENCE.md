@@ -113,3 +113,16 @@ The second implementation milestone remains QML-only:
   ownership, and last-step metadata;
 - avoid raw run paths, new action IDs, approval buttons inside the Room, or any
   new capture/automation behavior.
+
+## Third Milestone
+
+The third implementation milestone is shared rest-state chrome:
+
+- make display-only elements such as labels, clocks, docks, and dividers ambient
+  at rest instead of card-like;
+- make supporting status, controller, target, Doctor, and recent-activity
+  surfaces lower-emphasis while still readable and actionable;
+- keep ritual cards, shortcut handoffs, and active/error states structurally
+  clear;
+- do not change component IDs, action IDs, bindings, or packaged acceptance
+  expectations.
