@@ -2,13 +2,14 @@
 
 Canvas is the implementation layer that lets Ritualist present a ritual-aware
 desktop command surface without becoming a Windows shell replacement, file
-manager, wallpaper renderer, or generic widget platform. Home remains the
-current compatibility surface. Canvas Foundation v1 adds the data model,
-component registry, validation, storage, default templates, and performance
-smoke. Canvas Runtime Components v1 adds model/controller bindings from those
-typed components to existing Ritualist recipe, Doctor, target, runtime, and
+manager, wallpaper renderer, or generic widget platform. Home remains a
+compatibility surface. Canvas Foundation v1 adds the data model, component
+registry, validation, storage, default templates, and performance smoke. Canvas
+Runtime Components v1 adds model/controller bindings from those typed
+components to existing Ritualist recipe, Doctor, target, runtime, and
 run-history services. Canvas Use Mode MVP adds a bundled typed QML renderer for
-using a Canvas document as a runtime command surface.
+using a Canvas document as a runtime command surface. The Canvas Edit model and
+Room Builder UI MVP now exist for configuring typed native components.
 
 The current pipeline is:
 
@@ -303,8 +304,14 @@ compatible and performs live binding checks by default. Pass
 ## Use Mode And Edit Mode
 
 Canvas metadata names Use Mode and Edit Mode. Use Mode is implemented as a
-runtime command surface. Edit Mode is future UI work for
-moving/resizing/configuring typed components.
+runtime command surface. Edit Mode now has model/controller support and a Room
+Builder UI MVP for moving, resizing, selecting, inspecting, validating, and
+saving typed components. Preview and validation still must not execute
+component behavior.
+
+Next Canvas-facing work is hero-room depth, clearer runtime/editor state UX,
+safe shortcuts, and Suggestions that draft changes only after explicit user
+review. It is not a rebuild of Edit Mode.
 
 ## Shell Boundary
 
@@ -312,10 +319,15 @@ Canvas Mode is a reversible desktop canvas layer. It is not v1 shell
 replacement. Ritualist does not hide the taskbar, replace Explorer, use kiosk
 mode, or claim ownership of the Windows session.
 
-The supported stage is Desktop Work-Area mode on top of the normal desktop.
-Desktop-host expansion is frozen after that stage: no immersive/fullscreen
-mode, shell replacement research, taskbar manipulation, WorkerW/Progman
-attachment, or desktop icon integration belongs on the v0.2 release line.
+The supported stage is Desktop Work-Area mode on top of the normal desktop,
+with wallpaper passthrough to whatever Windows or a wallpaper app already owns.
+Ritualist does not render, manage, pause, stop, or replace wallpaper.
+
+Blank-area click-through is not implemented and remains frozen. Desktop-host
+expansion is frozen after Desktop Work-Area mode and wallpaper passthrough: no
+native click-through research, immersive/fullscreen mode, shell replacement
+research, taskbar manipulation, WorkerW/Progman attachment, or desktop icon
+integration belongs on the v0.2 release line.
 
 ## Pack Domains
 

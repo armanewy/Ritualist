@@ -1,7 +1,8 @@
 # Room Builder Roadmap
 
 Room Builder is the product-facing name for Canvas Edit Mode. The foundation
-should be staged so each layer is testable before the next layer adds more UI.
+has landed through the Edit Model and UI MVP; future work should deepen the
+three hero Rooms and improve editing/state quality, not rebuild Edit Mode.
 
 ## Stage 1: Theme Token Schema
 
@@ -60,7 +61,9 @@ Packaged acceptance must still pass or honestly mark human-review items.
 
 ## Stage 7: Edit Model Foundation
 
-Add model/controller support before the full editor UI:
+Status: complete.
+
+Model/controller support exists before the full editor UI:
 
 - edit session lifecycle
 - selection model
@@ -76,7 +79,9 @@ Editor previews must not auto-run behavior.
 
 ## Stage 8: Room Builder UI MVP
 
-Build a minimal visual editor:
+Status: complete.
+
+The minimal visual editor exists:
 
 - top bar with Done and Cancel
 - component palette
@@ -87,6 +92,36 @@ Build a minimal visual editor:
 - save/discard confirmation
 
 Behavior bindings should be shown and validated, not executed from preview.
+
+## Stage 9: Hero Room Depth
+
+Deepen exactly the promoted starter Rooms:
+
+- Gaming Room
+- Project Room
+- Support Desk
+
+Do not promote a fourth Room. `minimal_desktop` must remain available as an
+internal Desktop Work-Area fallback and acceptance fixture, not a promoted Room.
+
+Hero Room work should focus on better ritual cards, target/plan previews,
+status, recent activity, safe launch affordances, and evidence surfaces without
+adding new risky behavior.
+
+## Stage 10: State UX, Shortcuts, And Suggestions
+
+Improve the Room and Builder experience around:
+
+- visible states: ready, running, waiting, confirming, paused, stopped, failed,
+  interrupted, and draft/dirty editor state
+- keyboard shortcuts for safe editor and Room navigation commands
+- Suggestions that can draft recipes or Room changes only after explicit user
+  review
+
+Suggestions, shared/imported behavior, and imported Room content must never
+auto-run or auto-create recipes, Rooms, components, approvals, or risky actions.
+Blank-area click-through remains unimplemented and frozen; do not reopen
+desktop-host research for this stage.
 
 ## Required Evidence
 

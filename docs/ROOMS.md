@@ -40,12 +40,16 @@ rituals, target previews, status, controls, and recent activity.
 In Desktop Work-Area Use Mode, a Room layers Ritualist components over Windows
 and the user's wallpaper app. The wallpaper remains owned by Windows or the
 wallpaper app; Ritualist does not render, manage, pause, stop, or replace it.
-Blank desktop-area click-through is a target interaction policy, but it must be
-reported as unverified until machine evidence proves it.
+Blank desktop-area click-through is unimplemented and frozen for the current
+release line. Do not treat it as supported, and do not reopen desktop-host
+research to add it.
 
 **Edit Mode** or **Room Builder** is where a user safely changes a Room. It must
 operate through typed component schemas, validation, and explicit save/cancel
-flows. Builder previews must not auto-run behavior.
+flows. The Canvas Edit model and Room Builder UI MVP exist; future work should
+improve the editor around state, shortcuts, validation clarity, and hero-Room
+authoring rather than rebuilding Edit Mode. Builder previews must not auto-run
+behavior.
 
 **Run Mode** is the active ritual state. It must keep status, confirmation,
 pause/resume/stop controls, logs, and recovery visible.
@@ -77,6 +81,22 @@ python -m ritualist room show support_desk --json
 `room show` reads the bundled starter template for evidence and onboarding
 consistency. `canvas show` keeps the existing Canvas behavior, including user
 Canvas overrides.
+
+## Next Room Work
+
+Next Room work should deepen the three promoted hero Rooms, not add another
+promoted Room:
+
+- richer hero-room ritual cards, status, controls, recent activity, evidence,
+  and target/plan previews
+- clearer Room and Run state UX for ready, running, waiting, confirming,
+  paused, stopped, failed, interrupted, and recovery states
+- safe keyboard shortcuts for Room navigation and explicit commands
+- Suggestions that draft recipes or Room changes only after explicit user
+  review
+
+Imported or shared behavior, Suggestions, and Room content must never auto-run,
+auto-create recipes or Rooms, or bypass policy and confirmation gates.
 
 ## Pack Separation
 

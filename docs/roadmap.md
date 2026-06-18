@@ -14,9 +14,12 @@ Ritualist should not expand horizontally while release acceptance is open.
 - Keep product boundaries executable through tests and release acceptance
   evidence.
 - Keep Home and CLI workflows responsive and diagnosable.
-- Evolve Home toward Canvas as the Room implementation layer, without
-  replacing Explorer, hiding the taskbar, rendering wallpapers, or adding
-  arbitrary widget code.
+- Use Canvas as the Room implementation layer. Canvas Edit model and the Room
+  Builder UI MVP exist; do not restart that work while v0.2 acceptance remains
+  open.
+- Keep Desktop Work-Area mode and wallpaper passthrough bounded: Ritualist can
+  layer Room components over the normal desktop, but it does not replace
+  Explorer, hide the taskbar, render wallpapers, or add arbitrary widget code.
 - Keep recipes local-first, structured, Doctor-checkable, dry-runnable,
   confirmable, logged, and recoverable.
 - Improve target resolution and intent planning without adding arbitrary code
@@ -28,8 +31,8 @@ Ritualist should not expand horizontally while release acceptance is open.
 The current release line is frozen against new product systems and horizontal
 platform work. Do not add:
 
-- desktop-host expansion beyond Desktop Work-Area Mode and wallpaper
-  passthrough
+- desktop-host expansion beyond the existing Desktop Work-Area Mode and
+  wallpaper passthrough
 - native blank-area click-through, component-island windows, WorkerW/Progman
   attachment, desktop icon integration, fullscreen couch mode, shell
   replacement, or taskbar manipulation
@@ -48,12 +51,16 @@ platform work. Do not add:
 - Canvas Foundation: complete.
 - Canvas Runtime Components: complete. Components now have typed runtime state
   and explicit action dispatch through existing safe services.
-- Canvas Use Mode: current. The MVP renderer uses the Canvas view model,
+- Canvas Use Mode: complete. The MVP renderer uses the Canvas view model,
   component geometry, runtime state, and explicit safe dispatch.
-- Canvas Edit Mode / Room Builder: later, after the release gate. Editing
-  should configure typed native components, never arbitrary user-supplied QML,
-  JavaScript, HTML, or Python.
-- Visual polish: only when it improves one of the hero Room loops.
+- Canvas Edit Model: complete. Editing is model/controller support for typed
+  native components, not arbitrary user-supplied QML, JavaScript, HTML, or
+  Python.
+- Room Builder UI MVP: complete. Treat it as the baseline editor surface, not a
+  system to rebuild.
+- Next work: deepen exactly the three hero Rooms, improve visible state UX,
+  add focused shortcuts, and build the Suggestions-to-draft loop.
+- Visual polish: only when it improves one of the three hero Room loops.
 
 ## Near-Term Primitive Direction
 
