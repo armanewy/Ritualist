@@ -48,6 +48,7 @@ def run_home(*, mock: bool = False) -> int:
         payloadChanged = Signal()
         metricsChanged = Signal()
         recentActivityChanged = Signal()
+        learningChanged = Signal()
         installedModelLoaded = Signal(object)
         installedModelLoadFailed = Signal(str)
         actionStateChanged = Signal()
@@ -92,6 +93,10 @@ def run_home(*, mock: bool = False) -> int:
             self._runtime_control: Any | None = None
             self._runtime_paused = False
             self._process_starter = process_starter
+            self._learning_status = _home_learning_status_payload()
+            self._learning_sources = _home_learning_sources_payload()
+            self._onboarding_state = _home_onboarding_state_payload()
+            self._learning_delete_pending = False
             self.installedModelLoaded.connect(self._replace_model)
             self.installedModelLoadFailed.connect(self._mark_load_failed)
             self.actionCompleted.connect(self._complete_action)
@@ -144,6 +149,22 @@ def run_home(*, mock: bool = False) -> int:
         @Property(int, notify=recentActivityChanged)
         def minStatusDwellMs(self) -> int:
             return self._min_status_dwell_ms
+
+        @Property("QVariantMap", notify=learningChanged)
+        def learningStatus(self) -> dict[str, object]:
+            return self._learning_status
+
+        @Property("QVariantMap", notify=learningChanged)
+        def learningSources(self) -> dict[str, object]:
+            return self._learning_sources
+
+        @Property("QVariantMap", notify=learningChanged)
+        def onboardingState(self) -> dict[str, object]:
+            return self._onboarding_state
+
+        @Property(bool, notify=learningChanged)
+        def learningDeletePending(self) -> bool:
+            return self._learning_delete_pending
 
         @Slot()
         def drainMockEvents(self) -> None:
@@ -236,6 +257,69 @@ def run_home(*, mock: bool = False) -> int:
                 if started
                 else "Could not open classic GUI"
             )
+            self.metricsChanged.emit()
+
+        @Slot("QVariantList")
+        def enableLocalLearning(self, source_ids: object) -> None:
+            try:
+                payload = _enable_home_learning(_coerce_source_ids(source_ids))
+            except RitualistError as exc:
+                self._last_event_label = str(exc)
+                self.metricsChanged.emit()
+                return
+            _complete_home_learning_onboarding("enabled", _coerce_source_ids(source_ids))
+            self._refresh_learning(payload)
+
+        @Slot()
+        def disableLocalLearning(self) -> None:
+            _complete_home_learning_onboarding("disabled", ())
+            self._refresh_learning(_disable_home_learning())
+
+        @Slot()
+        def skipLearningOnboarding(self) -> None:
+            self._onboarding_state = _skip_home_learning_onboarding()
+            self._last_event_label = "Local Learning skipped"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def customizeLearningSources(self) -> None:
+            self._onboarding_state = _skip_home_learning_onboarding(reopen_settings_later=True)
+            self._last_event_label = "Choose Local Learning sources"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def requestDeleteLearningData(self) -> None:
+            self._learning_delete_pending = True
+            self._last_event_label = "Confirm Delete Learning Data"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def cancelDeleteLearningData(self) -> None:
+            self._learning_delete_pending = False
+            self._last_event_label = "Delete Learning Data canceled"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def confirmDeleteLearningData(self) -> None:
+            payload = _delete_home_learning_data()
+            self._learning_delete_pending = False
+            self._refresh_learning()
+            self._last_event_label = f"Deleted {payload.get('deleted_count', 0)} learning data files"
+            self.metricsChanged.emit()
+
+        @Slot()
+        def openLearningActivityJournal(self) -> None:
+            payload = _home_learning_journal_payload()
+            path = Path(str(payload.get("path") or ""))
+            if path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+                self._last_event_label = f"Opened Activity Journal ({payload.get('count', 0)} events)"
+            else:
+                self._last_event_label = "Activity Journal is empty"
             self.metricsChanged.emit()
 
         @Slot(str)
@@ -446,6 +530,16 @@ def run_home(*, mock: bool = False) -> int:
             if _should_flush_home_event(event):
                 self._apply_events(self._bridge.flush())
 
+        def _refresh_learning(self, payload: dict[str, object] | None = None) -> None:
+            self._learning_status = payload or _home_learning_status_payload()
+            self._learning_sources = _home_learning_sources_payload()
+            self._onboarding_state = _home_onboarding_state_payload()
+            self.learningChanged.emit()
+            message = str(self._learning_status.get("message") or "").strip()
+            if message:
+                self._last_event_label = message
+                self.metricsChanged.emit()
+
         def _set_action_busy(self, busy: bool) -> None:
             if self._action_busy == busy:
                 return
@@ -628,6 +722,89 @@ def _rooms_payload() -> dict[str, object]:
     from ritualist.rooms import room_list_payload
 
     return room_list_payload()
+
+
+def _home_learning_status_payload() -> dict[str, object]:
+    from ritualist.learning_service import learning_status_payload
+
+    return learning_status_payload()
+
+
+def _home_learning_sources_payload() -> dict[str, object]:
+    from ritualist.learning_service import learning_sources_payload
+
+    return learning_sources_payload()
+
+
+def _enable_home_learning(source_ids: Sequence[str]) -> dict[str, object]:
+    from ritualist.learning_service import enable_learning
+
+    return enable_learning(source_ids)
+
+
+def _disable_home_learning() -> dict[str, object]:
+    from ritualist.learning_service import disable_learning
+
+    return disable_learning()
+
+
+def _home_learning_journal_payload() -> dict[str, object]:
+    from ritualist.learning_service import learning_journal_payload
+
+    return learning_journal_payload()
+
+
+def _delete_home_learning_data() -> dict[str, object]:
+    from ritualist.learning_service import delete_learning_data
+
+    return delete_learning_data()
+
+
+def _home_onboarding_state_payload() -> dict[str, object]:
+    from ritualist.onboarding import load_onboarding_state
+
+    return _onboarding_payload(load_onboarding_state())
+
+
+def _complete_home_learning_onboarding(
+    decision: str,
+    source_ids: Sequence[str],
+) -> dict[str, object]:
+    from ritualist.onboarding import complete_onboarding, save_onboarding_state
+
+    state = complete_onboarding(
+        local_learning_decision=decision,
+        selected_recommended_source_ids=list(source_ids),
+    )
+    return _onboarding_payload(save_onboarding_state(state))
+
+
+def _skip_home_learning_onboarding(*, reopen_settings_later: bool = True) -> dict[str, object]:
+    from ritualist.onboarding import save_onboarding_state, skip_onboarding
+
+    return _onboarding_payload(
+        save_onboarding_state(skip_onboarding(reopen_settings_later=reopen_settings_later))
+    )
+
+
+def _onboarding_payload(state: object) -> dict[str, object]:
+    payload = dict(state.to_dict()) if hasattr(state, "to_dict") else {}
+    payload["should_show_first_run"] = bool(getattr(state, "should_show_first_run", False))
+    payload["local_learning_enabled"] = bool(getattr(state, "local_learning_enabled", False))
+    payload["has_selected_learning_sources"] = bool(
+        getattr(state, "has_selected_learning_sources", False)
+    )
+    return payload
+
+
+def _coerce_source_ids(raw: object) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, Sequence):
+        return tuple(str(item) for item in raw)
+    return ()
 
 
 def _room_launch_command(room_id: str, host: str) -> tuple[str, list[str], object]:

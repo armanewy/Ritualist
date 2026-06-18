@@ -34,6 +34,10 @@ Window {
     property string confirmationPrompt: homeController ? homeController.confirmationPrompt : ""
     property var recentActivity: homeController ? homeController.recentActivity : []
     property int minStatusDwellMs: homeController ? homeController.minStatusDwellMs : 1200
+    property var learningStatus: homeController ? homeController.learningStatus : ({ "enabled": false, "effective_enabled": false, "selected_sources": [], "enabled_sources": [] })
+    property var learningSources: homeController ? homeController.learningSources : ({ "sources": [] })
+    property var onboardingState: homeController ? homeController.onboardingState : ({ "should_show_first_run": true, "reopen_settings_later": false })
+    property bool learningDeletePending: homeController ? homeController.learningDeletePending : false
     property bool detailOpen: false
     property var detailCard: ({})
 
@@ -75,6 +79,76 @@ Window {
             return
         }
         homeController.openRoom(roomId, host)
+    }
+
+    function loadLearningSources() {
+        learningSourceModel.clear()
+        var sources = learningSources && learningSources.sources ? learningSources.sources : []
+        for (var i = 0; i < sources.length; i += 1) {
+            var source = sources[i]
+            learningSourceModel.append({
+                "id": source.id || "",
+                "label": source.label || "",
+                "description": source.description || "",
+                "selected": source.selected === true || source.enabled === true
+            })
+        }
+    }
+
+    function selectedLearningSources() {
+        var selected = []
+        for (var i = 0; i < learningSourceModel.count; i += 1) {
+            var source = learningSourceModel.get(i)
+            if (source.selected === true) {
+                selected.push(source.id)
+            }
+        }
+        return selected
+    }
+
+    function setLearningSourceSelected(index, selected) {
+        learningSourceModel.setProperty(index, "selected", selected)
+        footerText = "Local Learning sources customized"
+    }
+
+    function firstRunLearningChoiceVisible() {
+        return onboardingState
+            && onboardingState.should_show_first_run === true
+            && learningStatus
+            && learningStatus.enabled !== true
+            && String(learningStatus.consent_timestamp || "") === ""
+    }
+
+    function enableLearningFromSelection() {
+        if (!homeController || mockMode) {
+            footerText = "Local Learning controls are disabled in mock mode"
+            return
+        }
+        homeController.enableLocalLearning(selectedLearningSources())
+    }
+
+    function disableLearning() {
+        if (!homeController || mockMode) {
+            footerText = "Local Learning controls are disabled in mock mode"
+            return
+        }
+        homeController.disableLocalLearning()
+    }
+
+    function customizeLearningSources() {
+        if (!homeController || mockMode) {
+            footerText = "Local Learning controls are disabled in mock mode"
+            return
+        }
+        homeController.customizeLearningSources()
+    }
+
+    function skipLearningOnboarding() {
+        if (!homeController || mockMode) {
+            footerText = "Local Learning controls are disabled in mock mode"
+            return
+        }
+        homeController.skipLearningOnboarding()
     }
 
     function clamp(value, minimum, maximum) {
@@ -335,6 +409,10 @@ Window {
     }
 
     ListModel {
+        id: learningSourceModel
+    }
+
+    ListModel {
         id: cardModel
     }
 
@@ -373,6 +451,16 @@ Window {
                     statusDwellTimer.interval = Math.max(100, root.minStatusDwellMs)
                     statusDwellTimer.restart()
                 }
+            }
+        }
+
+        function onLearningChanged() {
+            if (root.homeController) {
+                root.learningStatus = root.homeController.learningStatus
+                root.learningSources = root.homeController.learningSources
+                root.onboardingState = root.homeController.onboardingState
+                root.learningDeletePending = root.homeController.learningDeletePending
+                root.loadLearningSources()
             }
         }
     }
@@ -422,6 +510,7 @@ Window {
 
         Component.onCompleted: {
             root.loadRooms()
+            root.loadLearningSources()
             root.loadCategories()
             root.loadCards()
             forceActiveFocus()
@@ -757,6 +846,304 @@ Window {
                                                     elide: Text.ElideRight
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: learningPanel
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 164
+                            radius: 8
+                            color: "#10151e"
+                            border.color: "#2a4052"
+                            border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 14
+                                spacing: 9
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 12
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "Local Learning & Privacy"
+                                            color: "#f2f5f8"
+                                            font.pixelSize: 16
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "Local only, no keystrokes, no screenshots, review before creation. Suggestions never auto-create or auto-run."
+                                            color: "#aebbd0"
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        id: localLearningToggle
+
+                                        Layout.preferredWidth: 154
+                                        Layout.preferredHeight: 34
+                                        radius: 7
+                                        color: localLearningToggle.toggleEnabled ? (localLearningPointer.containsMouse ? "#244735" : "#1c3529") : "#151b24"
+                                        border.color: localLearningToggle.toggleEnabled ? "#4f9f75" : "#263648"
+                                        opacity: localLearningToggle.toggleAvailable ? 1.0 : 0.52
+
+                                        property bool toggleAvailable: homeController && !mockMode
+                                        property bool toggleEnabled: root.learningStatus && root.learningStatus.effective_enabled === true
+
+                                        MouseArea {
+                                            id: localLearningPointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: localLearningToggle.toggleAvailable
+                                            onClicked: {
+                                                if (localLearningToggle.toggleEnabled) {
+                                                    root.disableLearning()
+                                                } else {
+                                                    root.enableLearningFromSelection()
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 12
+                                            text: localLearningToggle.toggleEnabled ? "Local Learning On" : "Local Learning Off"
+                                            color: localLearningToggle.toggleEnabled ? "#e9fff1" : "#aebbd0"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    Repeater {
+                                        model: learningSourceModel
+
+                                        delegate: Rectangle {
+                                            id: sourceToggle
+
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 48
+                                            radius: 7
+                                            color: sourceSelected ? "#182a24" : "#131a23"
+                                            border.color: sourceSelected ? "#4f9f75" : "#2b3948"
+                                            border.width: 1
+
+                                            property bool sourceSelected: selected === true
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: homeController && !mockMode
+                                                onClicked: root.setLearningSourceSelected(index, !sourceToggle.sourceSelected)
+                                            }
+
+                                            ColumnLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                spacing: 3
+
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 7
+
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 12
+                                                        Layout.preferredHeight: 12
+                                                        radius: 3
+                                                        color: sourceToggle.sourceSelected ? "#65d59b" : "#1c2734"
+                                                        border.color: sourceToggle.sourceSelected ? "#b7f5ce" : "#50667e"
+                                                    }
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: label
+                                                        color: "#e6edf7"
+                                                        font.pixelSize: 12
+                                                        font.weight: Font.DemiBold
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: description
+                                                    color: "#8f9aad"
+                                                    font.pixelSize: 10
+                                                    maximumLineCount: 1
+                                                    wrapMode: Text.WordWrap
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 94
+                                        Layout.preferredHeight: 30
+                                        radius: 6
+                                        color: enablePointer.containsMouse ? "#244735" : "#1c3529"
+                                        border.color: "#4f9f75"
+                                        visible: root.firstRunLearningChoiceVisible()
+                                        opacity: homeController && !mockMode ? 1.0 : 0.52
+
+                                        MouseArea {
+                                            id: enablePointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: homeController && !mockMode
+                                            onClicked: root.enableLearningFromSelection()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Enable"
+                                            color: "#e9fff1"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 142
+                                        Layout.preferredHeight: 30
+                                        radius: 6
+                                        color: customizePointer.containsMouse ? "#263648" : "#1c2734"
+                                        border.color: "#50667e"
+                                        visible: root.firstRunLearningChoiceVisible()
+
+                                        MouseArea {
+                                            id: customizePointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.customizeLearningSources()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 10
+                                            text: "Customize Sources"
+                                            color: "#e6edf7"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 94
+                                        Layout.preferredHeight: 30
+                                        radius: 6
+                                        color: notNowPointer.containsMouse ? "#263648" : "#1c2734"
+                                        border.color: "#50667e"
+                                        visible: root.firstRunLearningChoiceVisible()
+
+                                        MouseArea {
+                                            id: notNowPointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.skipLearningOnboarding()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Not Now"
+                                            color: "#e6edf7"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 146
+                                        Layout.preferredHeight: 30
+                                        radius: 6
+                                        color: journalPointer.containsMouse ? "#263648" : "#1c2734"
+                                        border.color: "#50667e"
+                                        opacity: homeController && !mockMode ? 1.0 : 0.52
+
+                                        MouseArea {
+                                            id: journalPointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: homeController && !mockMode
+                                            onClicked: root.homeController.openLearningActivityJournal()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 10
+                                            text: "View Activity Journal"
+                                            color: "#e6edf7"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 142
+                                        Layout.preferredHeight: 30
+                                        radius: 6
+                                        color: deleteLearningPointer.containsMouse ? "#4a2a34" : "#351f27"
+                                        border.color: "#d96d7e"
+                                        opacity: homeController && !mockMode ? 1.0 : 0.52
+
+                                        MouseArea {
+                                            id: deleteLearningPointer
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: homeController && !mockMode
+                                            onClicked: root.homeController.requestDeleteLearningData()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 10
+                                            text: "Delete Learning Data"
+                                            color: "#ffeef1"
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
@@ -1268,6 +1655,121 @@ Window {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: learningDeleteBlocker
+
+        visible: root.learningDeletePending
+        anchors.fill: parent
+        z: 90
+        color: "#000000"
+        opacity: 0.22
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.AllButtons
+            onClicked: {
+            }
+        }
+    }
+
+    Rectangle {
+        id: learningDeletePanel
+
+        visible: root.learningDeletePending
+        z: 100
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 28
+        width: Math.min(parent.width - 56, 700)
+        height: 146
+        radius: 8
+        color: "#10151e"
+        border.color: "#d96d7e"
+        border.width: 1
+        opacity: 0.96
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 14
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 6
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Delete Learning Data?"
+                    color: "#ffeef1"
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: "This deletes the local Activity Journal and learning suggestion files. Local Learning settings are preserved."
+                    color: "#d7e0eb"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 4
+                    elide: Text.ElideRight
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 112
+                Layout.preferredHeight: 42
+                radius: 6
+                color: confirmDeletePointer.containsMouse ? "#4a2a34" : "#351f27"
+                border.color: "#d96d7e"
+
+                MouseArea {
+                    id: confirmDeletePointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.homeController.confirmDeleteLearningData()
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Delete"
+                    color: "#ffeef1"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 42
+                radius: 6
+                color: cancelDeletePointer.containsMouse ? "#263648" : "#1c2734"
+                border.color: "#50667e"
+
+                MouseArea {
+                    id: cancelDeletePointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.homeController.cancelDeleteLearningData()
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Cancel"
+                    color: "#e6edf7"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
                 }
             }
         }

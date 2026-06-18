@@ -13,6 +13,7 @@ ApplicationWindow {
     property var canvasController: typeof ritualistCanvasUseController === "undefined" ? null : ritualistCanvasUseController
     property var canvasPayload: typeof ritualistCanvasPayload === "undefined" ? ({}) : ritualistCanvasPayload
     property var editPayload: canvasController ? canvasController.editPayload : ritualistCanvasEditPayload
+    property var suggestionsPayload: canvasController ? canvasController.suggestionsPayload : ({})
     property var performanceSettings: typeof ritualistCanvasPerformance === "undefined" ? ({}) : ritualistCanvasPerformance
     property var hostSettings: typeof ritualistCanvasHost === "undefined" ? ({ mode: "windowed", taskbar_policy: "respect" }) : ritualistCanvasHost
     property bool e2eEnabled: typeof ritualistE2EEnabled === "undefined" ? false : ritualistE2EEnabled
@@ -41,6 +42,7 @@ ApplicationWindow {
     property bool runtimePaused: canvasController ? canvasController.runtimePaused : false
     property string footerText: canvasController ? canvasController.lastEventLabel : "Canvas ready"
     property string pendingEditDecision: ""
+    property bool pendingSuggestionsDelete: false
     property int spaceSm: Number(token("spacing_sm", 6))
     property int spaceMd: Number(token("spacing_md", 12))
     property int spaceLg: Number(token("spacing_lg", 18))
@@ -593,6 +595,38 @@ ApplicationWindow {
         return editInspector().appearance_properties || []
     }
 
+    function suggestionFilters() {
+        if (!suggestionsPayload || !suggestionsPayload.filters) {
+            return []
+        }
+        return suggestionsPayload.filters
+    }
+
+    function suggestionRows() {
+        if (!suggestionsPayload || !suggestionsPayload.suggestions) {
+            return []
+        }
+        return suggestionsPayload.suggestions
+    }
+
+    function suggestionStatusText() {
+        if (!suggestionsPayload) {
+            return ""
+        }
+        if (suggestionsPayload.error && suggestionsPayload.error.length > 0) {
+            return suggestionsPayload.error
+        }
+        return suggestionsPayload.last_message || ""
+    }
+
+    function suggestionDraftSummary() {
+        if (!suggestionsPayload || !suggestionsPayload.last_draft || !suggestionsPayload.last_draft.draft) {
+            return ""
+        }
+        var draft = suggestionsPayload.last_draft
+        return "Draft preview ready: " + (draft.kind || "suggestion") + " / no files written"
+    }
+
     function editSnapGrid() {
         if (!editPayload || !editPayload.snap_grid) {
             return { enabled: true, size: 16, unit: "px" }
@@ -631,6 +665,13 @@ ApplicationWindow {
             root.canvasController.setEditMode(false)
         }
         root.pendingEditDecision = ""
+    }
+
+    function confirmDeleteAllSuggestions() {
+        if (root.canvasController) {
+            root.canvasController.deleteAllSuggestions()
+        }
+        root.pendingSuggestionsDelete = false
     }
 
     component PaperButton: Button {
@@ -706,6 +747,27 @@ ApplicationWindow {
         }
     }
 
+    component SuggestionBadge: Rectangle {
+        property string text: ""
+
+        height: 24
+        width: Math.max(76, badgeText.implicitWidth + 16)
+        radius: root.radiusSm
+        color: root.token("panel_alt", "#101720")
+        border.color: root.token("border", "#203044")
+        border.width: 1
+
+        Text {
+            id: badgeText
+            anchors.centerIn: parent
+            text: parent.text
+            color: root.token("muted", "#91a2b8")
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+        }
+    }
+
     Connections {
         target: root.canvasController
 
@@ -715,6 +777,10 @@ ApplicationWindow {
 
         function onEditPayloadChanged() {
             root.editPayload = root.canvasController.editPayload
+        }
+
+        function onSuggestionsPayloadChanged() {
+            root.suggestionsPayload = root.canvasController.suggestionsPayload
         }
 
         function onEditModeChanged() {
@@ -1314,6 +1380,211 @@ ApplicationWindow {
                             visible: text.length > 0
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 1
+                            color: root.token("border", "#203044")
+                            opacity: 0.72
+                        }
+
+                        Text {
+                            text: "Suggestions"
+                            color: root.token("foreground", "#f4f7fb")
+                            font.pixelSize: 20
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: root.spaceSm
+
+                            PaperButton {
+                                text: root.suggestionsPayload && root.suggestionsPayload.busy ? "Finding" : "Find Suggestions"
+                                role: "primary"
+                                enabled: root.canvasController && !(root.suggestionsPayload && root.suggestionsPayload.busy)
+                                Layout.fillWidth: true
+                                onClicked: root.canvasController.findSuggestions()
+                            }
+
+                            PaperButton {
+                                text: "Delete All"
+                                role: "danger"
+                                enabled: root.canvasController && root.suggestionRows().length > 0
+                                Layout.fillWidth: true
+                                onClicked: root.pendingSuggestionsDelete = true
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: root.pendingSuggestionsDelete ? 72 : 0
+                            radius: root.radiusMd
+                            color: root.token("danger_panel", "#28151c")
+                            border.color: root.token("danger", "#ff6b7a")
+                            visible: root.pendingSuggestionsDelete
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: root.spaceSm
+                                spacing: root.spaceSm
+
+                                Text {
+                                    text: "Delete all stored Suggestions?"
+                                    color: root.token("foreground", "#f4f7fb")
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    PaperButton { text: "Confirm"; role: "danger"; compact: true; onClicked: root.confirmDeleteAllSuggestions() }
+                                    PaperButton { text: "Keep"; compact: true; onClicked: root.pendingSuggestionsDelete = false }
+                                }
+                            }
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: root.spaceSm
+
+                            Repeater {
+                                model: root.suggestionFilters()
+
+                                PaperButton {
+                                    text: modelData.label
+                                    compact: true
+                                    role: root.suggestionsPayload && root.suggestionsPayload.filter === modelData.id ? "primary" : "neutral"
+                                    width: Math.max(74, Math.min(92, parent.width / 4 - root.spaceSm))
+                                    onClicked: root.canvasController.filterSuggestions(modelData.id)
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: root.suggestionStatusText()
+                            color: root.suggestionsPayload && root.suggestionsPayload.error && root.suggestionsPayload.error.length > 0 ? root.token("warning", "#f5c45b") : root.token("muted", "#91a2b8")
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 4
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            visible: text.length > 0
+                        }
+
+                        Text {
+                            text: root.suggestionDraftSummary()
+                            color: root.token("accent", "#3dd6a5")
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 3
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            visible: text.length > 0
+                        }
+
+                        Text {
+                            text: "Edit Before Creating"
+                            color: root.token("accent", "#3dd6a5")
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                            visible: root.suggestionsPayload && root.suggestionsPayload.editing_before_create
+                        }
+
+                        Repeater {
+                            model: root.suggestionRows()
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: suggestionCard.implicitHeight + root.spaceMd * 2
+                                radius: root.radiusMd
+                                color: root.token("panel_alt", "#101720")
+                                border.color: root.token("border", "#203044")
+                                border.width: 1
+
+                                ColumnLayout {
+                                    id: suggestionCard
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: root.spaceSm
+                                    spacing: root.spaceSm
+
+                                    Text {
+                                        text: modelData.title || modelData.id
+                                        color: root.token("foreground", "#f4f7fb")
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Text {
+                                        text: modelData.proposed_artifact_summary || modelData.description || ""
+                                        color: root.token("muted", "#91a2b8")
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 3
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Flow {
+                                        Layout.fillWidth: true
+                                        spacing: root.spaceSm
+                                        SuggestionBadge { text: modelData.kind_label || "Suggestion" }
+                                        SuggestionBadge { text: modelData.confidence_badge || "Confidence" }
+                                        SuggestionBadge { text: modelData.evidence_badge || "Evidence" }
+                                        SuggestionBadge { text: modelData.privacy_badge || "Privacy" }
+                                    }
+
+                                    Flow {
+                                        Layout.fillWidth: true
+                                        spacing: root.spaceSm
+
+                                        PaperButton {
+                                            text: "Review"
+                                            compact: true
+                                            width: 78
+                                            enabled: root.canvasController && (modelData.status === "new" || modelData.status === "reviewing")
+                                            onClicked: root.canvasController.reviewSuggestion(modelData.id)
+                                        }
+
+                                        PaperButton {
+                                            text: "Create Draft"
+                                            role: "primary"
+                                            compact: true
+                                            width: 104
+                                            enabled: root.canvasController && modelData.can_create_draft === true
+                                            onClicked: root.canvasController.createSuggestionDraft(modelData.id)
+                                        }
+
+                                        PaperButton {
+                                            text: "Edit Before Creating"
+                                            compact: true
+                                            width: 150
+                                            enabled: root.canvasController
+                                            onClicked: root.canvasController.editSuggestionBeforeCreating(modelData.id)
+                                        }
+
+                                        PaperButton {
+                                            text: "Dismiss"
+                                            role: "danger"
+                                            compact: true
+                                            width: 86
+                                            enabled: root.canvasController && modelData.status !== "dismissed"
+                                            onClicked: root.canvasController.dismissSuggestion(modelData.id)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

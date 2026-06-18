@@ -1,16 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ritualist.errors import RitualistError
+from ritualist.suggestions.models import Suggestion, SuggestionKind
+from ritualist.suggestions.review import approve_suggestion, dismiss_suggestion, review_snapshot
+from ritualist.suggestions.service import (
+    SuggestionsServiceError,
+    delete_all_suggestions_payload,
+    list_suggestions_payload,
+    scan_suggestions_payload,
+)
+from ritualist.suggestions.storage import SuggestionStore
 
 from .edit import CanvasEditSession
 from .models import CanvasBindingKind, CanvasComponent, CanvasComponentBinding
 from .storage import CanvasWriteResult
 
 CANVAS_EDIT_UI_SCHEMA_VERSION = "ritualist.canvas.edit_ui.v1"
+CANVAS_SUGGESTIONS_REVIEW_UI_SCHEMA_VERSION = "ritualist.canvas.suggestions_review_ui.v1"
 EDIT_UI_PALETTE_TYPES = frozenset(
     {
         "ritual.card",
@@ -25,6 +35,176 @@ EDIT_UI_PALETTE_TYPES = frozenset(
         "shortcut.url",
     }
 )
+SUGGESTION_FILTERS = (
+    {"id": "all", "label": "All"},
+    {"id": "shortcut", "label": "Shortcut"},
+    {"id": "ritual", "label": "Ritual"},
+    {"id": "room", "label": "Room"},
+)
+_FILTER_KIND = {
+    "shortcut": SuggestionKind.SHORTCUT_COMPONENT,
+    "ritual": SuggestionKind.RITUAL_RECIPE,
+    "room": SuggestionKind.ROOM_CANVAS,
+}
+
+
+@dataclass
+class CanvasSuggestionsReviewBridge:
+    """Review-gated, data-only Suggestions surface for Canvas Edit Mode."""
+
+    store: SuggestionStore = field(default_factory=SuggestionStore)
+    config_path: Path | None = None
+    filter_kind: str = "all"
+    selected_suggestion_id: str = ""
+    last_message: str = "Suggestions ready"
+    last_error: str = ""
+    last_draft: dict[str, Any] = field(default_factory=dict)
+    editing_before_create: bool = False
+
+    def model(self) -> dict[str, Any]:
+        suggestions: list[Suggestion] = []
+        error = self.last_error
+        try:
+            payload = list_suggestions_payload(store=self.store, config_path=self.config_path)
+            suggestions = [
+                suggestion
+                for suggestion in (
+                    Suggestion.from_mapping(item)
+                    for item in payload.get("suggestions", [])
+                    if isinstance(item, dict)
+                )
+                if self._matches_filter(suggestion)
+            ]
+        except (SuggestionsServiceError, ValueError) as exc:
+            error = str(exc)
+
+        selected = next(
+            (suggestion for suggestion in suggestions if suggestion.id == self.selected_suggestion_id),
+            None,
+        )
+        return {
+            "schema_version": CANVAS_SUGGESTIONS_REVIEW_UI_SCHEMA_VERSION,
+            "filters": [dict(item) for item in SUGGESTION_FILTERS],
+            "filter": self.filter_kind,
+            "count": len(suggestions),
+            "suggestions": [_suggestion_review_row(suggestion) for suggestion in suggestions],
+            "selected_suggestion_id": self.selected_suggestion_id if selected is not None else "",
+            "selected_suggestion": _suggestion_review_row(selected) if selected is not None else {},
+            "editing_before_create": self.editing_before_create and selected is not None,
+            "last_draft": dict(self.last_draft),
+            "last_message": self.last_message,
+            "error": error,
+            "review_required": True,
+            "auto_create": False,
+            "auto_run": False,
+        }
+
+    def set_filter(self, filter_kind: str) -> dict[str, Any]:
+        self.filter_kind = _normalized_filter(filter_kind)
+        return self.model()
+
+    def find_suggestions(self) -> dict[str, Any]:
+        self.last_error = ""
+        try:
+            payload = scan_suggestions_payload(store=self.store, config_path=self.config_path)
+        except SuggestionsServiceError as exc:
+            self.last_error = str(exc)
+            self.last_message = "Suggestions scan needs Local Learning consent"
+            return self.model()
+        self.last_message = (
+            f"Found {int(payload.get('suggestion_count') or 0)} Suggestions; "
+            "nothing was created or run."
+        )
+        return self.model()
+
+    def review_suggestion(self, suggestion_id: str) -> dict[str, Any]:
+        self.last_error = ""
+        self.last_draft = {}
+        try:
+            approved = approve_suggestion(
+                self.store,
+                suggestion_id,
+                reviewed_by="canvas_builder",
+            )
+        except Exception as exc:  # noqa: BLE001 - review failures are user-facing policy errors.
+            self.last_error = str(exc)
+            self.last_message = "Suggestion review failed"
+            return self.model()
+        self.selected_suggestion_id = approved.id
+        self.editing_before_create = False
+        self.last_message = "Suggestion reviewed; draft creation is now available."
+        return self.model()
+
+    def edit_before_creating(self, suggestion_id: str) -> dict[str, Any]:
+        self.selected_suggestion_id = str(suggestion_id or "").strip()
+        self.editing_before_create = bool(self.selected_suggestion_id)
+        self.last_draft = {}
+        self.last_error = ""
+        self.last_message = "Review fields before creating a disabled draft."
+        return self.model()
+
+    def create_draft(self, suggestion_id: str) -> dict[str, Any]:
+        self.last_error = ""
+        suggestion = self.store.get(suggestion_id)
+        if suggestion is None:
+            self.last_error = f"suggestion not found: {suggestion_id}"
+            self.last_message = "Draft creation failed"
+            return self.model()
+        try:
+            draft = _build_suggestion_draft_preview(suggestion)
+        except Exception as exc:  # noqa: BLE001 - draft builders raise several user-facing errors.
+            self.last_error = str(exc)
+            self.last_message = "Draft creation failed"
+            return self.model()
+        self.selected_suggestion_id = suggestion.id
+        self.editing_before_create = False
+        self.last_draft = {
+            "suggestion_id": suggestion.id,
+            "kind": suggestion.kind.value,
+            "created_artifact": False,
+            "wrote_files": False,
+            "ran": False,
+            "draft": draft,
+        }
+        self.last_message = "Disabled draft preview created; no files were written."
+        return self.model()
+
+    def dismiss_suggestion(self, suggestion_id: str) -> dict[str, Any]:
+        self.last_error = ""
+        try:
+            dismissed = dismiss_suggestion(
+                self.store,
+                suggestion_id,
+                reviewed_by="canvas_builder",
+            )
+        except Exception as exc:  # noqa: BLE001 - dismissal failures belong in UI status.
+            self.last_error = str(exc)
+            self.last_message = "Suggestion dismiss failed"
+            return self.model()
+        if self.selected_suggestion_id == dismissed.id:
+            self.selected_suggestion_id = ""
+            self.editing_before_create = False
+            self.last_draft = {}
+        self.last_message = "Suggestion dismissed."
+        return self.model()
+
+    def delete_all(self) -> dict[str, Any]:
+        self.last_error = ""
+        try:
+            payload = delete_all_suggestions_payload(store=self.store, config_path=self.config_path)
+        except SuggestionsServiceError as exc:
+            self.last_error = str(exc)
+            self.last_message = "Delete all Suggestions failed"
+            return self.model()
+        self.selected_suggestion_id = ""
+        self.editing_before_create = False
+        self.last_draft = {}
+        self.last_message = f"Deleted {int(payload.get('deleted_count') or 0)} Suggestions."
+        return self.model()
+
+    def _matches_filter(self, suggestion: Suggestion) -> bool:
+        kind = _FILTER_KIND.get(self.filter_kind)
+        return kind is None or suggestion.kind is kind
 
 
 @dataclass
@@ -189,3 +369,50 @@ def _binding_for_edit(kind: str, reference: str = "") -> CanvasComponentBinding 
     if binding_kind is CanvasBindingKind.RECENT_RUNS:
         return CanvasComponentBinding(kind=binding_kind, id=text)
     raise RitualistError(f"binding kind is not editable in Canvas Edit Mode: {kind}")
+
+
+def _suggestion_review_row(suggestion: Suggestion | None) -> dict[str, Any]:
+    if suggestion is None:
+        return {}
+    snapshot = review_snapshot(suggestion)
+    return {
+        **suggestion.to_dict(),
+        "kind_label": _kind_label(suggestion.kind),
+        "confidence_badge": f"Confidence {round(suggestion.confidence * 100)}%",
+        "evidence_badge": f"Evidence {suggestion.evidence_count}",
+        "privacy_badge": f"Privacy {suggestion.privacy_level.value}",
+        "review_token": snapshot.review_token,
+        "proposed_artifact_summary": snapshot.proposed_artifact_summary,
+        "approval_current": snapshot.approval_current,
+        "can_create_draft": snapshot.can_create_draft,
+    }
+
+
+def _build_suggestion_draft_preview(suggestion: Suggestion) -> dict[str, Any]:
+    if suggestion.kind is SuggestionKind.SHORTCUT_COMPONENT:
+        from ritualist.suggestions.drafts_shortcut import build_shortcut_draft
+
+        return build_shortcut_draft(suggestion)
+    if suggestion.kind is SuggestionKind.RITUAL_RECIPE:
+        from ritualist.suggestions.drafts_recipe import build_draft_recipe
+
+        return build_draft_recipe(suggestion)
+    if suggestion.kind is SuggestionKind.ROOM_CANVAS:
+        from ritualist.suggestions.drafts_room import build_room_draft_result
+
+        return build_room_draft_result(suggestion).to_dict()
+    raise RitualistError("Only shortcut, ritual, and room Suggestions can create drafts in Room Builder.")
+
+
+def _normalized_filter(filter_kind: str) -> str:
+    text = str(filter_kind or "all").strip().casefold()
+    return text if text in {"all", *tuple(_FILTER_KIND)} else "all"
+
+
+def _kind_label(kind: SuggestionKind) -> str:
+    return {
+        SuggestionKind.SHORTCUT_COMPONENT: "Shortcut",
+        SuggestionKind.RITUAL_RECIPE: "Ritual",
+        SuggestionKind.ROOM_CANVAS: "Room",
+        SuggestionKind.CLEANUP_HINT: "Cleanup",
+    }[kind]

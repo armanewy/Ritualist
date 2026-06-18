@@ -27,7 +27,7 @@ from ritualist.target_resolution import builtin_target_catalog
 
 from .controller import CanvasRuntimeController
 from .edit import CanvasEditSession, create_edit_session
-from .edit_ui import CanvasEditUiBridge
+from .edit_ui import CanvasEditUiBridge, CanvasSuggestionsReviewBridge
 from .host import (
     CANVAS_FORCE_WINDOWED_ENV,
     CanvasHostConfig,
@@ -94,10 +94,13 @@ def run_canvas_use(
         payloadChanged = Signal()
         editPayloadChanged = Signal()
         editModeChanged = Signal()
+        suggestionsPayloadChanged = Signal()
         metricsChanged = Signal()
         actionStateChanged = Signal()
         actionCompleted = Signal(str, object)
         actionFailed = Signal(str, str)
+        suggestionsOperationCompleted = Signal(object)
+        suggestionsOperationFailed = Signal(str)
         runtimeEventReceived = Signal(str, object)
         statusEventReceived = Signal(str, object)
         confirmationRequested = Signal(str, object)
@@ -107,6 +110,7 @@ def run_canvas_use(
             self,
             document: CanvasDocument,
             edit_bridge: CanvasEditUiBridge,
+            suggestions_bridge: CanvasSuggestionsReviewBridge,
             *,
             mock: bool,
             recipe_ids: set[str],
@@ -116,6 +120,7 @@ def run_canvas_use(
             super().__init__()
             self._document = document
             self._edit_bridge = edit_bridge
+            self._suggestions_bridge = suggestions_bridge
             self._mock = mock
             self._recipe_ids = recipe_ids
             self._target_ids = target_ids
@@ -125,6 +130,7 @@ def run_canvas_use(
             self._action_busy = False
             self._runtime_control: RuntimeControl | None = None
             self._runtime_paused = False
+            self._suggestions_busy = False
             self._executor: ThreadPoolExecutor | None = None
             self._action_future: Future[object] | None = None
             self._confirmation_event = Event()
@@ -137,6 +143,8 @@ def run_canvas_use(
             self._heartbeat_start = time.perf_counter()
             self.actionCompleted.connect(self._complete_action)
             self.actionFailed.connect(self._mark_action_failed)
+            self.suggestionsOperationCompleted.connect(self._complete_suggestions_operation)
+            self.suggestionsOperationFailed.connect(self._fail_suggestions_operation)
             self.runtimeEventReceived.connect(self._apply_runtime_event)
             self.statusEventReceived.connect(self._apply_status_event)
             self.confirmationRequested.connect(self._request_confirmation)
@@ -149,6 +157,12 @@ def run_canvas_use(
         @Property("QVariantMap", notify=editPayloadChanged)
         def editPayload(self) -> dict[str, object]:
             return self._edit_bridge.model()
+
+        @Property("QVariantMap", notify=suggestionsPayloadChanged)
+        def suggestionsPayload(self) -> dict[str, object]:
+            payload = self._suggestions_bridge.model()
+            payload["busy"] = self._suggestions_busy
+            return payload
 
         @Property(bool, notify=editModeChanged)
         def editMode(self) -> bool:
@@ -345,6 +359,59 @@ def run_canvas_use(
             self.payloadChanged.emit()
             return True
 
+        @Slot(str)
+        def filterSuggestions(self, filter_kind: str) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.set_filter(filter_kind)
+            self.suggestionsPayloadChanged.emit()
+
+        @Slot()
+        def findSuggestions(self) -> None:
+            if not self._suggestions_available():
+                return
+            if self._suggestions_busy:
+                return
+            self._suggestions_busy = True
+            self.suggestionsPayloadChanged.emit()
+            future = self._ensure_executor().submit(self._suggestions_bridge.find_suggestions)
+            future.add_done_callback(self._complete_suggestions_future)
+
+        @Slot(str)
+        def reviewSuggestion(self, suggestion_id: str) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.review_suggestion(suggestion_id)
+            self.suggestionsPayloadChanged.emit()
+
+        @Slot(str)
+        def editSuggestionBeforeCreating(self, suggestion_id: str) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.edit_before_creating(suggestion_id)
+            self.suggestionsPayloadChanged.emit()
+
+        @Slot(str)
+        def createSuggestionDraft(self, suggestion_id: str) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.create_draft(suggestion_id)
+            self.suggestionsPayloadChanged.emit()
+
+        @Slot(str)
+        def dismissSuggestion(self, suggestion_id: str) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.dismiss_suggestion(suggestion_id)
+            self.suggestionsPayloadChanged.emit()
+
+        @Slot()
+        def deleteAllSuggestions(self) -> None:
+            if not self._suggestions_available():
+                return
+            self._suggestions_bridge.delete_all()
+            self.suggestionsPayloadChanged.emit()
+
         @Slot()
         def pauseCurrentRun(self) -> None:
             record_event("canvas.runtime_control.requested", action="pause")
@@ -458,6 +525,31 @@ def run_canvas_use(
                 self.actionFailed.emit(component_id, str(exc))
                 return
             self.actionCompleted.emit(component_id, result)
+
+        def _complete_suggestions_future(self, future: Future[object]) -> None:
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - report scan failures to Canvas.
+                self.suggestionsOperationFailed.emit(str(exc))
+                return
+            self.suggestionsOperationCompleted.emit(result)
+
+        def _complete_suggestions_operation(self, _result: object) -> None:
+            self._suggestions_busy = False
+            self.suggestionsPayloadChanged.emit()
+
+        def _fail_suggestions_operation(self, message: str) -> None:
+            self._suggestions_busy = False
+            self._suggestions_bridge.last_error = message
+            self._suggestions_bridge.last_message = "Suggestions scan failed"
+            self.suggestionsPayloadChanged.emit()
+
+        def _suggestions_available(self) -> bool:
+            if self._edit_mode:
+                return True
+            self._last_event_label = "Switch to Edit Mode to review Suggestions"
+            self.metricsChanged.emit()
+            return False
 
         def _set_action_busy(self, busy: bool) -> None:
             if self._action_busy == busy:
@@ -581,6 +673,7 @@ def run_canvas_use(
     controller = CanvasUseController(
         document,
         CanvasEditUiBridge(edit_session),
+        CanvasSuggestionsReviewBridge(),
         mock=mock,
         recipe_ids=recipe_ids,
         target_ids=target_ids,

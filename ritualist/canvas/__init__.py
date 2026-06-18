@@ -15,7 +15,12 @@ from .edit import (
     create_edit_session,
     editable_binding_kinds,
 )
-from .edit_ui import CANVAS_EDIT_UI_SCHEMA_VERSION, CanvasEditUiBridge
+from .edit_ui import (
+    CANVAS_EDIT_UI_SCHEMA_VERSION,
+    CANVAS_SUGGESTIONS_REVIEW_UI_SCHEMA_VERSION,
+    CanvasEditUiBridge,
+    CanvasSuggestionsReviewBridge,
+)
 from .home_adapter import canvas_to_home_model, recipe_card_component
 from .host import (
     CANVAS_FORCE_WINDOWED_ENV,
@@ -117,6 +122,7 @@ __all__ = [
     "CANVAS_EDIT_MODEL_SCHEMA_VERSION",
     "CANVAS_EDIT_PLAN_SCHEMA_VERSION",
     "CANVAS_EDIT_UI_SCHEMA_VERSION",
+    "CANVAS_SUGGESTIONS_REVIEW_UI_SCHEMA_VERSION",
     "CANVAS_FORCE_WINDOWED_ENV",
     "CANVAS_HOST_SCHEMA_VERSION",
     "CANVAS_PERFORMANCE_SCHEMA_VERSION",
@@ -144,6 +150,7 @@ __all__ = [
     "CanvasEditHistory",
     "CanvasEditSession",
     "CanvasEditUiBridge",
+    "CanvasSuggestionsReviewBridge",
     "CanvasGrid",
     "CanvasHostConfig",
     "CanvasInputPolicy",
