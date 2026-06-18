@@ -34,6 +34,7 @@ CategoryName = Literal[
     "note",
     "notify",
     "flow",
+    "target",
     "wait",
     "window",
 ]

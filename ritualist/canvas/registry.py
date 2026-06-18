@@ -297,7 +297,16 @@ def _builtin_component_types() -> tuple[CanvasComponentType, ...]:
             can_trigger=True,
             display_only=False,
             requires_policy=True,
-            actions=("run", "dry_run", "doctor", "edit_recipe", "open_logs"),
+            actions=(
+                "run",
+                "dry_run",
+                "doctor",
+                "view_recipe",
+                "edit_setup",
+                "edit_recipe",
+                "open_yaml",
+                "open_logs",
+            ),
             untrusted=False,
         ),
         _component(

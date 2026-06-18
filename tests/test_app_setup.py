@@ -78,12 +78,14 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "performance_mode": "balanced",
         "show_performance_overlay": False,
     }
+    assert config["approvals"] == {
+        "remembered_approvals_enabled": True,
+    }
     assert (recipe_dir / "gaming_mode.yaml").exists()
     assert rows[0][1].id == "gaming_mode"
-    assert rows[0][1].steps[0].keep_open is True
-    assert rows[0][1].steps[0].clean_start is True
-    assert rows[0][1].steps[0].dismiss_restore_prompt is True
-    assert rows[0][1].steps[0].use_dedicated_profile is True
+    assert rows[0][1].variables["ambience_browser_mode"] == "native"
+    assert rows[0][1].variables["ambience_enabled"] is True
+    assert rows[0][1].steps[0].action == "browser.open_native"
 
 
 def test_initialize_app_migrates_existing_gaming_mode_keep_open(tmp_path, monkeypatch):

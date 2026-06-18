@@ -6,6 +6,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from importlib.resources import as_file, files
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 from typing import Any
 
 from ritualist.e2e import enabled as e2e_enabled
@@ -135,6 +136,7 @@ def run_canvas_use(
             self._action_future: Future[object] | None = None
             self._confirmation_event = Event()
             self._confirmation_result = False
+            self._confirmation_component_id = ""
             self._confirmation_presenter = _create_confirmation_presenter()
             self._activity_journal = journal_hook
             self._runtime_controller = CanvasRuntimeController(
@@ -648,6 +650,7 @@ def run_canvas_use(
 
         def _request_confirmation(self, component_id: str, prompt: object) -> None:
             record_event("canvas.confirmation.requested", component_id=component_id, prompt=prompt)
+            self._confirmation_component_id = component_id
             self._publish_status(component_id, HomeCardStatus.WARNING.value, "Confirmation required")
             self._confirmation_presenter.request_confirmation(
                 prompt,
@@ -656,8 +659,26 @@ def run_canvas_use(
 
         def _answer_confirmation(self, accepted: bool) -> None:
             record_event("canvas.confirmation.answered", accepted=accepted)
+            if accepted and self._confirmation_component_id:
+                self._publish_confirmation_starting(self._confirmation_component_id)
+            self._confirmation_component_id = ""
             self._confirmation_result = accepted
             self._confirmation_event.set()
+
+        def _publish_confirmation_starting(self, component_id: str) -> None:
+            reference = _component_reference(self._document, component_id)
+            current = dict(self._runtime_state.get(reference, {}))
+            ritual_state = ritual_state_from_runtime_event(
+                current.get("ritual_state"),
+                _confirmation_starting_event(current.get("ritual_state")),
+            )
+            self._publish_status(
+                component_id,
+                HomeCardStatus.RUNNING.value,
+                "Starting...",
+                state="starting",
+                ritual_state=ritual_state,
+            )
 
     app = QApplication.instance() or QApplication(sys.argv)
     edit_session = (
@@ -941,6 +962,20 @@ def _component_reference(document: CanvasDocument, component_id: str) -> str:
             or component.id
         )
     return component_id
+
+
+def _confirmation_starting_event(ritual_state: object) -> SimpleNamespace:
+    state = ritual_state if isinstance(ritual_state, dict) else {}
+    active = state.get("active_run") if isinstance(state.get("active_run"), dict) else {}
+    confirmation = active.get("confirmation") if isinstance(active.get("confirmation"), dict) else {}
+    return SimpleNamespace(
+        type="confirmation.resolved",
+        approved=True,
+        step_index=confirmation.get("step_index"),
+        step_name=confirmation.get("step_name"),
+        action=confirmation.get("action"),
+        message="Starting...",
+    )
 
 
 def _recent_activity_items(payload: dict[str, object]) -> list[dict[str, object]]:

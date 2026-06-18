@@ -125,7 +125,8 @@ ApplicationWindow {
     }
 
     function stateIsDanger(status) {
-        return status === "failed" || status === "incompatible" || status === "interrupted"
+        return status === "failed" || status === "blocked" ||
+               status === "incompatible" || status === "interrupted"
     }
 
     function stateIsWarning(status) {
@@ -133,8 +134,8 @@ ApplicationWindow {
     }
 
     function stateIsActive(status) {
-        return status === "running" || status === "waiting" || status === "paused" ||
-               status === "confirming" || status === "confirmation"
+        return status === "starting" || status === "running" || status === "waiting" ||
+               status === "paused" || status === "confirming" || status === "confirmation"
     }
 
     function stateIsRest(status) {
@@ -353,18 +354,41 @@ ApplicationWindow {
 
     function activeState(component) {
         var active = root.activeRun(component)
-        var state = String(active.state || component.state || component.status || "idle")
+        var liveState = String(active.state || active.status || "")
+        var last = root.lastRun(component)
+        if (liveState && liveState !== "idle" && liveState !== "none") {
+            return liveState
+        }
+        if (last.state === "failed") {
+            return "failed"
+        }
+        if (last.state === "interrupted" || component.state === "interrupted" || component.status === "interrupted") {
+            return "ready"
+        }
+        return String(component.state || component.status || "idle")
+    }
+
+    function recoveryNoticeVisible(component) {
+        var active = root.activeRun(component)
+        var liveState = String(active.state || active.status || "")
         var recovery = root.recoveryState(component)
         var last = root.lastRun(component)
-        if (recovery.interrupted || last.state === "interrupted") {
-            return "interrupted"
+        if (liveState === "interrupted") {
+            return true
         }
-        return state
+        if (liveState && liveState !== "idle" && liveState !== "none") {
+            return false
+        }
+        return recovery.interrupted === true || last.state === "interrupted" ||
+               component.state === "interrupted" || component.status === "interrupted"
     }
 
     function runStateLabel(state) {
+        if (state === "starting") {
+            return "Starting..."
+        }
         if (state === "running") {
-            return "Running"
+            return "Started"
         }
         if (state === "waiting") {
             return "Waiting"
@@ -377,6 +401,9 @@ ApplicationWindow {
         }
         if (state === "failed") {
             return "Failed"
+        }
+        if (state === "blocked") {
+            return "Blocked"
         }
         if (state === "interrupted") {
             return "Interrupted"
@@ -443,6 +470,15 @@ ApplicationWindow {
         }
         if (actionId === "doctor") {
             return "Doctor"
+        }
+        if (actionId === "view_recipe") {
+            return "View Recipe"
+        }
+        if (actionId === "edit_setup") {
+            return "Edit Setup"
+        }
+        if (actionId === "open_yaml") {
+            return "Open YAML"
         }
         if (actionId === "open_logs" || actionId === "open_run_log") {
             return "Open Logs"
@@ -561,6 +597,45 @@ ApplicationWindow {
         return names.length ? "Artifacts: " + names.join(", ") : ""
     }
 
+    function blockedReason(component) {
+        var active = root.activeRun(component)
+        var current = active.current_step || {}
+        return current.message || active.message || component.message || "Action blocked before it could continue."
+    }
+
+    function failedStepSummary(component) {
+        var active = root.activeRun(component)
+        var current = active.current_step || {}
+        var details = []
+        if (current.name) {
+            details.push(current.name)
+        }
+        if (current.message) {
+            details.push(current.message)
+        }
+        if (details.length > 0) {
+            return details.join(" | ")
+        }
+        var last = root.lastRun(component)
+        return last.last_step || last.final_message || component.message || "Run failed"
+    }
+
+    function stepVerificationSummary(component) {
+        var last = root.lastRun(component)
+        var rows = last.step_summaries || []
+        for (var i = rows.length - 1; i >= 0; i -= 1) {
+            var verification = rows[i].verification || {}
+            if (verification.status || verification.message) {
+                var text = "Verification: " + (verification.status || "recorded")
+                if (verification.message) {
+                    text += " | " + verification.message
+                }
+                return text
+            }
+        }
+        return ""
+    }
+
     function stepLedgerRowText(row) {
         var pieces = []
         if (row.index !== undefined && row.index !== null) {
@@ -653,6 +728,40 @@ ApplicationWindow {
         }
         if (item.ownership_count !== undefined && item.ownership_count !== null && Number(item.ownership_count) > 0) {
             details.push(Number(item.ownership_count) + " Ritualist-opened resource" + (Number(item.ownership_count) === 1 ? "" : "s"))
+        }
+        return details.join(" | ")
+    }
+
+    function targetEvidenceSummary(targetData) {
+        var pieces = []
+        if (targetData.best_candidate_summary) {
+            pieces.push(targetData.best_candidate_summary)
+        }
+        if (targetData.last_successful_source) {
+            pieces.push("Remembered source available")
+        }
+        var readiness = targetData.readiness || {}
+        if (readiness.status) {
+            pieces.push("Readiness " + readiness.status)
+        }
+        return pieces.join(" | ")
+    }
+
+    function targetVerificationSummary(targetData) {
+        var details = []
+        if (targetData.confirmation_count !== undefined && targetData.confirmation_count !== null &&
+                Number(targetData.confirmation_count) > 0) {
+            details.push(Number(targetData.confirmation_count) + " confirmation gate" +
+                         (Number(targetData.confirmation_count) === 1 ? "" : "s"))
+        }
+        if (targetData.risk_summary) {
+            var keys = Object.keys(targetData.risk_summary)
+            if (keys.length > 0) {
+                details.push("Risk " + keys.join(", "))
+            }
+        }
+        if (targetData.recommended_next_action) {
+            details.push(targetData.recommended_next_action)
         }
         return details.join(" | ")
     }
@@ -1775,7 +1884,8 @@ ApplicationWindow {
                 spacing: root.spaceSm
 
                 Rectangle {
-                    width: visualState === "running" || visualState === "waiting" || visualState === "confirming" ? 14 : 10
+                    width: visualState === "starting" || visualState === "running" ||
+                           visualState === "waiting" || visualState === "confirming" ? 14 : 10
                     height: width
                     radius: width / 2
                     color: root.borderColor(visualState === "interrupted" ? "interrupted" : componentData.status)
@@ -1843,11 +1953,13 @@ ApplicationWindow {
             Rectangle {
                 id: currentStepPanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: visualState === "running" || visualState === "waiting" || visualState === "confirming" ? 84 : 0
+                Layout.preferredHeight: visualState === "starting" || visualState === "running" ||
+                                        visualState === "waiting" || visualState === "confirming" ? 84 : 0
                 radius: root.radiusMd
                 color: root.token("focus_panel", "#132235")
                 border.color: root.token("focus_ring", "#7fb8ff")
-                visible: visualState === "running" || visualState === "waiting" || visualState === "confirming"
+                visible: visualState === "starting" || visualState === "running" ||
+                         visualState === "waiting" || visualState === "confirming"
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -1993,7 +2105,41 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: root.currentStepTitle(componentData) || root.lastRun(componentData).last_step || componentData.message
+                        text: root.failedStepSummary(componentData)
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: blockedPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 62
+                radius: root.radiusMd
+                color: root.token("danger_panel", "#28151c")
+                border.color: root.token("danger", "#ff6b7a")
+                visible: visualState === "blocked"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Blocked"
+                        color: root.token("danger", "#ff6b7a")
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.blockedReason(componentData)
                         color: root.token("foreground", "#f4f7fb")
                         font.pixelSize: 12
                         wrapMode: Text.WordWrap
@@ -2007,11 +2153,11 @@ ApplicationWindow {
             Rectangle {
                 id: interruptedPanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: 72
+                Layout.preferredHeight: visualState === "interrupted" ? 72 : 52
                 radius: root.radiusMd
                 color: root.token("danger_panel", "#28151c")
                 border.color: root.token("danger", "#ff6b7a")
-                visible: visualState === "interrupted"
+                visible: root.recoveryNoticeVisible(componentData)
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -2047,7 +2193,8 @@ ApplicationWindow {
                 maximumLineCount: compactRestCard ? 1 : 3
                 elide: Text.ElideRight
                 visible: text.length > 0 && !supportingRest &&
-                         visualState !== "running" && visualState !== "waiting" && visualState !== "confirming"
+                         visualState !== "starting" && visualState !== "running" &&
+                         visualState !== "waiting" && visualState !== "confirming"
                 Layout.fillWidth: true
             }
 
@@ -2070,7 +2217,7 @@ ApplicationWindow {
                 color: root.token("panel_alt", "#101720")
                 border.color: root.token("border", "#203044")
                 visible: root.lastRun(componentData).state && root.lastRun(componentData).state !== "none" &&
-                         visualState !== "interrupted" && !supportingRest && !compactRestCard
+                         !root.recoveryNoticeVisible(componentData) && !supportingRest && !compactRestCard
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -2087,7 +2234,7 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: root.artifactSummary(componentData)
+                        text: root.stepVerificationSummary(componentData) || root.artifactSummary(componentData)
                         color: root.token("muted", "#91a2b8")
                         font.pixelSize: 10
                         elide: Text.ElideRight
@@ -2105,7 +2252,8 @@ ApplicationWindow {
                 color: root.token("panel_alt", "#101720")
                 border.color: root.token("border", "#203044")
                 visible: root.lastRunLedgerSummary(componentData).length > 0 &&
-                         !supportingRest && !compactRestCard && componentData.height >= 260
+                         !root.recoveryNoticeVisible(componentData) && !supportingRest &&
+                         !compactRestCard && componentData.height >= 260
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -2145,6 +2293,15 @@ ApplicationWindow {
                         visible: text.length > 0
                         Layout.fillWidth: true
                     }
+
+                    Text {
+                        text: root.stepVerificationSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
                 }
             }
 
@@ -2156,16 +2313,16 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: root.spaceSm
                 visible: !root.editMode && (visualState === "ready" || visualState === "idle" || visualState === "success" || visualState === "stopped") &&
-                         root.actionsFrom(componentData, ["doctor", "dry_run", "run"]).length > 0
+                         root.actionsFrom(componentData, ["view_recipe", "edit_setup", "doctor", "dry_run", "run", "open_yaml"]).length > 0
 
                 Repeater {
-                    model: root.actionsFrom(componentData, ["doctor", "dry_run", "run"])
+                    model: root.actionsFrom(componentData, ["view_recipe", "edit_setup", "doctor", "dry_run", "run", "open_yaml"])
 
                     PaperButton {
                         text: root.actionLabel(modelData, componentData)
                         role: root.actionRole(modelData)
                         compact: true
-                        width: Math.max(92, Math.min(118, parent.width / 3 - root.spaceSm))
+                        width: Math.max(104, Math.min(132, parent.width / 3 - root.spaceSm))
                         enabled: !root.actionBusy && !root.mockMode
                         onClicked: root.dispatch(componentData.id, modelData)
                     }
@@ -2195,7 +2352,8 @@ ApplicationWindow {
             Flow {
                 Layout.fillWidth: true
                 spacing: root.spaceSm
-                visible: !root.editMode && (visualState === "running" || visualState === "waiting" || visualState === "confirming") &&
+                visible: !root.editMode && (visualState === "starting" || visualState === "running" ||
+                         visualState === "waiting" || visualState === "confirming") &&
                          root.actionsFrom(componentData, ["pause", "resume", "stop", "open_run_log"]).length > 0
 
                 Repeater {
@@ -2215,7 +2373,8 @@ ApplicationWindow {
             Flow {
                 Layout.fillWidth: true
                 spacing: root.spaceSm
-                visible: !root.editMode && (visualState === "failed" || root.lastRun(componentData).state === "failed") &&
+                visible: !root.editMode && (visualState === "failed" || visualState === "blocked" ||
+                         root.lastRun(componentData).state === "failed") &&
                          root.actionsFrom(componentData, ["open_logs", "open_run_log"]).length > 0
 
                 Repeater {
@@ -2235,7 +2394,7 @@ ApplicationWindow {
             Flow {
                 Layout.fillWidth: true
                 spacing: root.spaceSm
-                visible: !root.editMode && visualState === "interrupted" &&
+                visible: !root.editMode && root.recoveryNoticeVisible(componentData) &&
                          root.actionsFrom(componentData, ["open_logs", "open_run_log", "doctor", "run"]).length > 0
 
                 Repeater {
@@ -2435,7 +2594,7 @@ ApplicationWindow {
 
         ColumnLayout {
             property var componentData: ({})
-            property var targetData: componentData.data && componentData.data.target ? componentData.data.target : ({})
+            property var targetData: componentData.data && componentData.data.summary ? componentData.data.summary : ({})
 
             spacing: root.spaceSm
 
@@ -2477,7 +2636,7 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 54
+                Layout.preferredHeight: 92
                 radius: root.radiusMd
                 color: root.token("panel_alt", "#101720")
                 border.color: root.token("border", "#203044")
@@ -2488,7 +2647,7 @@ ApplicationWindow {
                     spacing: 1
 
                     Text {
-                        text: targetData.status || componentData.status || "ready"
+                        text: targetData.state || targetData.status || componentData.status || "ready"
                         color: root.token("foreground", "#f4f7fb")
                         font.pixelSize: 12
                         font.weight: Font.DemiBold
@@ -2497,12 +2656,30 @@ ApplicationWindow {
                     }
 
                     Text {
-                        text: targetData.summary || root.detailText(componentData)
+                        text: targetData.best_candidate_summary || root.detailText(componentData)
                         color: root.token("muted", "#91a2b8")
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.targetEvidenceSummary(targetData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.targetVerificationSummary(targetData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
                         Layout.fillWidth: true
                     }
                 }

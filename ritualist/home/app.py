@@ -88,6 +88,7 @@ def run_home(*, mock: bool = False) -> int:
             self._action_busy = False
             self._confirmation_pending = False
             self._confirmation_prompt = ""
+            self._confirmation_card_id = ""
             self._confirmation_event = Event()
             self._confirmation_result = False
             self._runtime_control: Any | None = None
@@ -218,11 +219,28 @@ def run_home(*, mock: bool = False) -> int:
             self._start_action(card_id, HomeCardAction.DOCTOR)
 
         @Slot(str)
+        def viewRecipe(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="view_recipe")
+            self._start_action(card_id, HomeCardAction.VIEW_RECIPE)
+
+        @Slot(str)
+        def editSetup(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="edit_setup")
+            self._start_action(card_id, HomeCardAction.EDIT_SETUP)
+
+        @Slot(str)
         def editRecipe(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="edit_recipe")
             self._start_action(card_id, HomeCardAction.EDIT_RECIPE)
 
         @Slot(str)
+        def openYaml(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="open_yaml")
+            self._start_action(card_id, HomeCardAction.OPEN_YAML)
+
+        @Slot(str)
         def openLogs(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="open_logs")
             self._start_action(card_id, HomeCardAction.OPEN_LOGS)
 
         @Slot(str, str)
@@ -391,6 +409,17 @@ def run_home(*, mock: bool = False) -> int:
         @Slot(bool)
         def answerConfirmation(self, accepted: bool) -> None:
             record_event("home.confirmation.answered", accepted=accepted)
+            if accepted and self._confirmation_card_id:
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=self._confirmation_card_id,
+                        status=HomeCardStatus.RUNNING,
+                        subtitle="Starting...",
+                        description="Approval accepted; runtime is resuming.",
+                        **_clear_wait_fields(),
+                    )
+                )
+            self._confirmation_card_id = ""
             self._confirmation_result = accepted
             self._confirmation_pending = False
             self._confirmation_prompt = ""
@@ -629,6 +658,7 @@ def run_home(*, mock: bool = False) -> int:
         @Slot(str, object)
         def _request_confirmation(self, card_id: str, prompt: object) -> None:
             record_event("home.confirmation.requested", card_id=card_id, prompt=prompt)
+            self._confirmation_card_id = card_id
             self._show_confirmation_status(card_id, prompt)
             self._confirmation_presenter.request_confirmation(
                 prompt,
@@ -865,6 +895,8 @@ def _should_flush_home_event(event: HomeRuntimeEvent) -> bool:
     if event.status is HomeCardStatus.FAILED:
         return True
     if event.subtitle == "Confirmation required":
+        return True
+    if event.subtitle == "Starting...":
         return True
     return False
 

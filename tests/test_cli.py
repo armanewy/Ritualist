@@ -9,6 +9,7 @@ from ritualist.app_setup import InitReport, MigrationResult
 from ritualist.cli import app
 from ritualist.errors import DependencyMissingError
 from ritualist.models import Recipe
+from ritualist.preferences import RememberedApprovalScope, remember_approval
 from ritualist.run_logs import ReconciledRun, RunRecord
 from ritualist.adapters.windows_uia import WindowInspection
 
@@ -1374,6 +1375,80 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
     assert "Final run state: stopped" in result.output
     assert "Outcome: stopped" in result.output
     assert "Confirmation declined; no confirmed risky action was performed." in result.output
+
+
+def test_run_can_store_remembered_approval_from_cli_decision(monkeypatch, tmp_path):
+    approval_store = tmp_path / "preferences.json"
+    fakes = FakeAdapters()
+    recipe = Recipe.model_validate(
+        {
+            "id": "demo",
+            "name": "Demo",
+            "steps": [
+                {
+                    "action": "desktop.click_text",
+                    "text": "Play",
+                    "window_title_contains": "Battle.net",
+                    "control_type": "Button",
+                    "requires_confirmation": True,
+                },
+            ],
+        }
+    )
+    monkeypatch.setattr("ritualist.preferences.preferences_path", lambda: approval_store)
+    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+
+    result = CliRunner().invoke(app, ["run", "demo"], input="r\n")
+
+    assert result.exit_code == 0
+    assert "Always allow this local ritual on this device" in result.output
+    data = json.loads(approval_store.read_text(encoding="utf-8"))
+    approvals = data["remembered_approvals"]
+    assert len(approvals) == 1
+    assert approvals[0]["scope"]["recipe_or_intent_id"] == "demo"
+    assert approvals[0]["scope"]["target_scope"] == "desktop"
+    assert approvals[0]["scope"]["target_application"] == "Battle.net"
+    assert approvals[0]["scope"]["risk_level"] == "risky"
+
+
+def test_settings_approvals_list_and_revoke(monkeypatch, tmp_path):
+    approval_store = tmp_path / "preferences.json"
+    monkeypatch.setattr("ritualist.preferences.preferences_path", lambda: approval_store)
+    entry = remember_approval(
+        RememberedApprovalScope(
+            recipe_or_intent_id="demo",
+            content_hash="hash-1",
+            step_id="steps:1",
+            action_or_primitive_id="desktop.click_text",
+            resolved_target_identity="battle-net-play",
+            target_context="Battle.net",
+            target_text="Play",
+            target_control="Button",
+            target_scope="desktop",
+            target_application="Battle.net",
+            risk_level="risky",
+            local_user="tester",
+            local_device="device-1",
+        )
+    )
+
+    listed = CliRunner().invoke(app, ["settings", "approvals", "list", "--json"])
+
+    assert listed.exit_code == 0
+    data = json.loads(listed.output)
+    assert data[0]["id"] == entry["id"]
+    assert data[0]["scope"]["action_or_primitive_id"] == "desktop.click_text"
+
+    revoked = CliRunner().invoke(
+        app,
+        ["settings", "approvals", "revoke", str(entry["id"]), "--json"],
+    )
+
+    assert revoked.exit_code == 0
+    assert json.loads(revoked.output)["revoked"] is True
+    assert json.loads(approval_store.read_text(encoding="utf-8"))["remembered_approvals"] == []
 
 
 def test_dry_run_never_keeps_alive(monkeypatch):

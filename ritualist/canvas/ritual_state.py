@@ -121,9 +121,15 @@ def ritual_state_from_runtime_event(
         active["confirmation"] = _confirmation_state_from_event(event)
     elif event_type == "confirmation.resolved":
         previous_confirmation = _mapping(active.get("confirmation"))
+        approved = bool(getattr(event, "approved", False))
+        message = "Starting..." if approved else _safe_text(getattr(event, "message", None))
+        active["state"] = "starting" if approved else "stopped"
+        active["message"] = message
+        active["current_step"] = _step_summary_from_event(event, state_name="starting" if approved else "cancelled")
+        active["current_step"]["message"] = message
         active["confirmation"] = {
             "required": False,
-            "approved": bool(getattr(event, "approved", False)),
+            "approved": approved,
             "step_index": _int_value(getattr(event, "step_index", None)),
             "step_name": _safe_text(getattr(event, "step_name", None)),
             "action": _safe_action(getattr(event, "action", None)),
@@ -131,6 +137,14 @@ def ritual_state_from_runtime_event(
             "target_type": _safe_text(previous_confirmation.get("target_type") or ""),
             "message": _safe_text(getattr(event, "message", None)),
         }
+    elif event_type == "step.finished":
+        step_state = _string_value(getattr(event, "state", None))
+        visual_state = _finished_step_visual_state(event, step_state)
+        active["current_step"] = _step_summary_from_event(event, state_name=visual_state)
+        active["current_step"]["message"] = _safe_text(getattr(event, "message", None))
+        if visual_state in {"blocked", "failed"}:
+            active["state"] = visual_state
+            active["message"] = active["current_step"]["message"]
     elif event_type == "heartbeat":
         active["state"] = _string_value(getattr(event, "run_state", None)) or active.get("state", "")
         active["current_step"] = _step_summary_from_event(event, state_name=_string_value(getattr(event, "step_state", None)))
@@ -259,6 +273,7 @@ def _active_run_state(value: Mapping[str, Any] | None) -> dict[str, Any]:
         },
         "confirmation": {
             "required": bool(confirmation.get("required") or data.get("state") == "confirming" or data.get("status") == "confirming"),
+            "approved": bool(confirmation.get("approved")),
             "step_index": _int_value(confirmation.get("step_index")),
             "step_name": _safe_text(confirmation.get("step_name") or ""),
             "action": _safe_action(confirmation.get("action") or ""),
@@ -457,23 +472,62 @@ def _max_step_index(steps: Sequence[Mapping[str, Any]]) -> int:
 
 
 def _step_summary_from_mapping(step: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    summary = {
         "index": _int_value(step.get("index") or step.get("step_index")),
         "name": _safe_text(step.get("step_name") or step.get("name") or ""),
         "action": _safe_action(step.get("action") or ""),
         "state": _safe_text(step.get("status") or step.get("state") or ""),
         "message": _safe_text(step.get("message") or ""),
     }
+    verification = _verification_summary(_mapping(step.get("metadata")).get("verification") or step.get("verification"))
+    if verification:
+        summary["verification"] = verification
+    return summary
 
 
 def _step_summary_from_event(event: Any, *, state_name: str) -> dict[str, Any]:
-    return {
+    summary = {
         "index": _int_value(getattr(event, "step_index", None)),
         "name": _safe_text(getattr(event, "step_name", None)),
         "action": _safe_action(getattr(event, "action", None)),
         "state": _safe_text(state_name or ""),
         "message": "",
     }
+    verification = _verification_summary(_mapping(getattr(event, "metadata", None)).get("verification"))
+    if verification:
+        summary["verification"] = verification
+    return summary
+
+
+def _finished_step_visual_state(event: Any, step_state: str) -> str:
+    if _event_blocked(event):
+        return "blocked"
+    if step_state == "failed":
+        return "failed"
+    if step_state == "cancelled":
+        return "cancelled"
+    return _safe_text(step_state)
+
+
+def _event_blocked(event: Any) -> bool:
+    metadata = _mapping(getattr(event, "metadata", None))
+    target_resolution = _mapping(metadata.get("target_resolution"))
+    if str(target_resolution.get("status") or "").casefold() == "blocked":
+        return True
+    message = str(getattr(event, "message", "") or "").casefold()
+    return "blocked" in message
+
+
+def _verification_summary(value: object) -> dict[str, str]:
+    data = _mapping(value)
+    if not data:
+        return {}
+    status = _safe_text(data.get("status") or "")
+    message = _safe_text(data.get("message") or "")
+    name = _safe_text(data.get("name") or "")
+    if not (status or message or name):
+        return {}
+    return {"name": name, "status": status, "message": message}
 
 
 def _current_step_from_mapping(data: Mapping[str, Any]) -> dict[str, Any]:

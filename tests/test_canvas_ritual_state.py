@@ -268,6 +268,73 @@ def test_failed_and_finished_runtime_events_move_to_last_run() -> None:
     assert state["last_run"]["final_message"] == "declined confirmation"
 
 
+def test_confirmation_approval_immediately_enters_starting_state() -> None:
+    state = ritual_state_from_runtime_event(
+        {"recipe_id": "gaming_mode"},
+        SimpleNamespace(
+            type="confirmation.requested",
+            step_index=2,
+            step_name="Confirm Play",
+            action="desktop.click_text",
+            prompt="Click Play?",
+            target="Play",
+            target_type="text",
+        ),
+    )
+
+    state = ritual_state_from_runtime_event(
+        state,
+        SimpleNamespace(
+            type="confirmation.resolved",
+            step_index=2,
+            step_name="Confirm Play",
+            action="desktop.click_text",
+            approved=True,
+            message="approved",
+        ),
+    )
+
+    active = state["active_run"]
+    assert active["state"] == "starting"
+    assert active["message"] == "Starting..."
+    assert active["current_step"]["state"] == "starting"
+    assert active["confirmation"]["required"] is False
+    assert active["confirmation"]["approved"] is True
+
+
+def test_finished_step_exposes_blocked_reason_and_failed_message() -> None:
+    blocked = ritual_state_from_runtime_event(
+        {"recipe_id": "gaming_mode"},
+        SimpleNamespace(
+            type="step.finished",
+            step_index=2,
+            step_name="Click Play",
+            action="desktop.click_text",
+            state="failed",
+            message="target unavailable or blocked before confirmation",
+            metadata={"target_resolution": {"status": "blocked"}},
+        ),
+    )
+    failed = ritual_state_from_runtime_event(
+        {"recipe_id": "gaming_mode"},
+        SimpleNamespace(
+            type="step.finished",
+            step_index=3,
+            step_name="Open launcher",
+            action="app.launch",
+            state="failed",
+            message="launcher missing",
+            metadata={},
+        ),
+    )
+
+    assert blocked["active_run"]["state"] == "blocked"
+    assert blocked["active_run"]["current_step"]["name"] == "Click Play"
+    assert blocked["active_run"]["current_step"]["message"] == "target unavailable or blocked before confirmation"
+    assert failed["active_run"]["state"] == "failed"
+    assert failed["active_run"]["current_step"]["message"] == "launcher missing"
+
+
 def test_interrupted_finished_event_populates_recovery_actions() -> None:
     state = ritual_state_from_runtime_event(
         {"recipe_id": "gaming_mode"},
@@ -331,6 +398,13 @@ def test_last_run_ledger_summarizes_failed_not_run_and_operator_review(tmp_path:
                 "action": "app.launch",
                 "status": "failed",
                 "message": "token=secret",
+                "metadata": {
+                    "verification": {
+                        "name": "launch_check",
+                        "status": "failed",
+                        "message": "app not visible",
+                    }
+                },
             },
         ],
         notes=[
@@ -351,6 +425,11 @@ def test_last_run_ledger_summarizes_failed_not_run_and_operator_review(tmp_path:
     assert last_run["last_operator_note_at"] == "2026-06-18T00:02:00+00:00"
     assert last_run["step_summaries"][0]["name"] == "Open approved checklist"
     assert last_run["step_summaries"][1]["state"] == "failed"
+    assert last_run["step_summaries"][1]["verification"] == {
+        "name": "launch_check",
+        "status": "failed",
+        "message": "app not visible",
+    }
     assert "metadata" not in payload
     assert "token=secret" not in payload
     assert "token=[redacted]" in payload

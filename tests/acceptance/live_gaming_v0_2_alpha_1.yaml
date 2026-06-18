@@ -1,0 +1,177 @@
+schema: ritualist.live_gaming_acceptance.v1
+release: v0.2.0-alpha.1
+scope: live_integration_only
+semantics:
+  PASS: "Live desktop evidence satisfies the case without mutation outside the approved Ritualist action."
+  FAIL: "Live desktop evidence contradicts the release requirement or a command failed."
+  NEEDS_HUMAN_REVIEW: "The case was captured but still requires operator comparison or visual judgment."
+  NOT_RUN: "The case was not selected or the required live state was not present."
+safety_contract:
+  - "Requires explicit -Live and -IUnderstandThisIsLive operator switches."
+  - "Never enters credentials."
+  - "Never installs, locates, or updates the game."
+  - "Never automates gameplay."
+  - "Never uses coordinate clicks or synthetic keyboard shortcuts."
+  - "Captures read-only process, window, UI Automation, run-log, screenshot, and human-note evidence."
+artifact_contract:
+  summary_json: artifacts/live-gaming-acceptance/live-gaming-summary.json
+  summary_md: artifacts/live-gaming-acceptance/live-gaming-summary.md
+  evidence_root: artifacts/live-gaming-acceptance/evidence
+cases:
+  - id: battlenet_absent
+    label: "Battle.net absent"
+    expected_evidence:
+      - process_snapshot
+      - window_snapshot
+      - selected_branch
+      - human_notes
+    pass_when: "No Battle.net process/window is observed and the case records no confirmation or invocation."
+  - id: login_required
+    label: "Battle.net login required"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Login-related controls or text are present and Play confirmation is suppressed."
+  - id: install_visible
+    label: "Install visible"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Install is visible for the scoped Diablo/Battle.net context and no Play approval is requested."
+  - id: locate_game_visible
+    label: "Locate the game visible"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Locate is visible for the scoped Diablo/Battle.net context and no Play approval is requested."
+  - id: update_visible
+    label: "Update visible or updating"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Update/updating state is observed and no Play approval is requested."
+  - id: play_visible_disabled
+    label: "Play visible but disabled"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Play is visible but disabled and Ritualist blocks without requesting approval."
+  - id: play_enabled
+    label: "Play enabled"
+    expected_evidence:
+      - scoped_window_tree
+      - uia_labels_control_types_enabled_state
+      - selected_branch
+      - confirmation_shown
+      - resolved_target_identity
+      - human_notes
+    pass_when: "The enabled Play target is resolved by identity before any approval is shown."
+  - id: target_disappears_after_approval
+    label: "Target disappears after approval"
+    expected_evidence:
+      - resolved_target_identity_before_approval
+      - scoped_window_tree_after_approval
+      - invocation_result
+      - run_json
+      - steps_jsonl
+      - human_notes
+    pass_when: "Ritualist fails visibly when the approved target disappears or changes before invocation."
+  - id: diablo_already_running
+    label: "Diablo already running"
+    expected_evidence:
+      - process_snapshot
+      - window_snapshot
+      - selected_branch
+      - confirmation_suppressed
+      - human_notes
+    pass_when: "Diablo is already running and the ritual completes/focuses safely without Play approval."
+  - id: approved_play_succeeds
+    label: "Approved Play succeeds"
+    expected_evidence:
+      - confirmation_shown
+      - approval_decision
+      - invocation_result
+      - process_window_postcondition
+      - run_json
+      - steps_jsonl
+      - screenshot_or_short_clip
+      - human_notes
+    pass_when: "The operator approved the exact resolved Play target and Diablo starts or Battle.net reports launching/playing."
+  - id: postcondition_fails
+    label: "Postcondition fails"
+    expected_evidence:
+      - invocation_result
+      - process_window_postcondition
+      - visible_failure_message
+      - run_json
+      - steps_jsonl
+      - human_notes
+    pass_when: "Ritualist surfaces the failed verification immediately and records it in the run."
+  - id: native_browser_handoff
+    label: "Native browser handoff"
+    expected_evidence:
+      - selected_browser_mode
+      - process_window_snapshot
+      - ritual_step_log
+      - human_notes
+    pass_when: "Native mode delegates to the user's browser and does not claim playback verification."
+  - id: managed_browser_selected
+    label: "Managed browser explicitly selected"
+    expected_evidence:
+      - selected_browser_mode
+      - managed_profile_evidence
+      - ritual_step_log
+      - human_notes
+    pass_when: "Managed mode is explicit and uses Ritualist's managed browser profile."
+  - id: managed_media_starts
+    label: "Managed media starts"
+    expected_evidence:
+      - selected_browser_mode
+      - media_ready_state
+      - current_time_advances
+      - ritual_step_log
+      - human_notes
+    pass_when: "Managed media readiness verifies ready state, not paused/ended, and advancing currentTime."
+  - id: managed_media_stalls
+    label: "Managed media stalls"
+    expected_evidence:
+      - selected_browser_mode
+      - media_ready_state
+      - current_time_samples
+      - visible_failure_message
+      - ritual_step_log
+      - human_notes
+    pass_when: "Stalled managed media is reported as optional ambience failure and does not block game setup."
+  - id: optional_ambience_failure
+    label: "Optional ambience failure"
+    expected_evidence:
+      - ambience_step_result
+      - selected_branch
+      - run_json
+      - steps_jsonl
+      - human_notes
+    pass_when: "Ambience failure is visible but non-blocking for the Battle.net readiness flow."
+  - id: no_premature_minimize
+    label: "No premature ambience minimize"
+    expected_evidence:
+      - selected_browser_mode
+      - minimize_setting
+      - media_readiness_result
+      - window_snapshot
+      - human_notes
+    pass_when: "Native mode never claims playback verification and managed mode only minimizes after media readiness succeeds."

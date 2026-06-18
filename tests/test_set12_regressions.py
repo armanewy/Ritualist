@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from ritualist.adapters.fake import FakeAdapters
 from ritualist.cli import app
 from ritualist.executor import WorkflowExecutor
+from ritualist.integrations.battlenet_readiness import BattleNetReadinessState
 from ritualist.home import HomeRunHistoryCache, load_installed_home_cards
 from ritualist.models import Recipe
 from ritualist.packs import (
@@ -24,6 +25,12 @@ from ritualist.packs import (
 from ritualist.recipe_loader import load_recipe
 from ritualist.run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
 from ritualist.runtime_control import RuntimeControl
+from ritualist.target_resolution import (
+    TargetCandidate,
+    TargetResolutionResult,
+    TargetState,
+    builtin_target_catalog,
+)
 
 
 def test_bundled_gaming_mode_validates_and_dry_runs_without_adapters(tmp_path, monkeypatch):
@@ -44,7 +51,7 @@ def test_bundled_gaming_mode_validates_and_dry_runs_without_adapters(tmp_path, m
 
     assert validate_result.exit_code == 0, validate_result.output
     assert "Gaming Mode" in validate_result.output
-    assert "Ask before clicking Play" in validate_result.output
+    assert "Play enabled branch" in validate_result.output
     assert "Recipe is valid." in validate_result.output
 
     assert dry_run_result.exit_code == 0, dry_run_result.output
@@ -56,7 +63,7 @@ def test_bundled_gaming_mode_validates_and_dry_runs_without_adapters(tmp_path, m
     assert fakes.desktop.calls == []
     assert writers and writers[0].run_dir is not None
     steps = _read_steps(writers[0].run_dir)
-    assert len(steps) == 6
+    assert len(steps) >= 20
     assert {step["status"] for step in steps} == {"dry-run"}
 
 
@@ -201,8 +208,18 @@ def test_bundled_gaming_mode_keep_open_survives_declined_play_confirmation(
         "ritualist.cli._keep_alive_until_interrupted",
         lambda: keep_alive_calls.append(True),
     )
+    _install_fake_play_ready_resolution(monkeypatch)
 
-    result = CliRunner().invoke(app, ["run", str(_gaming_mode_sample_path())], input="n\n")
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            str(_gaming_mode_sample_path()),
+            "--var",
+            "ambience_browser_mode=managed",
+        ],
+        input="n\n",
+    )
 
     assert result.exit_code == 1
     assert keep_alive_calls == [True]
@@ -225,8 +242,8 @@ def test_bundled_gaming_mode_generates_home_card_from_sample_metadata(tmp_path):
     assert card.id == "gaming_mode"
     assert card.title == "Diablo IV Night"
     assert card.category == "Gaming"
-    assert card.subtitle == "YouTube ambience + Battle.net"
-    assert card.description.startswith("Open a looping video")
+    assert card.subtitle == "Ambience + Battle.net readiness"
+    assert card.description.startswith("Open optional ambience")
     assert card.to_qml()["keep_open_active"] is False
 
 
@@ -368,3 +385,43 @@ def _write_wait_pack(tmp_path: Path) -> Path:
             ),
         )
     return path
+
+
+def _install_fake_play_ready_resolution(monkeypatch) -> None:
+    resolution = _fake_readiness_resolution(BattleNetReadinessState.PLAY_AVAILABLE_ENABLED)
+    monkeypatch.setattr("ritualist.predicates.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("ritualist.actions.target_actions.resolve_target", lambda _target: resolution)
+
+
+def _fake_readiness_resolution(readiness_state: BattleNetReadinessState) -> TargetResolutionResult:
+    target, _matched = builtin_target_catalog().resolve("diablo_iv")
+    assert target is not None
+    target_state = TargetState.READY
+    return TargetResolutionResult(
+        query="diablo_iv",
+        target=target,
+        state=target_state,
+        candidates=(
+            TargetCandidate(
+                candidate_id=f"readiness_{readiness_state.value}",
+                target_id=target.id,
+                provider="battle_net_readiness",
+                state=target_state,
+                label=f"Battle.net readiness: {readiness_state.value}",
+                confidence=0.9,
+                window_title="Battle.net",
+                evidence=("fake Battle.net readiness",),
+                details={
+                    "readiness": {
+                        "schema_version": "battle_net.readiness.v1",
+                        "provider": "battle_net_readiness",
+                        "state": readiness_state.value,
+                        "recommendation": "fake recommendation",
+                        "candidate_labels": ["Diablo IV", "Play"],
+                        "window_title": "Battle.net",
+                    },
+                    "recommendation": "fake recommendation",
+                },
+            ),
+        ),
+    )

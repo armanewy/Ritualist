@@ -38,7 +38,10 @@ class CanvasComponentAction(StrEnum):
     RUN = "run"
     DRY_RUN = "dry_run"
     DOCTOR = "doctor"
+    VIEW_RECIPE = "view_recipe"
+    EDIT_SETUP = "edit_setup"
     EDIT_RECIPE = "edit_recipe"
+    OPEN_YAML = "open_yaml"
     OPEN_LOGS = "open_logs"
     OPEN_RUN_LOG = "open_run_log"
     PAUSE = "pause"
@@ -266,7 +269,7 @@ def _component_runtime_state(
     binding = component.binding
     binding_kind = binding.kind if binding is not None else CanvasBindingKind.STATIC
     reference = binding.reference if binding is not None else ""
-    title = str(props.get("title") or component.id)
+    title = _component_title(component)
     warnings: list[str] = []
 
     shortcut_kind = shortcut_kind_for_component(component.type)
@@ -295,8 +298,26 @@ def _component_runtime_state(
             message=str(active_payload.get("message") or last_run_messages.get(reference, "")),
             binding_kind=CanvasBindingKind.RECIPE.value,
             binding_reference=reference,
-            enabled_actions=() if warnings else ("run", "dry_run", "doctor", "edit_recipe", "open_logs"),
-            disabled_actions=("run", "dry_run", "doctor", "edit_recipe", "open_logs") if warnings else (),
+            enabled_actions=() if warnings else (
+                "run",
+                "dry_run",
+                "doctor",
+                "view_recipe",
+                "edit_setup",
+                "edit_recipe",
+                "open_yaml",
+                "open_logs",
+            ),
+            disabled_actions=(
+                "run",
+                "dry_run",
+                "doctor",
+                "view_recipe",
+                "edit_setup",
+                "edit_recipe",
+                "open_yaml",
+                "open_logs",
+            ) if warnings else (),
             warnings=tuple(warnings),
             data={"recipe_id": reference, "active_run": active_payload, "ritual_state": ritual_states.get(reference, {})},
         )
@@ -759,7 +780,17 @@ def _unresolved_target_warnings(component_id: str, reference: str, target_ids: s
 
 def _status_for_run(state: str) -> str:
     normalized = state.strip().lower()
-    if normalized in {"success", "failed", "stopped", "interrupted", "paused", "waiting", "confirming"}:
+    if normalized in {
+        "success",
+        "failed",
+        "blocked",
+        "stopped",
+        "interrupted",
+        "paused",
+        "waiting",
+        "confirming",
+        "starting",
+    }:
         return normalized
     if normalized == "running":
         return "running"
@@ -777,3 +808,23 @@ def _status_for_doctor(state: str) -> str:
     if normalized == "running_check":
         return "running_check"
     return "unknown"
+
+
+def _component_title(component: CanvasComponent) -> str:
+    props = component.props_dict()
+    explicit = str(props.get("title") or props.get("text") or "").strip()
+    if explicit:
+        return explicit
+    by_type = {
+        "category.dock": "Categories",
+        "ritual.status": "Ritual status",
+        "ritual.controller": "Ritual controls",
+        "recent.activity": "Recent activity",
+        "doctor.badge": "Doctor",
+        "target.status": "Target status",
+        "target.card": "Target",
+        "clock": "Clock",
+    }
+    if component.type in by_type:
+        return by_type[component.type]
+    return str(component.id).replace("_", " ").replace("-", " ").strip().title() or "Canvas item"

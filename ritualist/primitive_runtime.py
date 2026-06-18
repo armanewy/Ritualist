@@ -82,6 +82,8 @@ def run_read_only_primitive(
         return _uia_primitive(verb, plan_step.parameters, adapters=adapters)
     if family == "browser.assert":
         return _browser_assert_primitive(verb, plan_step.parameters, adapters=adapters)
+    if family == "runtime.assert":
+        return _runtime_assert_primitive(verb, plan_step.parameters)
     if family == "hardware.inventory":
         return _hardware_primitive(verb, plan_step.parameters)
     if family == "network.connectivity":
@@ -237,6 +239,16 @@ def _browser_assert_primitive(
     else:
         raise RitualistError(f"unsupported browser.assert primitive verb: {verb}")
     return _success("browser assertion evaluated", {"matched": bool(matched)})
+
+
+def _runtime_assert_primitive(verb: str, parameters: dict[str, Any]) -> PrimitiveExecutionResult:
+    if verb == "value_equals":
+        matched = parameters.get("left") == parameters.get("right")
+        return _success(
+            "runtime value comparison evaluated",
+            {"matched": matched},
+        )
+    raise RitualistError(f"unsupported runtime.assert primitive verb: {verb}")
 
 
 def _hardware_primitive(verb: str, parameters: dict[str, Any]) -> PrimitiveExecutionResult:

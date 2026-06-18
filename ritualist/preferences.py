@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,18 +16,35 @@ PREFERENCES_SCHEMA_VERSION = "ritualist.preferences.v1"
 PREFERENCES_FILENAME = "local-preferences.json"
 HIGH_RISK_REMEMBER_TOKENS = frozenset(
     {
+        "bank",
         "buy",
+        "card",
+        "credential",
+        "credit card",
         "pay",
+        "payment",
         "purchase",
         "checkout",
         "delete",
+        "destroy",
+        "erase",
+        "format",
+        "password",
+        "passwd",
+        "remove",
         "send",
         "publish",
         "uninstall",
         "reset",
+        "secret",
+        "token",
+        "transfer",
+        "wipe",
         "confirm order",
     }
 )
+DISALLOWED_REMEMBER_RISKS = frozenset({"credential", "credentials", "payment", "destructive"})
+APPROVAL_SOURCE_TRUSTS = frozenset({"local_user", "private_pack"})
 
 
 @dataclass(frozen=True)
@@ -55,6 +74,11 @@ class RememberedApprovalScope:
     target_role: str = ""
     target_test_id: str = ""
     local_user: str = field(default_factory=lambda: _local_user())
+    local_device: str = field(default_factory=lambda: _local_device())
+    target_scope: str = ""
+    target_application: str = ""
+    risk_level: str = ""
+    target_ambiguous: bool = False
     source_trust: str = "local_user"
 
     def to_dict(self) -> dict[str, str]:
@@ -70,6 +94,11 @@ class RememberedApprovalScope:
             "target_role": self.target_role,
             "target_test_id": self.target_test_id,
             "local_user": self.local_user,
+            "local_device": self.local_device,
+            "target_scope": self.target_scope,
+            "target_application": self.target_application,
+            "risk_level": self.risk_level,
+            "target_ambiguous": "true" if self.target_ambiguous else "false",
             "source_trust": self.source_trust,
         }
 
@@ -140,9 +169,40 @@ def cleanup_choice_for(
 
 
 def can_remember_approval(scope: RememberedApprovalScope) -> bool:
-    if scope.source_trust not in {"local_user", "private_pack"}:
+    if scope.source_trust not in APPROVAL_SOURCE_TRUSTS:
         return False
-    label = f"{scope.target_label()} {scope.action_or_primitive_id}".casefold()
+    if scope.target_ambiguous:
+        return False
+    required_fields = (
+        scope.recipe_or_intent_id,
+        scope.content_hash,
+        scope.step_id,
+        scope.action_or_primitive_id,
+        scope.local_user,
+        scope.local_device,
+        scope.target_scope,
+        scope.target_application,
+        scope.risk_level,
+    )
+    if any(not str(value).strip() for value in required_fields):
+        return False
+    if scope.target_scope in {"browser", "desktop"} and not scope.target_label().strip():
+        return False
+    if scope.target_scope == "desktop" and not scope.resolved_target_identity.strip():
+        return False
+    if scope.risk_level.strip().casefold() in DISALLOWED_REMEMBER_RISKS:
+        return False
+    label = " ".join(
+        value
+        for value in (
+            scope.target_label(),
+            scope.action_or_primitive_id,
+            scope.target_scope,
+            scope.target_application,
+            scope.risk_level,
+        )
+        if value
+    ).casefold()
     return not any(token in label for token in HIGH_RISK_REMEMBER_TOKENS)
 
 
@@ -152,6 +212,8 @@ def remember_approval(
     path: Path | None = None,
 ) -> dict[str, Any]:
     if not can_remember_approval(scope):
+        if scope.target_ambiguous:
+            raise ValueError("ambiguous confirmation targets cannot be remembered")
         raise ValueError("high-risk confirmation targets cannot be remembered casually")
     preferences = load_preferences(path=path)
     serialized = scope.to_dict()
@@ -160,7 +222,7 @@ def remember_approval(
         for existing in preferences["remembered_approvals"]
         if existing.get("scope") != serialized
     ]
-    entry = {"id": uuid.uuid4().hex, "scope": serialized}
+    entry = {"id": uuid.uuid4().hex, "scope": serialized, "created_at": _now_iso()}
     approvals.append(entry)
     preferences["remembered_approvals"] = approvals
     _write_preferences(path or preferences_path(), preferences)
@@ -173,11 +235,36 @@ def approval_matches(
     path: Path | None = None,
     local_user_approved_source: bool = False,
 ) -> bool:
-    if not local_user_approved_source or scope.source_trust not in {"local_user", "private_pack"}:
+    if (
+        not local_user_approved_source
+        or scope.source_trust not in APPROVAL_SOURCE_TRUSTS
+        or not can_remember_approval(scope)
+    ):
         return False
     preferences = load_preferences(path=path)
     target = scope.to_dict()
     return any(entry.get("scope") == target for entry in preferences["remembered_approvals"])
+
+
+def list_remembered_approvals(*, path: Path | None = None) -> list[dict[str, Any]]:
+    preferences = load_preferences(path=path)
+    return [
+        dict(entry)
+        for entry in preferences["remembered_approvals"]
+        if isinstance(entry.get("id"), str) and isinstance(entry.get("scope"), dict)
+    ]
+
+
+def revoke_remembered_approval(approval_id: str, *, path: Path | None = None) -> bool:
+    preferences = load_preferences(path=path)
+    approval_id = approval_id.strip()
+    approvals = preferences["remembered_approvals"]
+    kept = [entry for entry in approvals if str(entry.get("id") or "") != approval_id]
+    if len(kept) == len(approvals):
+        return False
+    preferences["remembered_approvals"] = kept
+    _write_preferences(path or preferences_path(), preferences)
+    return True
 
 
 def _empty_preferences() -> dict[str, Any]:
@@ -204,3 +291,11 @@ def _write_preferences(path: Path, data: dict[str, Any]) -> None:
 
 def _local_user() -> str:
     return os.environ.get("USERNAME") or os.environ.get("USER") or "local"
+
+
+def _local_device() -> str:
+    return os.environ.get("COMPUTERNAME") or platform.node() or "local-device"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()

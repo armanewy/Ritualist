@@ -642,12 +642,15 @@ def _collect_condition(
 
 def _primitive_id_for_predicate(predicate_type: str) -> str:
     return {
+        "value.equals": "runtime.assert.value_equals",
         "file.exists": "filesystem.assert.file_exists",
         "path.exists": "filesystem.assert.path_exists",
         "process.running": "app.process.is_running",
         "window.exists": "window.topology.exists",
         "window.text_visible": "uia.element.text_visible",
         "browser.text_visible": "browser.assert.text_visible",
+        "target.state": "target.resolution.inspect",
+        "target.readiness_state": "target.resolution.inspect",
     }[predicate_type]
 
 

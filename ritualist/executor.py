@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 import shlex
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from .approvals import ConfirmationDecision, normalize_confirmation_decision
 from .actions.base import (
     ActionOutcome,
     ActionContext,
@@ -47,6 +51,13 @@ from .overlay import (
     TargetRegion,
 )
 from .predicates import PredicateResult, evaluate_condition
+from .preferences import (
+    APPROVAL_SOURCE_TRUSTS,
+    RememberedApprovalScope,
+    approval_matches,
+    can_remember_approval,
+    remember_approval,
+)
 from .runtime_control import RuntimeControl, RuntimeStoppedError
 from .runtime_models import (
     ConfirmationRequested,
@@ -113,6 +124,9 @@ class WorkflowExecutor:
         strict: bool = False,
         config: AppConfig | None = None,
         overlay: OverlayController | None = None,
+        approval_store_path: Path | None = None,
+        approval_source_trust: str = "local_user",
+        recipe_content_hash: str | None = None,
     ) -> None:
         if adapters is None:
             from .adapters import create_default_adapters
@@ -130,6 +144,10 @@ class WorkflowExecutor:
         self.runtime_event_callback = runtime_event_callback
         self.strict = strict
         self.config = config or load_app_config()
+        self.approval_store_path = approval_store_path
+        self.approval_source_trust = approval_source_trust
+        self._configured_recipe_content_hash = recipe_content_hash
+        self._active_recipe_content_hash: str | None = None
         self._overlay_available = overlay is not None and not isinstance(overlay, NullOverlayController)
         self.overlay = BestEffortOverlayController(overlay or NullOverlayController())
         self._run_id: str | None = None
@@ -142,6 +160,8 @@ class WorkflowExecutor:
         self._stopped_reason: str | None = None
         self._declined_target: dict[str, Any] | None = None
         self._ownership_ledger: list[dict[str, Any]] = []
+        self._remembered_approval_applied: dict[str, Any] | None = None
+        self._last_confirmation_result: dict[str, Any] | None = None
 
     def run(self, recipe: Recipe) -> RunSummary:
         results: list[StepResult] = []
@@ -153,6 +173,11 @@ class WorkflowExecutor:
         self._stopped_reason = None
         self._declined_target = None
         self._ownership_ledger = []
+        self._remembered_approval_applied = None
+        self._last_confirmation_result = None
+        self._active_recipe_content_hash = (
+            self._configured_recipe_content_hash or _recipe_content_hash(recipe)
+        )
         if self.run_logger is not None:
             self.run_logger.start(recipe, dry_run=self.dry_run)
         self._start_runtime_run(recipe, total)
@@ -375,14 +400,27 @@ class WorkflowExecutor:
                             step_id=step_id,
                             phase=phase_name,
                             step=active_step,
+                            recipe=recipe,
                         )
                     )
                     if step.requires_confirmation:
                         prompt = self._confirmation_request(recipe, step, preview_region)
-                        approved = self._confirm(prompt, step_id=index, phase=phase, step=step)
-                        result_metadata["approval"] = {
-                            "status": "approved" if approved else "declined",
-                        }
+                        self._last_confirmation_result = None
+                        approved = self._confirm(
+                            prompt,
+                            step_id=index,
+                            phase=phase,
+                            step=step,
+                            recipe=recipe,
+                        )
+                        confirmation_result = self._last_confirmation_result or {}
+                        result_metadata["approval"] = confirmation_result.get(
+                            "approval",
+                            {"status": "approved" if approved else "declined"},
+                        )
+                        remembered = confirmation_result.get("remembered_approval")
+                        if isinstance(remembered, dict):
+                            result_metadata["remembered_approval"] = remembered
                         if not approved:
                             raise UserCancelledError("user declined confirmation")
 
@@ -870,7 +908,7 @@ class WorkflowExecutor:
                 cleanup_offer=cleanup_offer,
                 cleanup_choice=cleanup_choice,
                 remembered_cleanup_preference_applied=False,
-                remembered_approval_applied=None,
+                remembered_approval_applied=self._remembered_approval_applied,
             )
         except TypeError:
             finish(success=summary.success)
@@ -882,10 +920,28 @@ class WorkflowExecutor:
         step_id: int,
         phase: str,
         step: ExecutableStep,
+        recipe: Recipe | None = None,
     ) -> bool:
         confirmation_id = uuid.uuid4().hex
         prompt_text = _confirmation_prompt_text(prompt)
         metadata = _confirmation_metadata(prompt, step=step, confirmation_id=confirmation_id)
+        remembered_scope = self._remembered_approval_scope(
+            recipe=recipe,
+            step=step,
+            prompt=prompt,
+            step_id=step_id,
+            phase=phase,
+        )
+        remembered = self._matching_remembered_approval(remembered_scope)
+        if remembered is not None:
+            self._last_confirmation_result = {
+                "approval": {"status": "remembered"},
+                "remembered_approval": remembered,
+            }
+            self._remembered_approval_applied = remembered
+            self._change_run_state(RunState.RUNNING, message="remembered approval applied")
+            return True
+
         self._change_run_state(RunState.CONFIRMING, message="confirmation requested")
         record_step_state = getattr(self.run_logger, "record_step_state", None)
         if record_step_state is not None:
@@ -917,7 +973,17 @@ class WorkflowExecutor:
                 target_type=str(metadata.get("target_type") or ""),
             )
         )
-        approved = bool(self.confirmer(prompt))
+        decision = normalize_confirmation_decision(self.confirmer(prompt))
+        approved = decision.approved
+        remembered_result = self._store_remembered_approval(
+            remembered_scope,
+            decision=decision,
+        )
+        self._last_confirmation_result = {
+            "approval": {"status": "approved" if approved else "declined"},
+        }
+        if remembered_result is not None:
+            self._last_confirmation_result["remembered_approval"] = remembered_result
         resolved_state = StepState.RUNNING if approved else StepState.CANCELLED
         if not approved:
             self._stopped_reason = STOPPED_USER_DECLINED_CONFIRMATION
@@ -949,6 +1015,86 @@ class WorkflowExecutor:
         else:
             self._change_run_state(RunState.STOPPING, message="confirmation declined")
         return approved
+
+    def _remembered_approval_scope(
+        self,
+        *,
+        recipe: Recipe | None,
+        step: ExecutableStep,
+        prompt: ConfirmationRequest | str,
+        step_id: int,
+        phase: str,
+    ) -> RememberedApprovalScope | None:
+        if recipe is None or not isinstance(prompt, ConfirmationRequest):
+            return None
+        target_application = _approval_target_application(prompt)
+        target_scope = str(prompt.target_scope or "").strip()
+        risk_level = self._risk_level_for_step(step)
+        target_identity = str(prompt.target_identity or "").strip()
+        target_context = target_application or str(prompt.window_title or prompt.browser_title or "")
+        if prompt.target_ambiguous:
+            target_identity = target_identity or "ambiguous"
+        return RememberedApprovalScope(
+            recipe_or_intent_id=recipe.id,
+            content_hash=self._active_recipe_content_hash or _recipe_content_hash(recipe),
+            step_id=f"{phase}:{step_id}",
+            action_or_primitive_id=step.action,
+            resolved_target_identity=target_identity,
+            target_context=target_context,
+            target_text=str(prompt.target_text or ""),
+            target_control=str(prompt.control_type or ""),
+            target_role=str(prompt.target_role or ""),
+            target_test_id=str(prompt.target_test_id or ""),
+            target_scope=target_scope,
+            target_application=target_application,
+            risk_level=risk_level,
+            target_ambiguous=bool(prompt.target_ambiguous),
+            source_trust=self.approval_source_trust,
+        )
+
+    def _matching_remembered_approval(
+        self,
+        scope: RememberedApprovalScope | None,
+    ) -> dict[str, Any] | None:
+        if scope is None or not self.config.approvals.remembered_approvals_enabled:
+            return None
+        if not approval_matches(
+            scope,
+            path=self.approval_store_path,
+            local_user_approved_source=self.approval_source_trust in APPROVAL_SOURCE_TRUSTS,
+        ):
+            return None
+        return {
+            "status": "applied",
+            "scope": _approval_scope_summary(scope),
+        }
+
+    def _store_remembered_approval(
+        self,
+        scope: RememberedApprovalScope | None,
+        *,
+        decision: ConfirmationDecision,
+    ) -> dict[str, Any] | None:
+        if not decision.approved or not decision.remember:
+            return None
+        if not self.config.approvals.remembered_approvals_enabled:
+            return {"status": "not_stored", "reason": "remembered approvals disabled"}
+        if scope is None:
+            return {"status": "not_stored", "reason": "confirmation is not target scoped"}
+        if not can_remember_approval(scope):
+            return {"status": "not_stored", "reason": "approval scope is not rememberable"}
+        entry = remember_approval(scope, path=self.approval_store_path)
+        return {
+            "status": "stored",
+            "approval_id": str(entry.get("id") or ""),
+            "scope": _approval_scope_summary(scope),
+        }
+
+    def _risk_level_for_step(self, step: ExecutableStep) -> str:
+        try:
+            return self.registry.metadata(step.action).side_effect_level
+        except KeyError:
+            return "unknown"
 
     def _record_owned_resource(self, step: ExecutableStep) -> None:
         item = _owned_resource_for_step(step, keep_open_active=self._browser_keep_open_active)
@@ -1143,6 +1289,8 @@ class WorkflowExecutor:
             target_text=_confirmation_target_text(step, region),
             target_role=_confirmation_target_role(step),
             target_test_id=_confirmation_target_test_id(step),
+            target_identity=region.target_identity if region else None,
+            target_ambiguous=bool(region.ambiguous) if region else False,
             control_type=region.control_type if region and region.control_type else getattr(step, "control_type", None),
             target_rect=region.rect if region else None,
             safety_message=_confirmation_safety_message(step),
@@ -1252,6 +1400,8 @@ def _requires_confirmed_desktop_target(step: ExecutableStep) -> bool:
 def _is_confirmable_region(region: TargetRegion | None) -> bool:
     if region is None:
         return False
+    if region.ambiguous:
+        return False
     if not region.target_identity:
         return False
     if region.visible is False or region.enabled is False:
@@ -1287,6 +1437,8 @@ def _target_evidence_metadata(region: TargetRegion | None) -> dict[str, Any] | N
         payload["control_type"] = region.control_type
     if region.target_identity:
         payload["target_identity"] = region.target_identity
+    if region.ambiguous:
+        payload["ambiguous"] = True
     if region.visible is not None:
         payload["visible"] = region.visible
     if region.enabled is not None:
@@ -1350,6 +1502,7 @@ def _heartbeat_wait_fields(step: ExecutableStep | None, started_at: datetime | N
 def _is_wait_step(step: ExecutableStep) -> bool:
     return (
         step.action == "window.wait"
+        or step.action == "target.wait_state"
         or step.action.startswith("wait.")
         or step.action
         in {
@@ -1408,6 +1561,8 @@ def _wait_target_label(step: ExecutableStep) -> str:
         return f"browser URL {getattr(step, 'url', None) or getattr(step, 'url_contains', '')}"
     if action == "browser.element_visible":
         return f"browser element {_browser_element_label(step)}"
+    if action == "target.wait_state":
+        return f"target {getattr(step, 'target', '')} state"
     return step.display_name
 
 
@@ -1807,12 +1962,52 @@ def _confirmation_metadata(
         ("target_text", getattr(prompt, "target_text", None)),
         ("target_role", getattr(prompt, "target_role", None)),
         ("target_test_id", getattr(prompt, "target_test_id", None)),
+        ("target_identity", getattr(prompt, "target_identity", None)),
         ("control_type", getattr(prompt, "control_type", None)),
     )
     for key, value in request_fields:
         if value:
             metadata[key] = value
+    if getattr(prompt, "target_ambiguous", False):
+        metadata["target_ambiguous"] = True
     return metadata
+
+
+def _recipe_content_hash(recipe: Recipe) -> str:
+    payload = recipe.model_dump(mode="json")
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _approval_target_application(prompt: ConfirmationRequest) -> str:
+    if prompt.window_title:
+        return prompt.window_title
+    if prompt.browser_url:
+        return prompt.browser_url
+    if prompt.browser_title:
+        return prompt.browser_title
+    return str(prompt.target_scope or "")
+
+
+def _approval_scope_summary(scope: RememberedApprovalScope) -> dict[str, str]:
+    data = scope.to_dict()
+    keys = (
+        "recipe_or_intent_id",
+        "content_hash",
+        "step_id",
+        "action_or_primitive_id",
+        "target_scope",
+        "target_application",
+        "target_text",
+        "target_control",
+        "target_role",
+        "target_test_id",
+        "risk_level",
+        "local_user",
+        "local_device",
+        "source_trust",
+    )
+    return {key: data[key] for key in keys if data.get(key)}
 
 
 def _dry_run_message(step: ExecutableStep) -> str:
@@ -1828,6 +2023,10 @@ def _dry_run_message(step: ExecutableStep) -> str:
         return f"would open browser URL{suffix}"
     if step.action == "browser.open_native":
         return "would hand off URL to default browser"
+    if step.action == "target.inspect":
+        return f"would inspect target {getattr(step, 'target', '')}"
+    if step.action == "target.wait_state":
+        return f"would wait for target {getattr(step, 'target', '')} state"
     layout_message = _dry_run_layout_message(step)
     if layout_message is not None:
         return layout_message

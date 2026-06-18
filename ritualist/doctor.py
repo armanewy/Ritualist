@@ -422,6 +422,8 @@ def _condition_capabilities(condition: Condition) -> set[str]:
         return {"windows_uia"}
     if condition.type == "browser.text_visible":
         return {"playwright", "browser_control"}
+    if condition.type in {"target.state", "target.readiness_state"}:
+        return {"process_inspection", "windows_uia"}
     return set()
 
 

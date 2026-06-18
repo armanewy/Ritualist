@@ -29,6 +29,7 @@ class TargetRegion:
     target_identity: str | None = None
     visible: bool | None = None
     enabled: bool | None = None
+    ambiguous: bool = False
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,8 @@ class ConfirmationRequest:
     target_text: str | None = None
     target_role: str | None = None
     target_test_id: str | None = None
+    target_identity: str | None = None
+    target_ambiguous: bool = False
     control_type: str | None = None
     target_rect: ScreenRect | None = None
     safety_message: str | None = None

@@ -51,6 +51,11 @@ class CanvasConfig:
 
 
 @dataclass(frozen=True)
+class ApprovalConfig:
+    remembered_approvals_enabled: bool = True
+
+
+@dataclass(frozen=True)
 class AppConfig:
     default_browser: str = "chromium"
     log_level: str = "INFO"
@@ -58,6 +63,7 @@ class AppConfig:
     ui: UIConfig = field(default_factory=UIConfig)
     home: HomeConfig = field(default_factory=HomeConfig)
     canvas: CanvasConfig = field(default_factory=CanvasConfig)
+    approvals: ApprovalConfig = field(default_factory=ApprovalConfig)
     learning: LocalLearningConfig = field(default_factory=LocalLearningConfig)
 
 
@@ -78,6 +84,8 @@ def load_app_config(path: Path | None = None) -> AppConfig:
     home = _load_home_config(home_raw if isinstance(home_raw, dict) else {})
     canvas_raw = raw.get("canvas")
     canvas = _load_canvas_config(canvas_raw if isinstance(canvas_raw, dict) else {})
+    approvals_raw = raw.get("approvals")
+    approvals = _load_approval_config(approvals_raw if isinstance(approvals_raw, dict) else {})
     learning_raw = raw.get("learning")
     learning = LocalLearningConfig.from_mapping(
         learning_raw if isinstance(learning_raw, dict) else {}
@@ -90,6 +98,7 @@ def load_app_config(path: Path | None = None) -> AppConfig:
         ui=ui,
         home=home,
         canvas=canvas,
+        approvals=approvals,
         learning=learning,
     )
 
@@ -124,6 +133,12 @@ def _load_canvas_config(raw: dict[str, Any]) -> CanvasConfig:
         performance_mode=str(raw.get("performance_mode") or "balanced").strip().casefold()
         or "balanced",
         show_performance_overlay=bool(raw.get("show_performance_overlay", False)),
+    )
+
+
+def _load_approval_config(raw: dict[str, Any]) -> ApprovalConfig:
+    return ApprovalConfig(
+        remembered_approvals_enabled=bool(raw.get("remembered_approvals_enabled", True)),
     )
 
 

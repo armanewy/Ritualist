@@ -206,6 +206,38 @@ def test_home_runtime_heartbeat_maps_waiting_details():
     assert home_event.wait_timeout_seconds == "30"
 
 
+def test_home_runtime_confirmation_approval_shows_starting() -> None:
+    event = SimpleNamespace(
+        type="confirmation.resolved",
+        approved=True,
+        message="approved",
+    )
+
+    home_event = home_event_from_runtime("gaming_mode", event)
+
+    assert home_event is not None
+    assert home_event.status is HomeCardStatus.RUNNING
+    assert home_event.subtitle == "Starting..."
+
+
+def test_home_runtime_blocked_step_keeps_reason_visible() -> None:
+    event = SimpleNamespace(
+        type="step.finished",
+        step_index=2,
+        step_name="Click Play",
+        state="failed",
+        message="target unavailable or blocked before confirmation",
+        metadata={"target_resolution": {"status": "blocked"}},
+    )
+
+    home_event = home_event_from_runtime("gaming_mode", event)
+
+    assert home_event is not None
+    assert home_event.status is HomeCardStatus.FAILED
+    assert home_event.subtitle == "Blocked: Click Play"
+    assert home_event.description == "target unavailable or blocked before confirmation"
+
+
 def test_home_step_status_maps_wait_and_keep_open_state():
     waiting = home_event_from_step_status(
         "gaming_mode",

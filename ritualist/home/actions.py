@@ -24,7 +24,10 @@ class HomeCardAction(StrEnum):
     RUN = "run"
     DRY_RUN = "dry_run"
     DOCTOR = "doctor"
+    VIEW_RECIPE = "view_recipe"
+    EDIT_SETUP = "edit_setup"
     EDIT_RECIPE = "edit_recipe"
+    OPEN_YAML = "open_yaml"
     OPEN_LOGS = "open_logs"
 
 
@@ -226,6 +229,33 @@ class HomeActionService:
         recipe, _raw, missing_variables = load_recipe_for_diagnostics(recipe_ref)
         return build_doctor_report(recipe, missing_variables=missing_variables)
 
+    def view_recipe(self, recipe_ref: RecipeReference) -> dict[str, Any]:
+        from ritualist.recipe_transparency import view_recipe_payload
+
+        return view_recipe_payload(recipe_ref)
+
+    def edit_setup(self, recipe_ref: RecipeReference) -> dict[str, Any]:
+        from ritualist.recipe_transparency import view_recipe_payload
+
+        payload = view_recipe_payload(recipe_ref)
+        return {
+            "schema_version": "recipe.setup_view.v1",
+            "recipe_id": payload["recipe_id"],
+            "recipe_name": payload["recipe_name"],
+            "setup_fields": payload["setup_fields"],
+            "plain_language_plan": payload["plain_language_plan"],
+            "actions": {
+                "doctor": payload["actions"]["doctor"],
+                "dry_run": payload["actions"]["dry_run"],
+                "auto_run_after_edit": False,
+            },
+        }
+
+    def open_recipe_yaml(self, recipe_ref: RecipeReference) -> dict[str, Any]:
+        from ritualist.recipe_transparency import open_yaml_payload
+
+        return open_yaml_payload(recipe_ref)
+
     def resolve_recipe_path(self, recipe_ref: RecipeReference) -> Path:
         if self.recipe_path_resolver is not None:
             return self.recipe_path_resolver(recipe_ref)
@@ -308,9 +338,21 @@ class HomeActionDispatcher:
             result = self.service.doctor_recipe(recipe_ref)
             return HomeActionOutcome(parsed, card_id, recipe_ref, result=result)
 
+        if parsed is HomeCardAction.VIEW_RECIPE:
+            result = self.service.view_recipe(recipe_ref)
+            return HomeActionOutcome(parsed, card_id, recipe_ref, result=result)
+
+        if parsed is HomeCardAction.EDIT_SETUP:
+            result = self.service.edit_setup(recipe_ref)
+            return HomeActionOutcome(parsed, card_id, recipe_ref, result=result)
+
         if parsed is HomeCardAction.EDIT_RECIPE:
             path = self.service.resolve_recipe_path(recipe_ref)
             return HomeActionOutcome(parsed, card_id, recipe_ref, path=path)
+
+        if parsed is HomeCardAction.OPEN_YAML:
+            result = self.service.open_recipe_yaml(recipe_ref)
+            return HomeActionOutcome(parsed, card_id, recipe_ref, result=result)
 
         path = self.service.resolve_runs_path()
         return HomeActionOutcome(parsed, card_id, path=path)
@@ -387,7 +429,7 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
         return HomeRuntimeEvent(
             card_id=card_id,
             status=HomeCardStatus.RUNNING if approved else HomeCardStatus.WARNING,
-            subtitle="Confirmation approved" if approved else "Confirmation declined",
+            subtitle="Starting..." if approved else "Confirmation declined",
             description=str(getattr(event, "message", "") or ""),
         )
 
@@ -402,6 +444,14 @@ def home_event_from_runtime(card_id: str, event: Any) -> HomeRuntimeEvent | None
 
     if event_type == "step.finished":
         state = _event_value(getattr(event, "state", "success"))
+        if _runtime_step_blocked(event):
+            return HomeRuntimeEvent(
+                card_id=card_id,
+                status=HomeCardStatus.FAILED,
+                subtitle=f"Blocked: {getattr(event, 'step_name', '') or getattr(event, 'step_index', '')}",
+                description=str(getattr(event, "message", "") or ""),
+                **_clear_wait_fields(),
+            )
         return HomeRuntimeEvent(
             card_id=card_id,
             status=_home_status_for_step_state(state),
@@ -608,6 +658,16 @@ def _event_value(value: Any) -> str:
     if value is None:
         return ""
     return str(getattr(value, "value", value))
+
+
+def _runtime_step_blocked(event: Any) -> bool:
+    metadata = getattr(event, "metadata", None)
+    if isinstance(metadata, Mapping):
+        target_resolution = metadata.get("target_resolution")
+        if isinstance(target_resolution, Mapping):
+            if str(target_resolution.get("status") or "").casefold() == "blocked":
+                return True
+    return "blocked" in str(getattr(event, "message", "") or "").casefold()
 
 
 def _home_status_for_run_state(state: str) -> HomeCardStatus:

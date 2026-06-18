@@ -105,7 +105,7 @@ def _component_view(component: CanvasComponent, state: Any | None) -> CanvasUseC
         height=component.height,
         z=component.z,
         visible=component.visible,
-        title=str(getattr(state, "title", "") or props.get("title") or props.get("text") or component.id),
+        title=str(getattr(state, "title", "") or props.get("title") or props.get("text") or _fallback_title(component)),
         subtitle=str(getattr(state, "subtitle", "") or props.get("subtitle") or ""),
         message=str(getattr(state, "message", "") or ""),
         state=str(getattr(state, "state", "") or "idle"),
@@ -119,3 +119,7 @@ def _component_view(component: CanvasComponent, state: Any | None) -> CanvasUseC
         disabled_actions=tuple(getattr(state, "disabled_actions", ()) or ()),
         warnings=tuple(getattr(state, "warnings", ()) or ()),
     )
+
+
+def _fallback_title(component: CanvasComponent) -> str:
+    return str(component.id).replace("_", " ").replace("-", " ").strip().title() or "Canvas item"

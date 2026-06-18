@@ -384,6 +384,12 @@ def test_gaming_mode_sample_exports_and_validates_as_pack(tmp_path):
 
     assert result.recipe_id == "gaming_mode"
     assert pack.manifest.id == "gaming_mode"
+    assert pack.manifest.variables["ambience_url"]["validation_default"].startswith(
+        "https://example.invalid/ritualist-required/"
+    )
+    assert pack.recipe.variables["ambience_url"].startswith(
+        "https://example.invalid/ritualist-required/"
+    )
     assert "browser.open" in pack.manifest.required_actions
     assert "desktop.click_text" in pack.manifest.required_actions
     assert pack.recipe.id == "gaming_mode"

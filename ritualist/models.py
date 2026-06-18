@@ -24,12 +24,15 @@ _WORD_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
 
 PredicateType = Literal[
+    "value.equals",
     "file.exists",
     "path.exists",
     "process.running",
     "window.exists",
     "window.text_visible",
     "browser.text_visible",
+    "target.state",
+    "target.readiness_state",
 ]
 
 
@@ -47,6 +50,13 @@ class Condition(BaseModel):
     text: str | None = None
     control_type: str | None = None
     exact: bool = True
+    left: Any | None = None
+    right: Any | None = None
+    target: str | None = None
+    state: str | None = None
+    states: list[str] | None = None
+    readiness_state: str | None = None
+    readiness_states: list[str] | None = None
 
     @model_validator(mode="after")
     def validate_condition_shape(self) -> "Condition":
@@ -402,6 +412,39 @@ class ConfirmAskStep(StepBase):
     prompt: str
 
 
+class TargetInspectStep(StepBase):
+    action: Literal["target.inspect"]
+    target: str = Field(min_length=1)
+
+    @field_validator("target")
+    @classmethod
+    def reject_blank_target(cls, value: str) -> str:
+        return _required_text("target", value)
+
+
+class TargetWaitStateStep(StepBase):
+    action: Literal["target.wait_state"]
+    target: str = Field(min_length=1)
+    states: list[str] = Field(default_factory=list)
+    readiness_states: list[str] = Field(default_factory=list)
+
+    @field_validator("target")
+    @classmethod
+    def reject_blank_target(cls, value: str) -> str:
+        return _required_text("target", value)
+
+    @field_validator("states", "readiness_states")
+    @classmethod
+    def normalize_state_names(cls, value: list[str]) -> list[str]:
+        return [_required_text("state", item) for item in value]
+
+    @model_validator(mode="after")
+    def require_expected_state(self) -> "TargetWaitStateStep":
+        if not self.states and not self.readiness_states:
+            raise ValueError("target.wait_state requires states or readiness_states")
+        return self
+
+
 class HumanPromptStep(StepBase):
     action: Literal["human.prompt"]
     prompt: str = Field(min_length=1)
@@ -658,6 +701,8 @@ WorkflowStep = Annotated[
     | DesktopClickTextStep
     | InputHotkeyStep
     | ConfirmAskStep
+    | TargetInspectStep
+    | TargetWaitStateStep
     | HumanPromptStep
     | HumanChecklistStep
     | HumanConfirmEvidenceStep
@@ -781,21 +826,27 @@ class Recipe(BaseModel):
 
 
 _PREDICATE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "value.equals": ("left", "right"),
     "file.exists": ("path",),
     "path.exists": ("path",),
     "process.running": ("process_name",),
     "window.exists": (),
     "window.text_visible": ("window_title_contains", "text"),
     "browser.text_visible": ("text",),
+    "target.state": ("target",),
+    "target.readiness_state": ("target",),
 }
 
 _PREDICATE_ALLOWED_FIELDS: dict[str, set[str]] = {
+    "value.equals": {"left", "right"},
     "file.exists": {"path"},
     "path.exists": {"path"},
     "process.running": {"process_name"},
     "window.exists": {"title_contains", "process_name"},
     "window.text_visible": {"window_title_contains", "text", "control_type", "exact"},
     "browser.text_visible": {"text", "exact"},
+    "target.state": {"target", "state", "states"},
+    "target.readiness_state": {"target", "readiness_state", "readiness_states"},
 }
 
 
@@ -803,21 +854,50 @@ def _validate_predicate_fields(condition: Condition) -> None:
     predicate_type = condition.type
     if predicate_type is None:
         return
-    required = _PREDICATE_REQUIRED_FIELDS[predicate_type]
-    for field_name in required:
-        value = getattr(condition, field_name)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"condition {predicate_type} requires {field_name}")
+    if predicate_type == "value.equals":
+        missing = [name for name in ("left", "right") if name not in condition.model_fields_set]
+        if missing:
+            raise ValueError(f"condition value.equals requires {', '.join(missing)}")
+    else:
+        required = _PREDICATE_REQUIRED_FIELDS[predicate_type]
+        for field_name in required:
+            value = getattr(condition, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"condition {predicate_type} requires {field_name}")
     if predicate_type == "window.exists" and not (
         condition.title_contains or condition.process_name
     ):
         raise ValueError("condition window.exists requires title_contains or process_name")
+    if predicate_type == "target.state" and not _has_one_or_more_states(
+        condition.state,
+        condition.states,
+    ):
+        raise ValueError("condition target.state requires state or states")
+    if predicate_type == "target.readiness_state" and not _has_one_or_more_states(
+        condition.readiness_state,
+        condition.readiness_states,
+    ):
+        raise ValueError("condition target.readiness_state requires readiness_state or readiness_states")
     allowed = _PREDICATE_ALLOWED_FIELDS[predicate_type]
     for field_name in _provided_condition_fields(condition) - {"type"}:
         if field_name not in allowed:
             raise ValueError(f"condition {predicate_type} does not support {field_name}")
     if condition.control_type is not None and not condition.control_type.strip():
         raise ValueError("condition control_type must not be blank")
+    if condition.target is not None and not condition.target.strip():
+        raise ValueError("condition target must not be blank")
+    for field_name in ("state", "readiness_state"):
+        value = getattr(condition, field_name)
+        if value is not None and not value.strip():
+            raise ValueError(f"condition {field_name} must not be blank")
+    for field_name in ("states", "readiness_states"):
+        values = getattr(condition, field_name)
+        if values is not None and (not values or any(not item.strip() for item in values)):
+            raise ValueError(f"condition {field_name} must contain non-blank values")
+
+
+def _has_one_or_more_states(state: str | None, states: list[str] | None) -> bool:
+    return bool((isinstance(state, str) and state.strip()) or states)
 
 
 def _require_one_text_field(action: str, values: dict[str, str | None]) -> None:

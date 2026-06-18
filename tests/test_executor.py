@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from ritualist.approvals import ConfirmationDecision
 from ritualist.actions.base import ActionContext
 from ritualist.actions.metadata import ALL_PLATFORMS, ActionMetadata
 from ritualist.actions.registry import ActionRegistry
@@ -197,6 +198,135 @@ def test_confirmed_desktop_click_enabled_target_requests_confirmation_then_invok
     assert summary.results[0].metadata["approval"] == {"status": "approved"}
     assert summary.results[0].metadata["target_invocation"]["status"] == "invoked"
     assert any(isinstance(event, ConfirmationRequested) for event in runtime_events)
+
+
+def test_remembered_approval_is_stored_and_reused_after_target_resolution(tmp_path):
+    recipe = _play_click_recipe()
+    approval_store = tmp_path / "preferences.json"
+    first_fakes = FakeAdapters()
+    first_confirmations = []
+
+    first = WorkflowExecutor(
+        adapters=first_fakes.bundle(),
+        confirmer=lambda request: first_confirmations.append(request)
+        or ConfirmationDecision.always_allow_local(),
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    assert first.success
+    assert first_confirmations
+    assert first.results[0].metadata["approval"] == {"status": "approved"}
+    assert first.results[0].metadata["remembered_approval"]["status"] == "stored"
+
+    second_fakes = FakeAdapters()
+    second_confirmations = []
+    second = WorkflowExecutor(
+        adapters=second_fakes.bundle(),
+        confirmer=lambda request: second_confirmations.append(request) or False,
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    assert second.success
+    assert second_confirmations == []
+    assert [call[0] for call in second_fakes.desktop.calls] == [
+        "find_text_region",
+        "invoke_resolved_text_region",
+    ]
+    assert second.results[0].metadata["approval"] == {"status": "remembered"}
+    assert second.results[0].metadata["remembered_approval"]["status"] == "applied"
+
+
+def test_remembered_approval_invalidates_when_target_identity_changes(tmp_path):
+    recipe = _play_click_recipe()
+    approval_store = tmp_path / "preferences.json"
+
+    first_fakes = FakeAdapters()
+    WorkflowExecutor(
+        adapters=first_fakes.bundle(),
+        confirmer=lambda _request: ConfirmationDecision.always_allow_local(),
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    changed_fakes = FakeAdapters()
+    changed_fakes.desktop.responses["find_text_region"] = TargetRegion(
+        rect=ScreenRect(30, 40, 120, 36),
+        window_title="Battle.net",
+        target_text="Play",
+        control_type="Button",
+        target_identity="changed-play-target",
+        visible=True,
+        enabled=True,
+    )
+    confirmations = []
+
+    summary = WorkflowExecutor(
+        adapters=changed_fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    assert summary.success
+    assert confirmations
+    assert summary.results[0].metadata["approval"] == {"status": "approved"}
+
+
+def test_imported_source_does_not_inherit_local_remembered_approval(tmp_path):
+    recipe = _play_click_recipe()
+    approval_store = tmp_path / "preferences.json"
+
+    WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: ConfirmationDecision.always_allow_local(),
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    confirmations = []
+    summary = WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        approval_store_path=approval_store,
+        approval_source_trust="imported_pack",
+    ).run(recipe)
+
+    assert summary.success
+    assert confirmations
+    assert summary.results[0].metadata["approval"] == {"status": "approved"}
+
+
+def test_ambiguous_target_blocks_before_remembered_approval(tmp_path):
+    recipe = _play_click_recipe()
+    approval_store = tmp_path / "preferences.json"
+
+    WorkflowExecutor(
+        adapters=FakeAdapters().bundle(),
+        confirmer=lambda _request: ConfirmationDecision.always_allow_local(),
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    fakes = FakeAdapters()
+    fakes.desktop.responses["find_text_region"] = TargetRegion(
+        rect=ScreenRect(30, 40, 120, 36),
+        window_title="Battle.net",
+        target_text="Play",
+        control_type="Button",
+        target_identity="battle-net-play",
+        visible=True,
+        enabled=True,
+        ambiguous=True,
+    )
+    confirmations = []
+
+    summary = WorkflowExecutor(
+        adapters=fakes.bundle(),
+        confirmer=lambda request: confirmations.append(request) or True,
+        approval_store_path=approval_store,
+    ).run(recipe)
+
+    assert not summary.success
+    assert confirmations == []
+    assert summary.results[0].metadata["target_resolution"]["status"] == "blocked"
+    assert summary.results[0].metadata["target_resolution"]["target"]["ambiguous"] is True
+    assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
 
 
 def test_confirmed_desktop_click_target_disappears_after_approval_fails_visibly():

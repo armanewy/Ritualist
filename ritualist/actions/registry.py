@@ -47,6 +47,7 @@ def create_default_registry() -> ActionRegistry:
     from .human_actions import create_human_handlers
     from .input_actions import InputHotkeyHandler
     from .notify_actions import create_notification_handlers
+    from .target_actions import create_target_handlers
     from .wait_actions import create_wait_handlers
     from .window_actions import (
         WindowFocusHandler,
@@ -85,6 +86,7 @@ def create_default_registry() -> ActionRegistry:
         *create_human_handlers(),
         *create_notification_handlers(),
         *create_flow_handlers(),
+        *create_target_handlers(),
         *create_wait_handlers(),
     ):
         registry.register(handler)

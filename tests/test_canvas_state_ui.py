@@ -57,14 +57,22 @@ def test_canvas_use_qml_renders_structured_ritual_state_hierarchy() -> None:
         "root.confirmationHoldSummary(componentData)",
         "Paused:",
         "Failed step",
+        "root.failedStepSummary(componentData)",
+        "Blocked",
+        "root.blockedReason(componentData)",
         "Repaired interrupted run",
+        "root.recoveryNoticeVisible(componentData)",
         "root.lastRunSummary(componentData)",
         "root.artifactSummary(componentData)",
+        "root.stepVerificationSummary(componentData)",
+        'return "Starting..."',
+        'return "Started"',
+        'visualState === "starting"',
         'visualState === "running"',
         'visualState === "waiting"',
         'visualState === "confirming"',
         'visualState === "paused"',
-        'visualState === "interrupted"',
+        'visualState === "blocked"',
     ):
         assert snippet in qml
 
@@ -130,7 +138,7 @@ def test_canvas_use_qml_compacts_supporting_surfaces_without_new_actions() -> No
         "componentData.height < 220",
         "Layout.preferredHeight: compactRestCard ? 46 : (supportingRest ? 50 : 58)",
         "visible: text.length > 0 && !supportingRest && !compactRestCard",
-        "visualState !== \"interrupted\" && !supportingRest && !compactRestCard",
+        "!root.recoveryNoticeVisible(componentData) && !supportingRest && !compactRestCard",
     ):
         assert snippet in qml
 
@@ -151,7 +159,7 @@ def test_canvas_use_qml_uses_existing_ritual_actions_with_state_specific_labels(
     qml = _qml()
 
     for snippet in (
-        'root.actionsFrom(componentData, ["doctor", "dry_run", "run"])',
+        'root.actionsFrom(componentData, ["view_recipe", "edit_setup", "doctor", "dry_run", "run", "open_yaml"])',
         'root.actionsFrom(componentData, ["resume", "stop", "open_run_log"])',
         'root.actionsFrom(componentData, ["pause", "resume", "stop", "open_run_log"])',
         'root.actionsFrom(componentData, ["open_logs", "open_run_log"])',
@@ -214,8 +222,13 @@ def test_canvas_use_qml_gives_target_cards_dedicated_readiness_surface() -> None
         "id: targetDelegate",
         "property var targetData",
         "Target readiness",
-        "targetData.status || componentData.status || \"ready\"",
-        "targetData.summary || root.detailText(componentData)",
+        "componentData.data && componentData.data.summary",
+        "targetData.state || targetData.status || componentData.status || \"ready\"",
+        "targetData.best_candidate_summary || root.detailText(componentData)",
+        "function targetEvidenceSummary(targetData)",
+        "function targetVerificationSummary(targetData)",
+        "root.targetEvidenceSummary(targetData)",
+        "root.targetVerificationSummary(targetData)",
         "text: root.actionLabel(modelData, componentData)",
         "root.dispatch(componentData.id, modelData)",
     ):

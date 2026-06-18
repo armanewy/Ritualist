@@ -173,13 +173,13 @@ def test_canvas_runtime_model_builds_from_canvas_without_executing_actions() -> 
     )
 
     assert model.canvas_id == "runtime_canvas"
-    assert model.component_state("card").enabled_actions == (
+    assert {
         "run",
         "dry_run",
         "doctor",
         "edit_recipe",
         "open_logs",
-    )
+    } <= set(model.component_state("card").enabled_actions)
     assert model.component_state("label").enabled_actions == ()
     assert model.component_state("activity").enabled_actions == ("open_logs",)
     assert model.component_state("activity").data["items"][0]["status"] == "success"
@@ -210,13 +210,38 @@ def test_canvas_use_view_model_includes_layout_and_runtime_state() -> None:
     assert components["status"]["state"] == "running"
     assert components["status"]["message"] == "Ask before clicking Play"
     assert components["label"]["display_only"] is True
-    assert components["card"]["enabled_actions"] == [
+    assert {
         "run",
         "dry_run",
         "doctor",
         "edit_recipe",
         "open_logs",
-    ]
+    } <= set(components["card"]["enabled_actions"])
+
+
+def test_canvas_runtime_uses_friendly_builtin_titles_and_outcome_states() -> None:
+    model = build_canvas_runtime_model(
+        _canvas(),
+        context=CanvasRuntimeContext(
+            recipe_ids={"gaming_mode"},
+            target_ids={"diablo_iv"},
+            runtime_state={
+                "gaming_mode": {
+                    "status": "blocked",
+                    "message": "target unavailable or blocked before confirmation",
+                }
+            },
+            recent_runs=(),
+        ),
+    )
+
+    status = model.component_state("status")
+    dock = model.component_state("dock")
+
+    assert status.title == "Ritual status"
+    assert dock.title == "Categories"
+    assert status.state == "blocked"
+    assert status.status == "blocked"
 
 
 def test_canvas_use_view_model_covers_required_component_types() -> None:

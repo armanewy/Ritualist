@@ -389,8 +389,14 @@ Window {
             homeController.dryRunCard(cardId)
         } else if (action === "doctor") {
             homeController.doctorCard(cardId)
+        } else if (action === "view_recipe") {
+            homeController.viewRecipe(cardId)
+        } else if (action === "edit_setup") {
+            homeController.editSetup(cardId)
         } else if (action === "edit_recipe") {
             homeController.editRecipe(cardId)
+        } else if (action === "open_yaml") {
+            homeController.openYaml(cardId)
         } else if (action === "open_logs") {
             homeController.openLogs(cardId)
         }
@@ -1601,7 +1607,9 @@ Window {
                                             { "label": "Run", "action": "run" },
                                             { "label": "Dry Run", "action": "dry_run" },
                                             { "label": "Doctor", "action": "doctor" },
-                                            { "label": "Edit", "action": "edit_recipe" },
+                                            { "label": "View", "action": "view_recipe" },
+                                            { "label": "Setup", "action": "edit_setup" },
+                                            { "label": "YAML", "action": "open_yaml" },
                                             { "label": "Logs", "action": "open_logs" }
                                         ]
 

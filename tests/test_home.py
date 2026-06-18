@@ -345,6 +345,16 @@ def test_home_runtime_flush_policy_only_flushes_important_events():
         home_app._should_flush_home_event(
             HomeRuntimeEvent(
                 card_id="gaming-001",
+                status=HomeCardStatus.RUNNING,
+                subtitle="Starting...",
+            )
+        )
+        is True
+    )
+    assert (
+        home_app._should_flush_home_event(
+            HomeRuntimeEvent(
+                card_id="gaming-001",
                 last_run_status="success",
             )
         )

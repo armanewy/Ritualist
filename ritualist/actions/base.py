@@ -8,13 +8,14 @@ from logging import Logger
 from typing import Any, Protocol
 
 from ritualist.config import AppConfig
+from ritualist.approvals import ConfirmationDecision
 from ritualist.actions.metadata import ActionMetadata
 from ritualist.models import ExecutableStep, Recipe
 from ritualist.overlay import ConfirmationRequest, OverlayController
 from ritualist.runtime_control import RuntimeControl
 
 
-ConfirmationCallback = Callable[[ConfirmationRequest | str], bool]
+ConfirmationCallback = Callable[[ConfirmationRequest | str], bool | str | ConfirmationDecision]
 StatusCallback = Callable[["StepEvent"], None]
 
 

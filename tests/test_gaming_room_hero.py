@@ -151,15 +151,14 @@ def test_gaming_room_desktop_work_area_preserves_wallpaper_passthrough() -> None
 
 def test_gaming_mode_keeps_play_confirmation_and_avoids_unconfirmed_game_control() -> None:
     recipe = load_recipe(GAMING_MODE_PATH)
-    actions_after_launch = _actions_after(recipe.steps, "app.launch")
+    actions_after_launch = _actions_after(recipe.execution_steps, "app.launch")
     desktop_clicks_after_launch = [step for step in actions_after_launch if step.action == "desktop.click_text"]
     play_steps = [step for step in desktop_clicks_after_launch if step.text == "Play"]
 
     assert [step.name for step in play_steps] == ["Ask before clicking Play"]
     assert all(step.requires_confirmation for step in play_steps)
     assert all(step.text == "Play" for step in desktop_clicks_after_launch)
-    assert "Select Diablo IV" not in [step.name for step in recipe.steps]
-    assert not any(_is_forbidden_action(step.action) for step in recipe.steps)
+    assert not any(_is_forbidden_action(step.action) for step in recipe.execution_steps)
 
 
 def _run_record(

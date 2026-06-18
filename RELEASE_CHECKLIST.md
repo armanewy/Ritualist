@@ -1027,3 +1027,69 @@ Release recommendation:
   remains backed by packaged heartbeat/frame evidence rather than a subjective
   claim.
 - No release tag was created.
+
+## 2026-06-18 Set 2 Wave F2 functionality recovery evidence
+
+Scope:
+
+- Rebuilt Gaming Mode as a state-driven ritual: native ambience by default,
+  managed ambience explicit/optional, Battle.net readiness inspection before
+  Play approval, no Install/Locate/Update/login/gameplay automation, exact
+  target invocation only after approval, and postcondition verification.
+- Added visible outcome state plumbing for starting/blocked/failed/verification
+  details, compact interrupted recovery history, and Open Logs affordances.
+- Added scoped remembered approvals for exact local recipe/action/target/risk
+  scopes with list/revoke support and no inherited approval for imported recipe
+  changes.
+- Added recipe transparency/setup support: View Recipe, Edit Setup, and
+  Advanced Open YAML path resolution; setup overrides are stored separately
+  from bundled YAML and never auto-run after editing.
+- Added an opt-in live Gaming acceptance procedure and schema in
+  `scripts\ritualist_live_gaming_acceptance.ps1`,
+  `tests\acceptance\live_gaming_v0_2_alpha_1.yaml`, and
+  `docs\LIVE_GAMING_ACCEPTANCE.md`. The live procedure requires explicit
+  `-Live -IUnderstandThisIsLive` initiation and was not run in this pass.
+
+Validation commands:
+
+- Combined Wave F2 focused checks:
+  `python -m pytest -q tests/test_gaming_mode_readiness.py tests/test_battlenet_readiness.py tests/test_predicate_flow.py tests/test_action_registry.py tests/test_recipe_loader.py tests/test_gaming_room_hero.py tests/test_set12_regressions.py tests/test_primitive_contract_fixtures.py tests/test_canvas_ritual_state.py tests/test_canvas_runtime.py tests/test_canvas_state_ui.py tests/test_home_actions.py tests/test_home.py tests/test_preferences.py tests/test_config.py tests/test_app_setup.py tests/test_executor.py tests/test_cli.py tests/test_recipe_transparency.py tests/test_live_gaming_acceptance.py`
+  passed with `301 passed`.
+- Full test suite: `python -m pytest -q` passed with
+  `1270 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 46 managed files.
+- `.\scripts\build_windows_app.ps1`: passed and rebuilt
+  `dist\Ritualist\Ritualist.exe`.
+- Simulated packaged acceptance:
+  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f2`
+  passed with `32 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance-set2-f2\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance-set2-f2\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance-set2-f2\evidence`
+
+Current release truth model:
+
+- `engine_tests_pass`: separate evidence from `python -m pytest -q` above.
+- `simulated_acceptance_pass`: `PASS`.
+- `live_integration_pass`: `NOT_RUN`; the new live Gaming harness was created
+  but not executed against real Battle.net/Diablo IV in this pass.
+- `human_ux_pass`: `NOT_RUN`; no person has explicitly approved the fresh UX
+  evidence in this machine run.
+- `release_pass`: `NOT_RUN`.
+- `taggable`: `false`.
+
+Release recommendation:
+
+- Current Set 2 truth-model evidence supersedes older checklist entries that
+  treated fixture/package evidence as taggable.
+- `v0.2.0-alpha.1` is still not taggable until the explicitly opted-in live
+  Gaming integration pass and human UX approval are recorded.
+- No release tag was created.

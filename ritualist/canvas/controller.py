@@ -113,9 +113,18 @@ class CanvasRuntimeController:
         if action == "doctor":
             result = self.action_service.doctor_recipe(recipe_ref)
             return _success(component, action, f"doctor completed for {recipe_ref}", _result_data(result))
+        if action == "view_recipe":
+            result = self.action_service.view_recipe(recipe_ref)
+            return _success(component, action, f"recipe view prepared for {recipe_ref}", _result_data(result))
+        if action == "edit_setup":
+            result = self.action_service.edit_setup(recipe_ref)
+            return _success(component, action, f"recipe setup prepared for {recipe_ref}", _result_data(result))
         if action == "edit_recipe":
             path = self.action_service.resolve_recipe_path(recipe_ref)
             return _success(component, action, f"recipe path resolved: {path}", {"path": str(path)})
+        if action == "open_yaml":
+            result = self.action_service.open_recipe_yaml(recipe_ref)
+            return _success(component, action, f"recipe YAML resolved for {recipe_ref}", _result_data(result))
         if action in {"open_logs", "open_run_log"}:
             path = self.action_service.resolve_runs_path()
             return _success(component, action, f"run logs path resolved: {path}", {"path": str(path)})

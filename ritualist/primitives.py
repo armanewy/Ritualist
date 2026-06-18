@@ -26,6 +26,8 @@ KNOWN_PRIMITIVE_FAMILIES: tuple[str, ...] = (
     "hardware.inventory",
     "network.connectivity",
     "diagnostics.bundle",
+    "target.resolution",
+    "runtime.assert",
     "packages.winget",
     "sandbox.run",
     "obs.session",
@@ -463,6 +465,8 @@ def _primitive_mapping(action_name: str) -> tuple[str, str]:
         "notify.beep": ("operator.notify", "beep"),
         "notify.sound": ("operator.notify", "sound"),
         "notify.toast": ("operator.notify", "toast"),
+        "target.inspect": ("target.resolution", "inspect"),
+        "target.wait_state": ("target.resolution", "wait_state"),
         "wait.for_file": ("filesystem.wait", "for_file"),
         "wait.for_process": ("app.process", "wait_for_process"),
         "wait.for_process_exit": ("app.process", "wait_for_process_exit"),
@@ -505,6 +509,12 @@ def _adapter_binding_for(action_name: str, family_name: str) -> PrimitiveAdapter
         return PrimitiveAdapterBinding("window_manager", "desktop_window", "Window management adapter")
     if action_name.startswith("app.launch"):
         return PrimitiveAdapterBinding("subprocess", "process_launcher", "Structured process launch")
+    if action_name.startswith("target."):
+        return PrimitiveAdapterBinding(
+            "target_resolution",
+            "local_target_readiness",
+            "Target resolution and readiness providers",
+        )
     if "process" in action_name:
         return PrimitiveAdapterBinding("psutil", "process_inspection", "Local process inspection")
     if "registry" in action_name:
@@ -612,6 +622,19 @@ def _read_only_primitive_specs() -> tuple[PrimitiveSpec, ...]:
             parameters={
                 "title_matches": (_optional("title"), _optional("title_contains")),
                 "url_matches": (_optional("url"), _optional("url_contains")),
+            },
+        )
+    )
+    specs.extend(
+        _read_only_specs(
+            "runtime.assert",
+            {
+                "value_equals": "Compare two rendered literal values without evaluating code.",
+            },
+            capabilities=(),
+            adapter=PrimitiveAdapterBinding("runtime", "literal_comparison", "Runtime value comparison"),
+            parameters={
+                "value_equals": (_required("left"), _required("right")),
             },
         )
     )

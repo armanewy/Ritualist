@@ -8,8 +8,10 @@ from ritualist.preferences import (
     approval_matches,
     can_remember_approval,
     cleanup_choice_for,
+    list_remembered_approvals,
     remember_approval,
     remember_cleanup_choice,
+    revoke_remembered_approval,
 )
 from ritualist.run_logs import KEEP_SETUP_OPEN, STOPPED_USER_DECLINED_CONFIRMATION
 
@@ -39,7 +41,12 @@ def test_remembered_approval_matches_exact_target_scope(tmp_path):
         resolved_target_identity="battle_net",
         target_context="Battle.net",
         target_text="Update",
+        target_control="Button",
+        target_scope="desktop",
+        target_application="Battle.net",
+        risk_level="risky",
         local_user="tester",
+        local_device="device-1",
     )
 
     remember_approval(scope, path=path)
@@ -55,7 +62,12 @@ def test_remembered_approval_matches_exact_target_scope(tmp_path):
             resolved_target_identity="battle_net",
             target_context="Battle.net",
             target_text="Update",
+            target_control="Button",
+            target_scope="desktop",
+            target_application="Battle.net",
+            risk_level="risky",
             local_user="tester",
+            local_device="device-1",
         ),
         path=path,
         local_user_approved_source=True,
@@ -69,7 +81,12 @@ def test_remembered_approval_matches_exact_target_scope(tmp_path):
             resolved_target_identity="battle_net",
             target_context="Battle.net",
             target_text="Play",
+            target_control="Button",
+            target_scope="desktop",
+            target_application="Battle.net",
+            risk_level="risky",
             local_user="tester",
+            local_device="device-1",
         ),
         path=path,
         local_user_approved_source=True,
@@ -85,7 +102,12 @@ def test_high_risk_tokens_cannot_be_casually_remembered(tmp_path):
         resolved_target_identity="store",
         target_context="Example Store",
         target_text="Confirm Order",
+        target_control="Button",
+        target_scope="browser",
+        target_application="https://example.test/checkout",
+        risk_level="risky",
         local_user="tester",
+        local_device="device-1",
     )
 
     assert not can_remember_approval(scope)
@@ -103,7 +125,12 @@ def test_imported_source_cannot_activate_remembered_approval(tmp_path):
         resolved_target_identity="battle_net",
         target_context="Battle.net",
         target_text="Update",
+        target_control="Button",
+        target_scope="desktop",
+        target_application="Battle.net",
+        risk_level="risky",
         local_user="tester",
+        local_device="device-1",
         source_trust="local_user",
     )
     imported_scope = RememberedApprovalScope(
@@ -114,7 +141,12 @@ def test_imported_source_cannot_activate_remembered_approval(tmp_path):
         resolved_target_identity="battle_net",
         target_context="Battle.net",
         target_text="Update",
+        target_control="Button",
+        target_scope="desktop",
+        target_application="Battle.net",
+        risk_level="risky",
         local_user="tester",
+        local_device="device-1",
         source_trust="imported_pack",
     )
 
@@ -123,3 +155,51 @@ def test_imported_source_cannot_activate_remembered_approval(tmp_path):
     assert not can_remember_approval(imported_scope)
     assert not approval_matches(imported_scope, path=path, local_user_approved_source=True)
     assert not approval_matches(local_scope, path=path, local_user_approved_source=False)
+
+
+def test_remembered_approval_revocation_removes_match(tmp_path):
+    path = tmp_path / "preferences.json"
+    scope = RememberedApprovalScope(
+        recipe_or_intent_id="gaming_mode",
+        content_hash="hash-1",
+        step_id="steps:7",
+        action_or_primitive_id="desktop.click_text",
+        resolved_target_identity="battle_net",
+        target_context="Battle.net",
+        target_text="Update",
+        target_control="Button",
+        target_scope="desktop",
+        target_application="Battle.net",
+        risk_level="risky",
+        local_user="tester",
+        local_device="device-1",
+    )
+    entry = remember_approval(scope, path=path)
+
+    assert len(list_remembered_approvals(path=path)) == 1
+    assert revoke_remembered_approval(str(entry["id"]), path=path) is True
+    assert list_remembered_approvals(path=path) == []
+    assert not approval_matches(scope, path=path, local_user_approved_source=True)
+
+
+def test_ambiguous_target_cannot_be_remembered(tmp_path):
+    scope = RememberedApprovalScope(
+        recipe_or_intent_id="gaming_mode",
+        content_hash="hash-1",
+        step_id="steps:7",
+        action_or_primitive_id="desktop.click_text",
+        resolved_target_identity="battle_net",
+        target_context="Battle.net",
+        target_text="Update",
+        target_control="Button",
+        target_scope="desktop",
+        target_application="Battle.net",
+        risk_level="risky",
+        local_user="tester",
+        local_device="device-1",
+        target_ambiguous=True,
+    )
+
+    assert not can_remember_approval(scope)
+    with pytest.raises(ValueError, match="ambiguous"):
+        remember_approval(scope, path=tmp_path / "preferences.json")

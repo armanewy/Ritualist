@@ -1207,7 +1207,18 @@ def _validation_default_for_variable(name: str, value: Any) -> Any:
     if isinstance(value, Mapping):
         return _sanitize_variable_values(value)
     safe_name = re.sub(r"[^A-Za-z0-9_]+", "_", name).strip("_") or "value"
+    if _looks_like_url_variable(name, value):
+        return f"https://example.invalid/ritualist-required/{safe_name}"
     return f"__REQUIRED_{safe_name}__"
+
+
+def _looks_like_url_variable(name: str, value: Any) -> bool:
+    lowered = name.casefold()
+    if lowered == "url" or lowered.endswith("_url") or lowered.endswith("-url"):
+        return True
+    if isinstance(value, str):
+        return value.startswith(("http://", "https://"))
+    return False
 
 
 def _set_variable_value(target: dict[str, Any], name: str, value: Any) -> None:

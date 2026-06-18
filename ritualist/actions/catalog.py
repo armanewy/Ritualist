@@ -19,6 +19,7 @@ CatalogCategoryName = Literal[
     "Notes",
     "Notifications",
     "Flow",
+    "Targets",
     "Assertions",
     "Waits",
 ]
@@ -35,6 +36,7 @@ CATALOG_CATEGORY_NAMES: tuple[CatalogCategoryName, ...] = (
     "Notes",
     "Notifications",
     "Flow",
+    "Targets",
     "Assertions",
     "Waits",
 )
@@ -95,6 +97,8 @@ _ACTION_DESCRIPTIONS: dict[str, str] = {
     "notify.sound": "Play a local sound file when available, with a fallback beep.",
     "notify.toast": "Record a local notification message for the operator.",
     "flow.if": "Branch between structured step lists based on a read-only condition.",
+    "target.inspect": "Inspect local target resolution and readiness without taking action.",
+    "target.wait_state": "Wait until target resolution reaches an expected state or readiness state.",
     "wait.for_file": "Wait until a file appears.",
     "wait.for_process": "Wait until a local process appears.",
     "wait.for_process_exit": "Wait until a local process exits.",
@@ -246,6 +250,8 @@ def _catalog_category(metadata: ActionMetadata) -> CatalogCategoryName:
         return "Notifications"
     if metadata.category == "flow":
         return "Flow"
+    if metadata.category == "target":
+        return "Targets"
     if metadata.category == "assert":
         return "Assertions"
     if metadata.category == "wait":

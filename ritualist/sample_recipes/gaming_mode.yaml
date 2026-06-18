@@ -1,25 +1,33 @@
 version: "0.1"
 id: gaming_mode
 name: Gaming Mode
-description: Open a looping video, minimize Chrome, launch Battle.net, and ask before Play.
+description: Open optional ambience, inspect Diablo IV readiness in Battle.net, and ask before Play.
 home:
   category: Gaming
   card:
     title: Diablo IV Night
-    subtitle: YouTube ambience + Battle.net
+    subtitle: Ambience + Battle.net readiness
     image: ""
     accent: ""
 variables:
-  youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  ambience_enabled: true
+  ambience_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  ambience_browser_mode: native
+  minimize_ambience: false
   battle_net_path: 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'
   battle_net_window: Battle.net
+  ambience_window_title: YouTube
+  diablo_target: diablo_iv
+  diablo_window: Diablo IV
 environment:
   os:
     - windows
   required_capabilities:
-    - playwright
+    - native_browser_handoff
+    - process_inspection
     - windows_uia
     - app_launch
+    - playwright
     - browser_control
     - window_management
   expected_windows:
@@ -27,45 +35,302 @@ environment:
   expected_labels:
     - window_title_contains: "{{ battle_net_window }}"
       text: Play
+      control_type: Button
   variable_hints:
-    youtube_url: Set this to the ambience video URL you want to keep open.
+    ambience_enabled: Set false to skip ambience entirely.
+    ambience_url: Set this to the ambience video URL you want to open.
+    ambience_browser_mode: Use native for the default browser handoff, or managed for a Ritualist browser session.
+    minimize_ambience: Set true to minimize the managed ambience browser after playback is observed.
     battle_net_path: Set this to your local Battle.net Launcher.exe path.
     battle_net_window: Set this to the visible title text of the Battle.net window.
+    ambience_window_title: Set this to the managed ambience browser title if minimize_ambience is enabled.
+    diablo_target: Keep diablo_iv unless the target catalog changes.
+    diablo_window: Set this to the visible Diablo IV window title.
 steps:
   - name: Open ambience video
+    action: browser.open_native
+    url: "{{ ambience_url }}"
+    optional: true
+    when:
+      all:
+        - type: value.equals
+          left: "{{ ambience_enabled }}"
+          right: true
+        - type: value.equals
+          left: "{{ ambience_browser_mode }}"
+          right: native
+
+  - name: Open managed ambience video
     action: browser.open
-    url: "{{ youtube_url }}"
+    url: "{{ ambience_url }}"
     browser: chrome
     profile: gaming_mode
     keep_open: true
     clean_start: true
     dismiss_restore_prompt: true
     use_dedicated_profile: true
+    optional: true
+    when:
+      all:
+        - type: value.equals
+          left: "{{ ambience_enabled }}"
+          right: true
+        - type: value.equals
+          left: "{{ ambience_browser_mode }}"
+          right: managed
 
-  - name: Loop and play video
-    action: browser.media
+  - name: Observe managed ambience playback
+    action: browser.wait_media_playing
     selector: video
-    loop: true
-    play: true
+    timeout_seconds: 10
+    optional: true
+    when:
+      all:
+        - type: value.equals
+          left: "{{ ambience_enabled }}"
+          right: true
+        - type: value.equals
+          left: "{{ ambience_browser_mode }}"
+          right: managed
 
-  - name: Minimize Chrome
+  - name: Minimize managed ambience
     action: window.minimize
-    title_contains: YouTube
+    title_contains: "{{ ambience_window_title }}"
     optional: true
     timeout_seconds: 5
+    when:
+      all:
+        - type: value.equals
+          left: "{{ ambience_enabled }}"
+          right: true
+        - type: value.equals
+          left: "{{ ambience_browser_mode }}"
+          right: managed
+        - type: value.equals
+          left: "{{ minimize_ambience }}"
+          right: true
 
-  - name: Launch Battle.net
+  - name: Focus Diablo IV if already running
+    action: window.focus
+    title_contains: "{{ diablo_window }}"
+    optional: true
+    when:
+      type: target.state
+      target: "{{ diablo_target }}"
+      state: running
+
+  - name: Launch Battle.net if needed
     action: app.launch
     command: "{{ battle_net_path }}"
+    optional: true
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - not:
+            type: window.exists
+            title_contains: "{{ battle_net_window }}"
 
   - name: Wait for Battle.net
     action: window.wait
     title_contains: "{{ battle_net_window }}"
     timeout_seconds: 30
+    optional: true
+    when:
+      not:
+        type: target.state
+        target: "{{ diablo_target }}"
+        state: running
 
-  - name: Ask before clicking Play
-    action: desktop.click_text
-    text: Play
-    window_title_contains: "{{ battle_net_window }}"
-    requires_confirmation: true
-    timeout_seconds: 20
+  - name: Inspect Diablo IV readiness
+    action: target.inspect
+    target: "{{ diablo_target }}"
+    when:
+      not:
+        type: target.state
+        target: "{{ diablo_target }}"
+        state: running
+
+  - name: Battle.net launcher not ready
+    action: human.prompt
+    prompt: Open Battle.net manually, then rerun this ritual. Ritualist will not locate files, install, update, or enter credentials.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: launcher_not_running
+
+  - name: Manual Battle.net login required
+    action: human.prompt
+    prompt: Log in to Battle.net manually, then rerun this ritual. Ritualist will not enter credentials.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: login_required
+
+  - name: Select Diablo IV manually
+    action: human.prompt
+    prompt: Select Diablo IV in Battle.net manually, then rerun this ritual.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: game_not_selected
+
+  - name: Manual install review required
+    action: human.prompt
+    prompt: Battle.net shows Install for Diablo IV. Review it manually; Ritualist will not install software.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: install_available
+
+  - name: Manual locate review required
+    action: human.prompt
+    prompt: Battle.net shows Locate the game for Diablo IV. Use it manually only if Diablo IV is already installed; Ritualist will not locate files.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: locate_game_available
+
+  - name: Manual update review required
+    action: human.prompt
+    prompt: Battle.net shows Update for Diablo IV. Review it manually; Ritualist will not start updates.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: update_available
+
+  - name: Diablo IV update in progress
+    action: human.prompt
+    prompt: Battle.net is already updating Diablo IV. Wait for the update to finish, then rerun this ritual.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: updating
+
+  - name: Diablo IV launch already in progress
+    action: target.wait_state
+    target: "{{ diablo_target }}"
+    states:
+      - running
+      - launching
+    readiness_states:
+      - launching
+      - game_running
+    timeout_seconds: 30
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: launching
+
+  - name: Battle.net reports Diablo IV running
+    action: window.focus
+    title_contains: "{{ diablo_window }}"
+    optional: true
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: game_running
+
+  - name: Play button disabled
+    action: human.prompt
+    prompt: Battle.net shows Play but it is disabled. Wait or resolve Battle.net status manually, then rerun this ritual.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: play_visible_but_disabled
+
+  - name: Battle.net readiness unknown
+    action: human.prompt
+    prompt: Battle.net readiness is ambiguous. Review the launcher manually before any Play action.
+    when:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: blocked_unknown
+
+  - name: Play enabled branch
+    action: flow.if
+    condition:
+      all:
+        - not:
+            type: target.state
+            target: "{{ diablo_target }}"
+            state: running
+        - type: target.readiness_state
+          target: "{{ diablo_target }}"
+          readiness_state: play_available_enabled
+    then:
+      - name: Ask before clicking Play
+        action: desktop.click_text
+        text: Play
+        window_title_contains: "{{ battle_net_window }}"
+        control_type: Button
+        exact: true
+        requires_confirmation: true
+        timeout_seconds: 20
+      - name: Verify Diablo IV launch started
+        action: target.wait_state
+        target: "{{ diablo_target }}"
+        states:
+          - running
+          - launching
+        readiness_states:
+          - launching
+          - game_running
+        timeout_seconds: 45

@@ -48,6 +48,8 @@ def test_default_registry_contains_supported_actions():
         "notify.beep",
         "notify.sound",
         "notify.toast",
+        "target.inspect",
+        "target.wait_state",
         "wait.for_file",
         "wait.for_process",
         "wait.for_process_exit",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -12,6 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
+from .approvals import ConfirmationDecision
 from .actions.registry import create_default_registry
 from .adapters.fake import FakeAdapters
 from .adapters import create_default_adapters
@@ -96,6 +98,7 @@ from .paths import (
     runs_dir,
     themes_dir,
 )
+from .preferences import list_remembered_approvals, revoke_remembered_approval
 from .primitives import PrimitiveSpec, create_primitive_registry
 from .primitive_runtime import run_read_only_primitive
 from .policy import (
@@ -107,7 +110,17 @@ from .policy import (
     explain_primitive_policy,
     policy_overview,
 )
-from .recipe_loader import discover_recipes, load_recipe_for_diagnostics, load_recipe_reference
+from .recipe_loader import (
+    discover_recipes,
+    load_recipe_for_diagnostics,
+    load_recipe_reference,
+    resolve_recipe_reference,
+)
+from .recipe_transparency import (
+    open_yaml_payload,
+    save_recipe_setup_overrides,
+    view_recipe_payload,
+)
 from .run_logs import (
     RunLogWriter,
     RunbookSummary,
@@ -156,6 +169,8 @@ diagnostics_app = typer.Typer(help="Collect redacted local diagnostics artifacts
 plan_app = typer.Typer(help="Preview deterministic intent-to-primitive plans.")
 target_app = typer.Typer(help="Discover and preview local target start plans.")
 learning_app = typer.Typer(help="Manage local, opt-in learning data.")
+settings_app = typer.Typer(help="Inspect and manage local Ritualist settings.")
+settings_approvals_app = typer.Typer(help="List and revoke remembered local approvals.")
 suggestions_app = typer.Typer(help="Review local, on-demand learning suggestions.")
 canvas_app = typer.Typer(help="Inspect and validate local Ritualist Canvas documents.")
 canvas_pack_app = typer.Typer(help="Export and import local visual Canvas packs.")
@@ -163,6 +178,7 @@ canvas_theme_app = typer.Typer(help="Export and import local visual theme packs.
 theme_app = typer.Typer(help="Inspect and validate safe declarative Ritualist themes.")
 room_app = typer.Typer(help="Inspect starter Ritualist Rooms backed by Canvas templates.")
 suite_app = typer.Typer(help="Export, import, and review quarantined whole-Room suite packs.")
+recipe_app = typer.Typer(help="View and configure recipes without running them.")
 app.add_typer(perf_app, name="perf")
 app.add_typer(pack_app, name="pack")
 app.add_typer(primitive_app, name="primitive")
@@ -171,13 +187,16 @@ app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(plan_app, name="plan")
 app.add_typer(target_app, name="target")
 app.add_typer(learning_app, name="learning")
+app.add_typer(settings_app, name="settings")
 app.add_typer(suggestions_app, name="suggestions")
 app.add_typer(canvas_app, name="canvas")
 app.add_typer(theme_app, name="theme")
 app.add_typer(room_app, name="room")
 app.add_typer(suite_app, name="suite")
+app.add_typer(recipe_app, name="recipe")
 canvas_app.add_typer(canvas_pack_app, name="pack")
 canvas_app.add_typer(canvas_theme_app, name="theme")
+settings_app.add_typer(settings_approvals_app, name="approvals")
 console = Console()
 
 
@@ -236,6 +255,42 @@ def paths() -> None:
             "learning_suggestions": learning_suggestions_path(),
         }
     )
+
+
+@settings_approvals_app.command("list")
+def settings_approvals_list(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable remembered approvals."),
+    ] = False,
+) -> None:
+    """List remembered local action approvals."""
+    approvals = list_remembered_approvals()
+    if json_output:
+        console.print_json(data=approvals)
+        return
+    _print_remembered_approvals(approvals)
+
+
+@settings_approvals_app.command("revoke")
+def settings_approvals_revoke(
+    approval_id: Annotated[str, typer.Argument(help="Remembered approval id to revoke.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable revoke result."),
+    ] = False,
+) -> None:
+    """Revoke one remembered local action approval."""
+    revoked = revoke_remembered_approval(approval_id)
+    payload = {"approval_id": approval_id, "revoked": revoked}
+    if json_output:
+        console.print_json(data=payload)
+    elif revoked:
+        console.print(f"[green]Revoked remembered approval:[/] {escape(approval_id)}")
+    else:
+        console.print(f"[red]Error:[/] remembered approval not found: {escape(approval_id)}")
+    if not revoked:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -1055,6 +1110,80 @@ def _print_target_resolution(resolution: object) -> None:
             console.print(f"- {escape(str(item))}")
 
 
+def _print_recipe_view(payload: dict[str, Any]) -> None:
+    console.print(f"Recipe: {escape(str(payload['recipe_name']))}")
+    console.print(f"Purpose: {escape(str(payload.get('purpose') or 'No purpose provided.'))}")
+    console.print("Plan:")
+    for line in payload.get("plain_language_plan", []):
+        console.print(f"  {escape(str(line))}")
+    console.print("Setup:")
+    for field in payload.get("setup_fields", []):
+        label = str(field.get("label") or field.get("name") or "")
+        value = str(field.get("value") if field.get("value") is not None else "")
+        marker = " (override)" if field.get("overridden") else ""
+        console.print(f"  {escape(label)}: {escape(value)}{marker}")
+    console.print("Confirmations:")
+    confirmations = payload.get("confirmations", [])
+    if confirmations:
+        for item in confirmations:
+            console.print(f"  {escape(str(item.get('summary') or item.get('name') or item.get('action')))}")
+    else:
+        console.print("  None")
+    console.print("Ritualist will never:")
+    for item in payload.get("what_ritualist_will_never_do", []):
+        console.print(f"  - {escape(str(item))}")
+    actions = payload.get("actions", {})
+    console.print(f"Doctor: {escape(str(actions.get('doctor', 'available')))}")
+    console.print(f"Dry Run: {escape(str(actions.get('dry_run', 'available')))}")
+    console.print("Editing setup does not run the recipe.")
+
+
+def _print_recipe_setup(payload: dict[str, Any]) -> None:
+    console.print(
+        f"Recipe setup: {escape(str(payload.get('recipe_name') or payload.get('recipe_id') or 'recipe'))}"
+    )
+    if payload.get("overrides_path"):
+        console.print(f"Overrides: {escape(str(payload['overrides_path']))}")
+    fields = payload.get("setup_fields", [])
+    if fields:
+        for field in fields:
+            value = field.get("value")
+            marker = " (override)" if field.get("overridden") else ""
+            console.print(
+                f"  {escape(str(field.get('label') or field.get('name')))}: "
+                f"{escape(str(value if value is not None else ''))}{marker}"
+            )
+    overrides = payload.get("overrides", {})
+    if overrides:
+        console.print("Saved overrides:")
+        for key, value in overrides.items():
+            console.print(f"  {escape(str(key))}: {escape(str(value))}")
+    console.print("Resulting plan:")
+    for line in payload.get("plain_language_plan", []):
+        console.print(f"  {escape(str(line))}")
+    console.print("Doctor and Dry Run are available; setup editing never auto-runs.")
+
+
+def _parse_setup_assignments(values: list[str] | None) -> dict[str, Any]:
+    assignments: dict[str, Any] = {}
+    for raw in values or []:
+        if "=" not in raw:
+            raise ValueError("--set values must use NAME=VALUE")
+        key, value = raw.split("=", 1)
+        name = key.strip()
+        if not name:
+            raise ValueError("--set field name must not be blank")
+        assignments[name] = _parse_setup_value(value.strip())
+    return assignments
+
+
+def _parse_setup_value(value: str) -> Any:
+    lowered = value.casefold()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    return value
+
+
 def _print_canvas_document(document: object) -> None:
     title = getattr(document, "name", "")
     canvas_id = getattr(document, "id", "")
@@ -1200,6 +1329,90 @@ def target_plan(
     _print_plan_preview(plan, doctor)
     if doctor.compatibility == "incompatible":
         raise typer.Exit(1)
+
+
+@recipe_app.command("view")
+def recipe_view(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable recipe explanation."),
+    ] = False,
+) -> None:
+    """Show what a recipe will do without running it."""
+    try:
+        payload = view_recipe_payload(recipe)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_recipe_view(payload)
+
+
+@recipe_app.command("edit-setup")
+def recipe_edit_setup(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    set_values: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--set",
+            help="Setup override as NAME=VALUE. Repeat for multiple fields.",
+        ),
+    ] = None,
+    overrides_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--overrides-dir",
+            help="Directory for setup override YAML. Defaults to Ritualist app config.",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable setup payload."),
+    ] = False,
+) -> None:
+    """View or save recipe setup overrides without running the recipe."""
+    try:
+        if set_values:
+            result = save_recipe_setup_overrides(
+                recipe,
+                _parse_setup_assignments(set_values),
+                overrides_root=overrides_dir,
+            )
+            payload = result.to_dict()
+        else:
+            payload = view_recipe_payload(recipe, overrides_root=overrides_dir)
+    except (RitualistError, ValueError) as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    _print_recipe_setup(payload)
+
+
+@recipe_app.command("open-yaml")
+def recipe_open_yaml(
+    recipe: Annotated[str, typer.Argument(help="Recipe id or YAML path.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable YAML reference."),
+    ] = False,
+) -> None:
+    """Resolve the recipe YAML path without opening an editor or running it."""
+    try:
+        payload = open_yaml_payload(recipe)
+    except RitualistError as exc:
+        console.print(f"[red]Error:[/] {escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    if json_output:
+        console.print_json(data=payload)
+        return
+    console.print(f"Recipe YAML: {escape(str(payload['recipe_path']))}")
+    console.print(escape(str(payload["warning"])))
+    console.print("Side effects: editor not opened, recipe not run, recipe not modified.")
 
 
 @room_app.command("list")
@@ -3009,14 +3222,13 @@ def _run_recipe(
         adapters = create_default_adapters()
         runtime_control = RuntimeControl()
         run_logger = RunLogWriter()
+        approval_source_trust = _approval_source_trust_for_run(recipe, parsed)
+        recipe_content_hash = _recipe_content_hash_for_run(recipe)
         executor = WorkflowExecutor(
             registry=registry,
             adapters=adapters,
             dry_run=dry_run,
-            confirmer=lambda request: typer.confirm(
-                format_confirmation_request(request),
-                default=False,
-            ),
+            confirmer=_prompt_confirmation_decision,
             status_callback=lambda event: console.print(
                 f"[dim]{event.index}/{event.total}[/] "
                 f"{escape(event.status)}: {escape(event.step_name)}"
@@ -3025,6 +3237,8 @@ def _run_recipe(
             run_logger=run_logger,
             runtime_control=runtime_control,
             stop_requested=runtime_control.is_stopping,
+            approval_source_trust=approval_source_trust,
+            recipe_content_hash=recipe_content_hash,
         )
         try:
             summary = executor.run(parsed)
@@ -3066,6 +3280,58 @@ def _is_imported_pack_recipe_path(recipe: str) -> bool:
     except OSError:
         return False
     return resolved_candidate.is_relative_to(resolved_imports)
+
+
+def _approval_source_trust_for_run(recipe_reference: str, recipe: Recipe) -> str:
+    if _is_imported_pack_recipe_path(recipe_reference):
+        return "imported_pack"
+    try:
+        recipe_path = resolve_recipe_reference(recipe_reference).resolve(strict=False)
+        recipe_bytes = recipe_path.read_bytes()
+    except (OSError, RitualistError):
+        return "local_user"
+    try:
+        records = list_pack_imports()
+    except RitualistError:
+        return "local_user"
+    for record in records:
+        if record.status != "enabled":
+            continue
+        for imported_recipe in record.recipes:
+            if imported_recipe.recipe_id != recipe.id:
+                continue
+            imported_path = record.root / imported_recipe.path
+            try:
+                if imported_path.read_bytes() == recipe_bytes:
+                    return "imported_pack"
+            except OSError:
+                continue
+    return "local_user"
+
+
+def _recipe_content_hash_for_run(recipe_reference: str) -> str | None:
+    try:
+        recipe_path = resolve_recipe_reference(recipe_reference)
+        return hashlib.sha256(recipe_path.read_bytes()).hexdigest()
+    except (OSError, RitualistError):
+        return None
+
+
+def _prompt_confirmation_decision(request: object) -> ConfirmationDecision:
+    console.print(format_confirmation_request(request))
+    console.print("[bold]Decisions[/]")
+    console.print("  a: Allow once")
+    console.print("  r: Always allow this local ritual on this device")
+    console.print("  c: Cancel")
+    while True:
+        choice = typer.prompt("Decision", default="c", show_default=False).strip().casefold()
+        if choice in {"a", "allow", "allow once", "y", "yes"}:
+            return ConfirmationDecision.allow_once()
+        if choice in {"r", "remember", "always", "always allow"}:
+            return ConfirmationDecision.always_allow_local()
+        if choice in {"c", "cancel", "n", "no"}:
+            return ConfirmationDecision.cancel()
+        console.print("[red]Choose a, r, or c.[/]")
 
 
 def _parse_vars(values: list[str]) -> dict[str, str]:
@@ -3154,6 +3420,38 @@ def _print_paths(paths: dict[str, object]) -> None:
     for name, path in paths.items():
         table.add_row(escape(name), escape(str(path)))
     console.print(table)
+
+
+def _print_remembered_approvals(approvals: list[dict[str, Any]]) -> None:
+    table = Table(title="Remembered Approvals")
+    table.add_column("ID", no_wrap=True)
+    table.add_column("Recipe", no_wrap=True)
+    table.add_column("Action", no_wrap=True)
+    table.add_column("Target", overflow="fold")
+    table.add_column("Application", overflow="fold")
+    table.add_column("Risk", no_wrap=True)
+    for approval in approvals:
+        scope = approval.get("scope") if isinstance(approval.get("scope"), dict) else {}
+        target_parts = [
+            str(scope.get("target_text") or ""),
+            str(scope.get("target_role") or ""),
+            str(scope.get("target_test_id") or ""),
+            str(scope.get("target_control") or ""),
+        ]
+        target = " / ".join(part for part in target_parts if part) or str(
+            scope.get("target_scope") or ""
+        )
+        table.add_row(
+            escape(str(approval.get("id") or "")),
+            escape(str(scope.get("recipe_or_intent_id") or "")),
+            escape(str(scope.get("action_or_primitive_id") or "")),
+            escape(target),
+            escape(str(scope.get("target_application") or scope.get("target_context") or "")),
+            escape(str(scope.get("risk_level") or "")),
+        )
+    console.print(table)
+    if not approvals:
+        console.print("No remembered approvals.")
 
 
 def _print_visual_pack_result(result: VisualPackResult, *, json_output: bool) -> None:

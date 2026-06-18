@@ -121,3 +121,28 @@ canvas:
     settings = load_app_config(path).canvas.performance_settings()
 
     assert settings.mode is CanvasPerformanceMode.BALANCED
+
+
+def test_load_app_config_reads_approval_options(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+version: "0.1"
+approvals:
+  remembered_approvals_enabled: false
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    config = load_app_config(path)
+
+    assert config.approvals.remembered_approvals_enabled is False
+
+
+def test_load_app_config_defaults_approval_options(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("version: '0.1'\n", encoding="utf-8")
+
+    config = load_app_config(path)
+
+    assert config.approvals.remembered_approvals_enabled is True

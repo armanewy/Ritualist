@@ -366,7 +366,7 @@ def test_bundled_gaming_mode_sample_includes_home_metadata():
 
     assert recipe.home.category == "Gaming"
     assert recipe.home.card.title == "Diablo IV Night"
-    assert recipe.home.card.subtitle == "YouTube ambience + Battle.net"
+    assert recipe.home.card.subtitle == "Ambience + Battle.net readiness"
 
 
 def test_unknown_action_is_validation_error(tmp_path):
