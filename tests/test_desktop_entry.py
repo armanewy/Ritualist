@@ -31,6 +31,42 @@ def test_desktop_entry_launches_classic_gui_with_option(monkeypatch):
     assert called == ["gui"]
 
 
+def test_desktop_entry_launches_agent_with_startup_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_agent",
+        lambda *, startup=False, open_picker=False: called.append((startup, open_picker)) or 0,
+    )
+
+    assert desktop_entry.main(["--agent", "--startup"]) == 0
+    assert called == [(True, False)]
+
+
+def test_desktop_entry_launches_agent_with_open_picker_option(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_agent",
+        lambda *, startup=False, open_picker=False: called.append((startup, open_picker)) or 0,
+    )
+
+    assert desktop_entry.main(["--agent", "--open-picker"]) == 0
+    assert called == [(False, True)]
+
+
+def test_desktop_entry_agent_defaults_to_picker_activation(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        desktop_entry,
+        "_run_agent",
+        lambda *, startup=False, open_picker=False: called.append((startup, open_picker)) or 0,
+    )
+
+    assert desktop_entry.main(["--agent"]) == 0
+    assert called == [(False, False)]
+
+
 def test_desktop_entry_launches_canvas_with_option(monkeypatch):
     called = []
     monkeypatch.setattr(desktop_entry, "_run_home", lambda: called.append(("home", "")))
@@ -123,6 +159,17 @@ def test_desktop_entry_rejects_unknown_canvas_option(monkeypatch, capsys):
     assert "--fullscreen" in capsys.readouterr().err
 
 
+def test_desktop_entry_rejects_unknown_agent_option(monkeypatch, capsys):
+    messages = []
+    logs = []
+    monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
+    monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
+
+    assert desktop_entry.main(["--agent", "--legacy-home"]) == 1
+    assert "Unsupported Agent option" in messages[0]
+    assert "--legacy-home" in capsys.readouterr().err
+
+
 def test_desktop_entry_reports_home_dependency_error(monkeypatch, capsys):
     messages = []
     logs = []
@@ -148,6 +195,7 @@ def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
 
     assert desktop_entry.main(["--unknown"]) == 1
     assert "Unsupported desktop option" in messages[0]
+    assert "Ritualist.exe --agent" in logs[0][0]
     assert "Ritualist.exe --classic-gui" in logs[0][0]
     assert "Ritualist.exe --room gaming --host desktop-work-area" in logs[0][0]
     assert "Ritualist.exe --canvas gaming_desktop" in logs[0][0]

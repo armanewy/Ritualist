@@ -13,6 +13,7 @@ $pyinstallerArgs = @(
     "--name", "Ritualist",
     "--collect-submodules", "ritualist.actions",
     "--collect-submodules", "ritualist.adapters",
+    "--collect-submodules", "ritualist.agent",
     "--collect-submodules", "ritualist.canvas",
     "--collect-submodules", "ritualist.home",
     "--collect-submodules", "ritualist.ui",

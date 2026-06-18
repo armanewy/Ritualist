@@ -16,6 +16,8 @@ class DesktopLaunch:
     canvas: str | None = None
     host: str = "windowed"
     taskbar_policy: str = "respect"
+    startup: bool = False
+    open_picker: bool = False
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -29,6 +31,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             host=launch.host,
             taskbar_policy=launch.taskbar_policy,
         )
+        if launch.mode == "agent":
+            return _run_agent(startup=launch.startup, open_picker=launch.open_picker)
         if launch.mode == "classic-gui":
             _run_gui()
         elif launch.mode == "canvas":
@@ -42,6 +46,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         _report_startup_error(f"Ritualist failed to start: {exc}", traceback.format_exc())
         return 1
     return 0
+
+
+def _run_agent(*, startup: bool = False, open_picker: bool = False) -> int:
+    from ritualist.agent.app import run_agent
+
+    return run_agent(startup=startup, open_picker=open_picker)
 
 
 def _run_gui() -> None:
@@ -68,6 +78,8 @@ def _launch_mode(argv: Sequence[str]) -> DesktopLaunch:
     args = tuple(argv)
     if not args or args == ("--home",):
         return DesktopLaunch("home")
+    if args and args[0] == "--agent":
+        return _agent_launch(args[1:])
     if args in (("--classic-gui",), ("--gui",)):
         return DesktopLaunch("classic-gui")
     if args and (args[0] == "--room" or args[0].startswith("--room=")):
@@ -78,10 +90,26 @@ def _launch_mode(argv: Sequence[str]) -> DesktopLaunch:
         return _canvas_launch(args[1:])
     raise RitualistError(
         "Unsupported desktop option. Use Ritualist.exe for Home or "
+        "Ritualist.exe --agent for the tray Agent, "
         "Ritualist.exe --classic-gui for the classic GUI, or "
         "Ritualist.exe --room gaming --host desktop-work-area for a Room, or "
         "Ritualist.exe --canvas gaming_desktop for Canvas Use Mode."
     )
+
+
+def _agent_launch(argv: Sequence[str]) -> DesktopLaunch:
+    startup = False
+    open_picker = False
+    for token in argv:
+        if token == "--startup":
+            startup = True
+        elif token == "--open-picker":
+            open_picker = True
+        else:
+            raise RitualistError(f"Unsupported Agent option for packaged app: {token}")
+    if startup and open_picker:
+        raise RitualistError("--agent accepts either --startup or --open-picker, not both.")
+    return DesktopLaunch("agent", startup=startup, open_picker=open_picker)
 
 
 def _room_launch(argv: Sequence[str]) -> DesktopLaunch:

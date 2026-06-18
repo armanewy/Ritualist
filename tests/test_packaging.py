@@ -16,6 +16,7 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "--collect-submodules" in script
     assert "ritualist.actions" in script
     assert "ritualist.adapters" in script
+    assert "ritualist.agent" in script
     assert "ritualist.canvas" in script
     assert "ritualist.home" in script
     assert "ritualist.ui" in script
