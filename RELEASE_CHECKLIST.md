@@ -794,3 +794,82 @@ Release note:
 
 - No `v0.2.0-alpha.1` tag was created. The pre-removal acceptance summary is no
   longer the current taggability evidence.
+
+## Wave 14C Packaged North-Star Acceptance Update - 2026-06-18
+
+Status: Harness/checklist update plus packaged north-star acceptance run.
+
+Repository state at start:
+
+- `git pull --ff-only`: failed with `fatal: Cannot fast-forward to multiple
+  branches`.
+- Explicit `git pull --ff-only origin main`: already up to date.
+- Recorded starting HEAD:
+  `abb8dd40d61c08147dca5bc311bc6bcca983c308`.
+- Working tree was clean before Wave 14C edits.
+
+Acceptance contract updates:
+
+- Added structured checks for all three hero Rooms on Desktop Work-Area with
+  taskbar/work-area, wallpaper passthrough, and honest click-through limitation
+  evidence.
+- Added Local Learning/Suggestions acceptance evidence for explicit source
+  enablement, fixture journal events, on-demand suggestion scan, reviewed
+  folder-only shortcut draft, reviewed multi-step ritual draft, no draft
+  install/enable/run/write side effects, no run-log creation, and delete-data.
+- Added Suite Pack acceptance evidence for export/validate/import/list, nested
+  Canvas/theme quarantine, behavior-bearing ritual disabled state,
+  `auto_run=false`, `auto_enable=false`, and no run-log creation.
+- Added a top-level `north_star_packaged_acceptance` aggregate check that keeps
+  `NEEDS_HUMAN_REVIEW` rather than overclaiming host-observable taskbar or
+  click-through ambiguity.
+- Added `edit_mode_builder_visible` to the acceptance spec and aggregate gate
+  after integration found the harness already emitted that check.
+- Updated the test-only Desktop Work-Area capture harness to focus the launched
+  Ritualist Canvas window before screenshots. A post-rebuild run exposed that
+  the fake wallpaper fixture could otherwise occlude the Room UI screenshot; the
+  final evidence records `canvas_focused_before_capture=true` for the hero Room
+  captures.
+- Added `docs\NORTH_STAR_DOGFOOD.md` with the flow and evidence boundaries.
+
+Validation commands:
+
+- Integration-focused checks:
+  `python -m pytest -q tests/test_release_acceptance.py tests/test_north_star_privacy.py tests/test_north_star_performance.py tests/test_learning_cli.py tests/test_suggestions_cli.py tests/test_suite_packs.py tests/test_suggestion_shortcut_drafts.py tests/test_suggestion_recipe_drafts.py`
+  passed with `59 passed`.
+- Focused acceptance/schema/API checks:
+  `python -m pytest -q tests/test_release_acceptance.py tests/test_learning_cli.py tests/test_suggestions_cli.py tests/test_suite_packs.py tests/test_suggestion_shortcut_drafts.py tests/test_suggestion_recipe_drafts.py`
+  passed with `43 passed`.
+- Post-focus harness check: `python -m pytest -q tests/test_release_acceptance.py`
+  passed with `7 passed`.
+- Full test suite: `python -m pytest -q` passed with
+  `1175 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 41 managed files.
+- PowerShell parser check for `scripts\ritualist_release_acceptance.ps1`:
+  passed.
+- `.\scripts\build_windows_app.ps1`: passed and rebuilt
+  `dist\Ritualist\Ritualist.exe`.
+- Packaged smoke without `-RecordScreen` in
+  `artifacts\release-acceptance-wave14c`: `30 PASS`, `0 FAIL`,
+  `1 NEEDS_HUMAN_REVIEW` because frame timing was not captured.
+- Final full packaged acceptance with screen frames against the rebuilt package:
+  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`
+  passed with `31 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance\evidence`
+
+Release recommendation:
+
+- The generated summary reports `taggable: true` and `tag_created: false`.
+- This entry recommends taggable based on the local packaged acceptance evidence
+  above, but no tag was created.
+- No release tag was created.

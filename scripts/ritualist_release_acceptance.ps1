@@ -334,6 +334,41 @@ function Save-ZOrderSnapshot {
     return $path
 }
 
+function Set-ForegroundProcessWindow {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$Title
+    )
+    if (-not $Process) {
+        return $false
+    }
+    for ($attempt = 0; $attempt -lt 10; $attempt += 1) {
+        $Process.Refresh()
+        $handle = $Process.MainWindowHandle
+        if ($handle -eq [System.IntPtr]::Zero) {
+            $row = @(
+                Get-TopLevelWindows |
+                    Where-Object {
+                        [int64]$_.process_id -eq [int64]$Process.Id -and
+                        ([string]::IsNullOrWhiteSpace($Title) -or $_.title -eq $Title)
+                    } |
+                    Select-Object -First 1
+            )
+            if ($row.Count -gt 0) {
+                $handle = [System.IntPtr]::new([int64]$row[0].hwnd)
+            }
+        }
+        if ($handle -ne [System.IntPtr]::Zero) {
+            [void][RitualistAcceptanceWin32]::ShowWindow($handle, 9)
+            [void][RitualistAcceptanceWin32]::SetForegroundWindow($handle)
+            Start-Sleep -Milliseconds 500
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
+}
+
 function Get-WindowByName {
     param([string]$Name, [int]$TimeoutSeconds = 15)
     $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -1674,6 +1709,7 @@ function Capture-DesktopWorkAreaCanvasArtifact {
         Start-Sleep -Seconds $ScenarioDwellSeconds
         $window = Get-WindowByName "Ritualist Canvas" 10
         $fakeWallpaperWindow = Get-WindowByName $FakeWallpaperTitle 2
+        $focusedCanvas = Set-ForegroundProcessWindow $process "Ritualist Canvas"
         $screenshot = Save-Screenshot "desktop-work-area-canvas"
         $frames = Capture-ScreenFrames "desktop-work-area-canvas" 2
         $processTree = Save-ProcessTree "desktop-work-area-canvas" $process.Id
@@ -1717,6 +1753,7 @@ function Capture-DesktopWorkAreaCanvasArtifact {
             screen_geometry = $screen
             window_bounds = $windowRow.bounds
             bounds_match_work_area = $boundsMatch
+            canvas_focused_before_capture = $focusedCanvas
             exit_control_present = [bool]$exitControl
             exit_invoked = $exitInvoked
             exit_clean = $exitClean
@@ -1795,6 +1832,106 @@ function Capture-DesktopWorkAreaWindowedFallbackArtifact {
     }
     finally {
         Stop-AcceptanceProcess $process
+    }
+}
+
+function Capture-HeroDesktopWorkAreaArtifacts {
+    $heroes = @(
+        [ordered]@{ room_id = "gaming"; canvas_id = "gaming_desktop"; artifact_id = "gaming-room-desktop-work-area" },
+        [ordered]@{ room_id = "project"; canvas_id = $script:ProjectRoomShortcutFixtureCanvas; artifact_id = "project-room-desktop-work-area" },
+        [ordered]@{ room_id = "support_desk"; canvas_id = "helpdesk_desktop"; artifact_id = "support-desk-desktop-work-area" }
+    )
+    $fakeWallpaperProcess = $null
+    $entries = @()
+    try {
+        $fakeWallpaperProcess = Start-FakeWallpaperFixture
+        foreach ($hero in $heroes) {
+            $process = Start-AcceptanceProcess $script:RitualistExe @("--canvas", $hero.canvas_id, "--host", "desktop-work-area")
+            try {
+                Start-Sleep -Seconds $ScenarioDwellSeconds
+                $window = Get-WindowByName "Ritualist Canvas" 10
+                $fakeWallpaperWindow = Get-WindowByName $FakeWallpaperTitle 2
+                $focusedCanvas = Set-ForegroundProcessWindow $process "Ritualist Canvas"
+                $screenshot = Save-Screenshot $hero.artifact_id
+                $frames = Capture-ScreenFrames $hero.artifact_id 2
+                $processTree = Save-ProcessTree $hero.artifact_id $process.Id
+                $windowTree = Save-WindowTree $hero.artifact_id $window
+                $zOrderPath = Save-ZOrderSnapshot $hero.artifact_id
+                $zOrder = Get-Content -Path $zOrderPath -Raw | ConvertFrom-Json
+                $screen = Get-PrimaryScreenGeometry
+                $windowRow = @($zOrder | Where-Object { [int64]$_.process_id -eq [int64]$process.Id -and $_.title -eq "Ritualist Canvas" } | Select-Object -First 1)
+                $events = Get-E2EEvents
+                $hostReady = @(
+                    $events |
+                        Where-Object { $_.event -eq "canvas.host.ready" -and [int]$_.process_id -eq $process.Id } |
+                        Select-Object -Last 1
+                )
+                $entry = [ordered]@{
+                    room_id = $hero.room_id
+                    canvas_id = $hero.canvas_id
+                    artifact_id = $hero.artifact_id
+                    screenshot = $screenshot
+                    frames = $frames
+                    process_tree = $processTree
+                    window_tree = $windowTree
+                    z_order = $zOrderPath
+                    screen_geometry = $screen
+                    window_bounds = if ($windowRow) { $windowRow.bounds } else { $null }
+                    bounds_match_work_area = if ($windowRow) { Test-BoundsMatch $windowRow.bounds $screen.work_area } else { $false }
+                    non_blank = Test-ScreenshotNonBlank $screenshot
+                    canvas_focused_before_capture = $focusedCanvas
+                    fake_wallpaper_fixture_visible = [bool]$fakeWallpaperWindow
+                    taskbar_visible_by_work_area = (
+                        [int]$screen.work_area.width -lt [int]$screen.bounds.width -or
+                        [int]$screen.work_area.height -lt [int]$screen.bounds.height
+                    )
+                    host_ready = if ($hostReady.Count -gt 0) { $hostReady[-1] } else { $null }
+                    background_passthrough = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_passthrough } else { $null }
+                    background_mode = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.background_mode } else { $null }
+                    click_through_implemented = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.click_through_implemented } else { $null }
+                    blank_area_click_through_status = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_status } else { "NEEDS_HUMAN_REVIEW" }
+                    blank_area_click_through_machine_verified = if ($hostReady.Count -gt 0) { $hostReady[-1].payload.blank_area_click_through_machine_verified } else { $false }
+                }
+                $entries += $entry
+                Add-VisualArtifact -Id $hero.artifact_id -CanvasId $hero.canvas_id -State "desktop_work_area" -NonBlank $entry.non_blank -Evidence $entry
+            }
+            finally {
+                Stop-AcceptanceProcess $process
+            }
+        }
+    }
+    finally {
+        Stop-AcceptanceProcess $fakeWallpaperProcess -Force
+    }
+
+    $allOpened = @($entries | Where-Object { $_.non_blank -and $_.bounds_match_work_area -and $_.fake_wallpaper_fixture_visible }).Count -eq $heroes.Count
+    $backgroundOk = @($entries | Where-Object { $_.background_passthrough -eq $true -or $_.background_mode -eq "passthrough" }).Count -eq $heroes.Count
+    $taskbarObservable = @($entries | Where-Object { $_.taskbar_visible_by_work_area }).Count -gt 0
+    $clickThroughHonest = @(
+        $entries |
+            Where-Object {
+                $_.click_through_implemented -eq $false -and
+                $_.blank_area_click_through_machine_verified -eq $false -and
+                $_.blank_area_click_through_status -eq "NEEDS_HUMAN_REVIEW"
+            }
+    ).Count -eq $heroes.Count
+    $evidence = @{
+        hero_desktop_work_area = $entries
+        opened_hero_count = $entries.Count
+        expected_hero_count = $heroes.Count
+        all_opened_nonblank_on_work_area = $allOpened
+        wallpaper_passthrough_confirmed = $backgroundOk
+        taskbar_visible_by_work_area = $taskbarObservable
+        click_through_honest_unimplemented = $clickThroughHonest
+    }
+    if ($allOpened -and $backgroundOk -and $taskbarObservable -and $clickThroughHonest) {
+        Set-Check "desktop_work_area_hero_passthrough" "PASS" "All three hero Rooms opened on Desktop Work-Area with taskbar-preserving bounds, wallpaper passthrough, and honest click-through limitation evidence." $evidence
+    }
+    elseif ($allOpened -and $backgroundOk -and $clickThroughHonest) {
+        Set-Check "desktop_work_area_hero_passthrough" "NEEDS_HUMAN_REVIEW" "Hero Desktop Work-Area evidence was captured, but taskbar visibility was not machine-observable on this host." $evidence
+    }
+    else {
+        Set-Check "desktop_work_area_hero_passthrough" "FAIL" "Hero Desktop Work-Area evidence was incomplete." $evidence
     }
 }
 
@@ -2439,6 +2576,273 @@ function Invoke-HardKillRecovery {
     }
 }
 
+function Invoke-LocalLearningSuggestionsEvidence {
+    $journalProbe = Join-Path $CommandRoot "north_star_journal_events.py"
+    $journalOutput = Join-Path $SnapshotRoot "north-star-journal-events.json"
+    $suggestionProbe = Join-Path $CommandRoot "north_star_suggestions_scan.py"
+    $suggestionOutput = Join-Path $SnapshotRoot "north-star-suggestions-scan.json"
+    $draftProbe = Join-Path $CommandRoot "north_star_suggestion_drafts.py"
+    $draftOutput = Join-Path $SnapshotRoot "north-star-suggestion-drafts.json"
+    $reviewedFolder = Join-Path $FixtureRoot "north-star-reviewed-folder"
+    New-Item -ItemType Directory -Force -Path $reviewedFolder | Out-Null
+
+    @'
+import json
+import sys
+
+from ritualist.activity_journal import ActivityJournal
+
+journal = ActivityJournal(enabled=True)
+events = [
+    ("shortcut_opened", {"folder_label": "North Star Project Folder"}),
+    ("shortcut_opened", {"folder_label": "North Star Project Folder"}),
+    (
+        "recipe_run_finished",
+        {
+            "recipe_id": "support_shift",
+            "recipe_name": "Support Shift",
+            "shortcut_id": "ticket_queue",
+            "context_id": "support-shift",
+        },
+    ),
+    (
+        "recipe_run_finished",
+        {
+            "recipe_id": "support_shift",
+            "recipe_name": "Support Shift",
+            "shortcut_id": "ticket_queue",
+            "context_id": "support-shift",
+        },
+    ),
+]
+written = []
+for event_type, payload in events:
+    if not journal.write(event_type, **payload):
+        raise SystemExit(f"failed to write journal event: {event_type}")
+    written.append({"event_type": event_type, "payload": payload})
+payload = {
+    "schema": "ritualist.acceptance.north_star_journal_events.v1",
+    "written_count": len(written),
+    "events": written,
+}
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, indent=2)
+print(json.dumps({"path": sys.argv[1], "written_count": len(written)}))
+'@ | Set-Content -Path $journalProbe -Encoding UTF8
+
+    @'
+import json
+import sys
+from pathlib import Path
+
+from ritualist.activity_collectors import FakeActivityCollector
+from ritualist.activity_signals import journal_event_signal, recent_reference_signal
+from ritualist.suggestions.service import scan_suggestions_payload
+
+signals = (
+    recent_reference_signal(
+        reference_type="folder",
+        label="North Star Project Folder",
+        target="North Star Project Folder",
+    ),
+    recent_reference_signal(
+        reference_type="folder",
+        label="North Star Project Folder",
+        target="North Star Project Folder",
+    ),
+    journal_event_signal(
+        label="Support Shift",
+        value="recipe_run_finished",
+        metadata={
+            "event_type": "recipe_run_finished",
+            "recipe_id": "support_shift",
+            "recipe_name": "Support Shift",
+            "shortcut_id": "ticket_queue",
+            "context_id": "support-shift",
+        },
+    ),
+    journal_event_signal(
+        label="Support Shift",
+        value="recipe_run_finished",
+        metadata={
+            "event_type": "recipe_run_finished",
+            "recipe_id": "support_shift",
+            "recipe_name": "Support Shift",
+            "shortcut_id": "ticket_queue",
+            "context_id": "support-shift",
+        },
+    ),
+)
+payload = scan_suggestions_payload(
+    collectors=(FakeActivityCollector(collector_id="north_star_acceptance", signals=signals),),
+)
+Path(sys.argv[1]).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+print(json.dumps(payload))
+'@ | Set-Content -Path $suggestionProbe -Encoding UTF8
+
+    @'
+import json
+import sys
+from pathlib import Path
+
+from ritualist.paths import recipes_path
+from ritualist.suggestions.drafts_recipe import build_draft_recipe
+from ritualist.suggestions.drafts_shortcut import build_shortcut_draft
+from ritualist.suggestions.review import approve_suggestion
+from ritualist.suggestions.storage import SuggestionStore
+
+out = Path(sys.argv[1])
+reviewed_folder = Path(sys.argv[2])
+store = SuggestionStore()
+suggestions = store.list()
+shortcut = next((item for item in suggestions if item.kind.value == "shortcut_component"), None)
+ritual = next((item for item in suggestions if item.kind.value == "ritual_recipe"), None)
+if shortcut is None or ritual is None:
+    raise SystemExit("expected shortcut_component and ritual_recipe suggestions")
+
+recipes_before = sorted(path.name for path in recipes_path().glob("*.yaml")) if recipes_path().exists() else []
+approved_shortcut = approve_suggestion(
+    store,
+    shortcut.id,
+    reviewed_by="acceptance_operator",
+    reviewed_at="2026-06-18T00:00:00Z",
+)
+shortcut_draft = build_shortcut_draft(
+    approved_shortcut,
+    reviewed_inputs={"folder_path": str(reviewed_folder)},
+)
+approved_ritual = approve_suggestion(
+    store,
+    ritual.id,
+    reviewed_by="acceptance_operator",
+    reviewed_at="2026-06-18T00:01:00Z",
+)
+recipe_draft = build_draft_recipe(approved_ritual)
+recipes_after = sorted(path.name for path in recipes_path().glob("*.yaml")) if recipes_path().exists() else []
+
+payload = {
+    "schema": "ritualist.acceptance.north_star_suggestion_drafts.v1",
+    "suggestion_count": len(suggestions),
+    "suggestion_kinds": sorted({item.kind.value for item in suggestions}),
+    "shortcut_suggestion_id": shortcut.id,
+    "ritual_suggestion_id": ritual.id,
+    "shortcut_approval": approved_shortcut.approval.to_dict() if approved_shortcut.approval else None,
+    "ritual_approval": approved_ritual.approval.to_dict() if approved_ritual.approval else None,
+    "shortcut_draft": shortcut_draft,
+    "recipe_draft": recipe_draft,
+    "recipes_before": recipes_before,
+    "recipes_after": recipes_after,
+    "recipes_written": recipes_before != recipes_after,
+}
+out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+print(json.dumps({"path": str(out), "suggestion_kinds": payload["suggestion_kinds"]}))
+'@ | Set-Content -Path $draftProbe -Encoding UTF8
+
+    $runsBefore = Get-RunDirectoryNames
+    $enable = Invoke-CapturedCommand "north-star-learning-enable" "python" @("-m", "ritualist", "learning", "enable", "--source", "ritualist_journal", "--source", "recent_items", "--json")
+    $journalWrite = Invoke-CapturedCommand "north-star-journal-events" "python" @($journalProbe, $journalOutput)
+    $journal = Invoke-CapturedCommand "north-star-learning-journal" "python" @("-m", "ritualist", "learning", "journal", "--json")
+    $learningScan = Invoke-CapturedCommand "north-star-learning-scan" "python" @("-m", "ritualist", "learning", "scan", "--json")
+    $suggestionScan = Invoke-CapturedCommand "north-star-suggestions-scan" "python" @($suggestionProbe, $suggestionOutput)
+    $suggestionList = Invoke-CapturedCommand "north-star-suggestions-list" "python" @("-m", "ritualist", "suggestions", "list", "--json")
+    $drafts = Invoke-CapturedCommand "north-star-suggestion-drafts" "python" @($draftProbe, $draftOutput, $reviewedFolder)
+    $delete = Invoke-CapturedCommand "north-star-learning-delete-data" "python" @("-m", "ritualist", "learning", "delete-data", "--yes", "--json")
+    $runsAfter = Get-RunDirectoryNames
+
+    $enablePayload = Convert-CommandJson $enable
+    $journalPayload = Convert-CommandJson $journal
+    $learningScanPayload = Convert-CommandJson $learningScan
+    $suggestionScanPayload = Convert-CommandJson $suggestionScan
+    $suggestionListPayload = Convert-CommandJson $suggestionList
+    $deletePayload = Convert-CommandJson $delete
+    $draftPayload = if (Test-Path $draftOutput) { Get-Content -Path $draftOutput -Raw | ConvertFrom-Json } else { $null }
+    $journalEventPayload = if (Test-Path $journalOutput) { Get-Content -Path $journalOutput -Raw | ConvertFrom-Json } else { $null }
+
+    $suggestionKinds = if ($suggestionScanPayload) { @($suggestionScanPayload.suggestions | ForEach-Object { $_.kind } | Select-Object -Unique) } else { @() }
+    $hasShortcutSuggestion = $suggestionKinds -contains "shortcut_component"
+    $hasRitualSuggestion = $suggestionKinds -contains "ritual_recipe"
+    $shortcutDraftOk = (
+        $draftPayload -and
+        $draftPayload.shortcut_draft.schema_version -eq "ritualist.shortcut_draft.v1" -and
+        $draftPayload.shortcut_draft.component_type -eq "shortcut.folder" -and
+        $draftPayload.shortcut_draft.shortcut.target_configured -eq $true
+    )
+    $recipeDraftOk = (
+        $draftPayload -and
+        $draftPayload.recipe_draft.schema_version -eq "ritualist.suggestion.recipe_draft.v1" -and
+        $draftPayload.recipe_draft.status -eq "disabled" -and
+        $draftPayload.recipe_draft.creation_side_effects.installed -eq $false -and
+        $draftPayload.recipe_draft.creation_side_effects.enabled -eq $false -and
+        $draftPayload.recipe_draft.creation_side_effects.ran -eq $false -and
+        $draftPayload.recipe_draft.creation_side_effects.wrote_files -eq $false
+    )
+    $noAutoRun = (($runsBefore -join "|") -eq ($runsAfter -join "|"))
+    $deletedLearningData = (
+        $deletePayload -and
+        $deletePayload.deleted_count -ge 2 -and
+        $deletePayload.paths.journal.deleted -eq $true -and
+        $deletePayload.paths.suggestions.deleted -eq $true
+    )
+    $evidence = @{
+        enable_stdout = $enable.stdout
+        enable_stderr = $enable.stderr
+        journal_event_fixture = $journalOutput
+        journal_write_stdout = $journalWrite.stdout
+        journal_write_stderr = $journalWrite.stderr
+        learning_journal_stdout = $journal.stdout
+        learning_scan_stdout = $learningScan.stdout
+        suggestions_scan_json = $suggestionOutput
+        suggestions_scan_stdout = $suggestionScan.stdout
+        suggestions_list_stdout = $suggestionList.stdout
+        suggestion_drafts_json = $draftOutput
+        suggestion_drafts_stdout = $drafts.stdout
+        suggestion_drafts_stderr = $drafts.stderr
+        delete_learning_stdout = $delete.stdout
+        delete_learning_stderr = $delete.stderr
+        enabled_sources = if ($enablePayload) { $enablePayload.enabled_sources } else { @() }
+        journal_event_count = if ($journalPayload) { $journalPayload.count } else { $null }
+        written_journal_event_count = if ($journalEventPayload) { $journalEventPayload.written_count } else { $null }
+        learning_scan_signal_count = if ($learningScanPayload) { $learningScanPayload.collection.signals.Count } else { $null }
+        suggestion_scan_count = if ($suggestionScanPayload) { $suggestionScanPayload.suggestion_count } else { $null }
+        suggestion_list_count = if ($suggestionListPayload) { $suggestionListPayload.count } else { $null }
+        suggestion_kinds = $suggestionKinds
+        has_shortcut_suggestion = $hasShortcutSuggestion
+        has_ritual_suggestion = $hasRitualSuggestion
+        shortcut_draft_ok = $shortcutDraftOk
+        recipe_draft_ok = $recipeDraftOk
+        recipes_written_by_draft_probe = if ($draftPayload) { $draftPayload.recipes_written } else { $null }
+        runs_before = $runsBefore
+        runs_after = $runsAfter
+        no_auto_run = $noAutoRun
+        delete_payload = $deletePayload
+    }
+    if (
+        $enable.exit_code -eq 0 -and
+        $journalWrite.exit_code -eq 0 -and
+        $journal.exit_code -eq 0 -and
+        $learningScan.exit_code -eq 0 -and
+        $suggestionScan.exit_code -eq 0 -and
+        $suggestionList.exit_code -eq 0 -and
+        $drafts.exit_code -eq 0 -and
+        $delete.exit_code -eq 0 -and
+        $enablePayload.enabled -eq $true -and
+        $enablePayload.background_collection -eq $false -and
+        $journalPayload.count -ge 4 -and
+        $hasShortcutSuggestion -and
+        $hasRitualSuggestion -and
+        $shortcutDraftOk -and
+        $recipeDraftOk -and
+        -not $draftPayload.recipes_written -and
+        $noAutoRun -and
+        $deletedLearningData
+    ) {
+        Set-Check "local_learning_suggestions_review_drafts" "PASS" "Local Learning enabled with explicit consent, journal events produced suggestions, reviewed shortcut and ritual drafts were created without installing/enabling/running, and learning data was deleted." $evidence
+    }
+    else {
+        Set-Check "local_learning_suggestions_review_drafts" "FAIL" "Local Learning, Suggestions, draft review, no-auto-run, or deletion evidence was incomplete." $evidence
+    }
+}
+
 function Invoke-PackSafetyChecks {
     $canvasOut = Join-Path $CommandRoot "visual_acceptance.ritualistcanvas"
     $themeOut = Join-Path $CommandRoot "minimal_theme.ritualisttheme"
@@ -2493,6 +2897,158 @@ components:
             stderr = $badExport.stderr
             exit_code = $badExport.exit_code
         }
+    }
+}
+
+function Invoke-SuitePackQuarantineEvidence {
+    $suiteCanvasOut = Join-Path $CommandRoot "north_star_suite_canvas.ritualistcanvas"
+    $suiteThemeOut = Join-Path $CommandRoot "north_star_suite_theme.ritualisttheme"
+    $suiteRitualRecipe = Join-Path $CommandRoot "north_star_suite_wait.yaml"
+    $suiteRitualOut = Join-Path $CommandRoot "north_star_suite_wait.ritualistpack"
+    $suiteOut = Join-Path $CommandRoot "north_star_suite.ritualistsuite"
+    $readme = Join-Path $CommandRoot "north_star_suite_README.md"
+    @"
+version: "0.1"
+id: north_star_suite_wait
+name: North Star Suite Wait
+description: Acceptance fixture ritual pack for suite quarantine checks.
+steps:
+  - action: wait.seconds
+    seconds: 0.1
+"@ | Set-Content -Path $suiteRitualRecipe -Encoding UTF8
+    "# North Star Suite`n" | Set-Content -Path $readme -Encoding UTF8
+
+    $runsBefore = Get-RunDirectoryNames
+    $canvasExport = Invoke-CapturedCommand "north-star-suite-canvas-export" "python" @("-m", "ritualist", "canvas", "pack", "export", (Join-Path $script:FixtureAppData "canvases\visual_acceptance.yaml"), "--out", $suiteCanvasOut, "--json")
+    $themeExport = Invoke-CapturedCommand "north-star-suite-theme-export" "python" @("-m", "ritualist", "canvas", "theme", "export", (Join-Path $script:FixtureAppData "themes\minimal_theme.yaml"), "--out", $suiteThemeOut, "--json")
+    $ritualExport = Invoke-CapturedCommand "north-star-suite-ritual-export" "python" @("-m", "ritualist", "pack", "export", $suiteRitualRecipe, "--out", $suiteRitualOut)
+    $suiteExport = Invoke-CapturedCommand "north-star-suite-export" "python" @("-m", "ritualist", "suite", "export", "--canvas-pack", $suiteCanvasOut, "--theme-pack", $suiteThemeOut, "--ritual-pack", $suiteRitualOut, "--out", $suiteOut, "--id", "north_star_suite", "--name", "North Star Suite", "--readme", $readme, "--json")
+    $suiteValidate = Invoke-CapturedCommand "north-star-suite-validate" "python" @("-m", "ritualist", "suite", "validate", $suiteOut, "--json")
+    $suiteImport = Invoke-CapturedCommand "north-star-suite-import" "python" @("-m", "ritualist", "suite", "import", $suiteOut, "--json")
+    $suiteList = Invoke-CapturedCommand "north-star-suite-list-imports" "python" @("-m", "ritualist", "suite", "list-imports", "--json")
+    $runsAfter = Get-RunDirectoryNames
+
+    $validatePayload = Convert-CommandJson $suiteValidate
+    $importPayload = Convert-CommandJson $suiteImport
+    $listPayload = Convert-CommandJson $suiteList
+    $ritualImports = if ($importPayload) { @($importPayload.ritual_imports) } else { @() }
+    $listRows = if ($listPayload) { @($listPayload) } else { @() }
+    $noAutoRun = (($runsBefore -join "|") -eq ($runsAfter -join "|"))
+    $quarantined = (
+        $validatePayload.validation.auto_run -eq $false -and
+        $validatePayload.validation.auto_enable -eq $false -and
+        $importPayload.status -eq "quarantined" -and
+        $importPayload.auto_run -eq $false -and
+        $importPayload.auto_enable -eq $false -and
+        $importPayload.canvas_import.status -eq "quarantined" -and
+        $importPayload.theme_import.status -eq "quarantined" -and
+        $ritualImports.Count -eq 1 -and
+        $ritualImports[0].status -eq "disabled" -and
+        $listRows.Count -ge 1
+    )
+    $evidence = @{
+        canvas_export_stdout = $canvasExport.stdout
+        theme_export_stdout = $themeExport.stdout
+        ritual_export_stdout = $ritualExport.stdout
+        suite_export_stdout = $suiteExport.stdout
+        suite_validate_stdout = $suiteValidate.stdout
+        suite_import_stdout = $suiteImport.stdout
+        suite_list_stdout = $suiteList.stdout
+        validate_payload = $validatePayload
+        import_payload = $importPayload
+        list_payload = $listPayload
+        runs_before = $runsBefore
+        runs_after = $runsAfter
+        no_auto_run = $noAutoRun
+        quarantined = $quarantined
+    }
+    if (
+        $canvasExport.exit_code -eq 0 -and
+        $themeExport.exit_code -eq 0 -and
+        $ritualExport.exit_code -eq 0 -and
+        $suiteExport.exit_code -eq 0 -and
+        $suiteValidate.exit_code -eq 0 -and
+        $suiteImport.exit_code -eq 0 -and
+        $suiteList.exit_code -eq 0 -and
+        $quarantined -and
+        $noAutoRun
+    ) {
+        Set-Check "suite_pack_quarantine_no_auto_enable" "PASS" "Suite Pack import placed visual and ritual contents into quarantine/disabled storage without auto-enable or auto-run." $evidence
+    }
+    else {
+        Set-Check "suite_pack_quarantine_no_auto_enable" "FAIL" "Suite Pack quarantine or no-auto-enable evidence was incomplete." $evidence
+    }
+}
+
+function Set-NorthStarAggregateEvidence {
+    $required = @(
+        "room_picker_three_heroes_taskbar_visible",
+        "desktop_work_area_hero_passthrough",
+        "edit_mode_builder_visible",
+        "gaming_room_acceptance",
+        "project_room_acceptance",
+        "support_desk_acceptance",
+        "local_learning_suggestions_review_drafts",
+        "suite_pack_quarantine_no_auto_enable",
+        "canvas_theme_pack_import_export_no_autorun",
+        "no_recording_or_preview_capture"
+    )
+    $states = [ordered]@{}
+    foreach ($id in $required) {
+        if ($Results.Contains($id)) {
+            $states[$id] = $Results[$id].status
+        }
+        else {
+            $states[$id] = "MISSING"
+        }
+    }
+    $desktopArtifacts = @(
+        $script:VisualArtifacts |
+            Where-Object { $_.state -eq "desktop_work_area" -and $_.id -match "desktop-work-area" }
+    )
+    $clickThroughHonest = @(
+        $desktopArtifacts |
+            Where-Object {
+                $_.evidence.click_through_implemented -eq $false -and
+                $_.evidence.blank_area_click_through_machine_verified -eq $false -and
+                $_.evidence.blank_area_click_through_status -eq "NEEDS_HUMAN_REVIEW"
+            }
+    ).Count -ge 3
+    $hasFailure = @($states.Values | Where-Object { $_ -eq "FAIL" -or $_ -eq "MISSING" }).Count -gt 0
+    $hasReview = @($states.Values | Where-Object { $_ -eq "NEEDS_HUMAN_REVIEW" }).Count -gt 0
+    $status = if ($hasFailure -or -not $clickThroughHonest) { "FAIL" } elseif ($hasReview) { "NEEDS_HUMAN_REVIEW" } else { "PASS" }
+    $message = if ($status -eq "PASS") {
+        "Packaged north-star acceptance flow has structured evidence across hero Rooms, Desktop Work-Area, Local Learning/Suggestions, Suite Pack quarantine, no auto-run, and honest click-through limitation checks."
+    }
+    elseif ($status -eq "NEEDS_HUMAN_REVIEW") {
+        "Packaged north-star acceptance flow has structured evidence but at least one host-observable visual/taskbar item needs human review."
+    }
+    else {
+        "Packaged north-star acceptance flow has failing or missing structured evidence."
+    }
+    Set-Check "north_star_packaged_acceptance" $status $message @{
+        required_check_statuses = $states
+        visual_artifact_references = @($desktopArtifacts | ForEach-Object { $_.id })
+        click_through_honest_unimplemented = $clickThroughHonest
+        flow_steps = @(
+            "Open non-fullscreen Room picker",
+            "Open each hero on Desktop Work-Area",
+            "Confirm taskbar and wallpaper passthrough",
+            "Exercise Gaming state lifecycle",
+            "Exercise Project ritual and shortcuts",
+            "Exercise Support Desk dry-run workflows",
+            "Enable Local Learning",
+            "Produce journal events",
+            "Scan Suggestions",
+            "Confirm folder-only -> shortcut",
+            "Confirm multi-step -> ritual draft",
+            "Review and create drafts",
+            "Confirm nothing auto-runs",
+            "Delete learning data",
+            "Import a Suite Pack into quarantine",
+            "Confirm no behavior auto-enables",
+            "Confirm click-through remains honestly unimplemented"
+        )
     }
 }
 
@@ -2680,15 +3236,19 @@ try {
     Invoke-HeroRoomEvidence
     Capture-DesktopWorkAreaCanvasArtifact
     Capture-DesktopWorkAreaWindowedFallbackArtifact
+    Capture-HeroDesktopWorkAreaArtifacts
     Capture-CanvasEditModeVisualArtifact
     Invoke-CanvasStaticActions
     Invoke-CanvasRunControls
     Invoke-CanvasRunDecline
     Invoke-HardKillRecovery
     Set-GamingRoomAggregateEvidence
+    Invoke-LocalLearningSuggestionsEvidence
     Invoke-PackSafetyChecks
+    Invoke-SuitePackQuarantineEvidence
     Invoke-PerformanceChecks
     Set-RemainingReviewChecks
+    Set-NorthStarAggregateEvidence
 }
 catch {
     $errorPath = Join-Path $AcceptanceRoot "acceptance-error.txt"

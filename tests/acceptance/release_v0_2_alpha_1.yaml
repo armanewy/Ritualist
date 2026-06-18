@@ -34,6 +34,18 @@ checks:
       - window_tree
       - e2e_event: canvas.ready
     pass_when: "Ritualist Canvas window is visible and process stays alive for the scenario dwell."
+  - id: edit_mode_builder_visible
+    blocker: "Packaged Canvas Edit Mode opens visibly as the Room Builder support surface."
+    expected_evidence:
+      - screenshot
+      - process_tree
+      - window_tree
+      - z_order
+      - edit_invoked
+      - expected_controls
+      - found_controls
+      - review_status
+    pass_when: "Packaged Canvas Edit Mode opens from the Canvas process, renders nonblank, and exposes expected builder controls without creating or running behavior."
   - id: packaged_classic_gui_visible
     blocker: "Packaged classic GUI opens."
     expected_evidence:
@@ -172,6 +184,46 @@ checks:
       - placeholder_static_scan
       - runtime_state_fixture
     pass_when: "Packaged Support Desk opens with five runbook cards, diagnostics/audio dry-runs are captured, VPN/New Hire remain non-mutating placeholders, and status/controller/recent activity/log evidence is recorded."
+  - id: desktop_work_area_hero_passthrough
+    blocker: "All three hero Rooms open in Desktop Work-Area mode while preserving taskbar/wallpaper behavior."
+    expected_evidence:
+      - screenshot
+      - screen_work_area
+      - window_bounds
+      - fake_wallpaper_fixture
+      - e2e_event: canvas.host.ready
+      - blank_area_click_through_status
+    pass_when: "Gaming Room, Project Room, and Support Desk open nonblank on the primary work area, host evidence reports passthrough background, the OS work area leaves taskbar space when observable, and blank-area click-through remains honestly marked unimplemented/NEEDS_HUMAN_REVIEW rather than faked."
+  - id: local_learning_suggestions_review_drafts
+    blocker: "Local Learning and Suggestions north-star loop is review-only and local."
+    expected_evidence:
+      - learning_enable_json
+      - journal_events_json
+      - learning_scan_json
+      - suggestions_scan_json
+      - suggestions_list_json
+      - shortcut_draft_json
+      - ritual_recipe_draft_json
+      - learning_delete_data_json
+      - run_directory_diff
+    pass_when: "Local Learning is enabled only with explicit sources, fixture journal events produce folder-only shortcut and multi-step ritual suggestions, reviewed drafts are created without writing/enabling/running artifacts, no run logs appear, and delete-data removes local learning records."
+  - id: suite_pack_quarantine_no_auto_enable
+    blocker: "Suite Pack import quarantines whole-Room contents without enabling behavior."
+    expected_evidence:
+      - suite_export_json
+      - suite_validate_json
+      - suite_import_json
+      - suite_list_imports_json
+      - run_directory_diff
+    pass_when: "A fixture Suite Pack containing visual and behavior-bearing ritual content validates, imports with suite/canvas/theme quarantined and ritual disabled, reports auto_run=false and auto_enable=false, and creates no run log."
+  - id: north_star_packaged_acceptance
+    blocker: "Packaged north-star acceptance flow has complete structured evidence."
+    expected_evidence:
+      - required_check_statuses
+      - visual_artifact_references
+      - click_through_honest_unimplemented
+      - flow_steps
+    pass_when: "The room picker, hero Desktop Work-Area, Gaming, Project, Support Desk, Local Learning/Suggestions, Suite Pack quarantine, pack no-auto-run, recording-surface absence, and honest click-through limitation checks have no FAIL or missing status; NEEDS_HUMAN_REVIEW is preserved for host-observable ambiguities."
   - id: state_ui_fixture_evidence
     blocker: "Canvas state UI exposes ready, running, waiting, confirming, paused, failed, and interrupted states."
     expected_evidence:

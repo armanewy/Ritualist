@@ -120,3 +120,31 @@ Refresh this evidence with:
 ```powershell
 python -m pytest -q tests/test_hero_room_performance.py
 ```
+
+## North Star Scale Advisory Evidence
+
+`tests/test_north_star_performance.py` records advisory scale evidence for fake Local Learning activity, suggestion mining, journal I/O, the three hero Rooms, repeated runtime state updates, and the Canvas suggestions UI worker body. These checks are intentionally non-brittle: timing budgets produce warnings and payload evidence, while test failures are reserved for broken data shape, missing hero Rooms, lost worker boundaries, review-gate regressions, or forbidden capability leakage.
+
+Latest local observation on 2026-06-18 at `abb8dd40d61c08147dca5bc311bc6bcca983c308`:
+
+| Evidence | Observed |
+| --- | ---: |
+| 100 fake activity signals collected | 0.015ms |
+| 1,000 fake activity signals collected | 0.030ms |
+| 10,000 fake activity signals collected | 0.152ms |
+| Suggestion mining over 10,000 fake signals | 573.284ms, 7 review-only suggestions |
+| Journal write, 1,000 events | 236.323ms |
+| Journal read, bounded to 500 events | 21.405ms |
+| Gaming Room runtime model | 0.963ms, 7 components |
+| Project Room runtime model | 23.112ms, 12 components |
+| Support Desk runtime model | 23.576ms, 12 components |
+| 300 repeated runtime state updates | 253.120ms total, 0.940ms p95 |
+| Suggestion UI worker body with 20 suggestions | 35.128ms |
+
+The evidence uses fake collectors, pytest `tmp_path` journal files, bundled Room models, and static worker-path assertions. It does not use Windows desktop automation, screenshots, OCR, recording, browser history, coordinate capture, arbitrary code execution, cloud sync, remote execution, marketplace behavior, password automation, gameplay automation, shell replacement, taskbar hiding, kiosk mode, or click-through behavior.
+
+Refresh this evidence with:
+
+```powershell
+python -m pytest -q tests/test_north_star_performance.py
+```
