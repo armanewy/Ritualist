@@ -1,3 +1,5 @@
+"""Resident Agent domain models and narrow desktop adapters."""
+
 from __future__ import annotations
 
 from .models import (
