@@ -134,6 +134,299 @@ def test_suggestion_text_fields_redact_raw_locators_and_command_text() -> None:
     ]
 
 
+def test_suggestion_text_fields_redact_schemeless_urls() -> None:
+    suggestion = Suggestion.create(
+        kind="shortcut_component",
+        title="Open [::1]?token=abc",
+        description=r"Visited www.example.dev\path before work",
+        confidence=0.4,
+        evidence_summary="Saw //project.example.test/raw history",
+        evidence_count=2,
+        proposed_actions=(
+            {
+                "label": "[fe80::1]/raw",
+                "description": "localhost/admin",
+                "notes": r"www.example.dev\path",
+                "placeholder": "folder_path",
+            },
+        ),
+    )
+
+    payload = suggestion.to_dict()
+    text = str(payload)
+    assert "secret.internal" not in text
+    assert "www.example.dev" not in text
+    assert "project.example.test" not in text
+    assert "customer=a" not in text
+    assert "localhost" not in text
+    assert "token=abc" not in text
+    assert "fe80" not in text
+    assert payload["title"] == "Open [redacted]"
+    assert payload["description"] == "Visited [redacted] before work"
+    assert payload["evidence_summary"] == "Saw [redacted] history"
+    assert payload["proposed_actions"] == [
+        {
+            "label": "[redacted]",
+            "description": "[redacted]",
+            "notes": "[redacted]",
+            "placeholder": "folder_path",
+        }
+    ]
+
+
+def test_suggestion_text_fields_redact_non_http_uri_schemes() -> None:
+    suggestion = Suggestion.create(
+        kind="shortcut_component",
+        title="Open x://server/share/raw",
+        description="Saw x:server/share/raw",
+        confidence=0.4,
+        evidence_summary="Saw [file://server/share/raw] and [mailto:alice@example.com]",
+        evidence_count=2,
+        proposed_actions=(
+            {
+                "label": "x://server/share/raw",
+                "description": "Use x:server/share/raw",
+                "notes": "ssh://user@example.com/project",
+                "placeholder": "folder_path",
+            },
+        ),
+        missing_inputs=("x://server/share/raw", "folder_path"),
+    )
+
+    payload = suggestion.to_dict()
+    text = str(payload)
+    assert "x://server" not in text
+    assert "x:server" not in text
+    assert "file://server" not in text
+    assert "mailto:" not in text
+    assert "ssh://user" not in text
+    assert payload["title"] == "[redacted]"
+    assert payload["description"] == "[redacted]"
+    assert payload["evidence_summary"] == "[redacted]"
+    assert payload["missing_inputs"] == ["folder_path"]
+    assert payload["proposed_actions"] == [
+        {
+            "label": "[redacted]",
+            "description": "[redacted]",
+            "notes": "[redacted]",
+            "placeholder": "folder_path",
+        }
+    ]
+
+
+def test_suggestion_text_fields_redact_non_http_uri_parameter_tails() -> None:
+    payloads = (
+        "ssh://user@example.com/project;token=abc123",
+        "ssh://user@example.com/project,password=abc123",
+        "ftp://project.example.test/raw;customer=a",
+        "mailto:alice@example.com;subject=SecretProject",
+    )
+
+    for payload_value in payloads:
+        suggestion = Suggestion.create(
+            kind=SuggestionKind.CLEANUP_HINT,
+            title=f"Review {payload_value}",
+            description=f"Saw {payload_value}",
+            confidence=0.5,
+            evidence_summary=f"Saw {payload_value}",
+            evidence_count=2,
+            proposed_actions=(
+                {
+                    "action": "review_cleanup_hint",
+                    "kind": "cleanup_hint",
+                    "label": payload_value,
+                },
+            ),
+            privacy_level=SuggestionPrivacyLevel.REVIEW,
+        )
+
+        payload = suggestion.to_dict()
+        text = str(payload)
+        assert "ssh://" not in text
+        assert "ftp://" not in text
+        assert "mailto:" not in text
+        assert "token=abc123" not in text
+        assert "password=abc123" not in text
+        assert "customer=a" not in text
+        assert "SecretProject" not in text
+        assert payload["title"] == "[redacted]"
+        assert payload["description"] == "[redacted]"
+        assert payload["evidence_summary"] == "[redacted]"
+        assert payload["proposed_actions"] == [
+            {
+                "action": "review_cleanup_hint",
+                "kind": "cleanup_hint",
+                "label": "[redacted]",
+            }
+        ]
+
+
+def test_suggestion_text_fields_redact_data_uri_payloads() -> None:
+    payloads = (
+        "data:text/html,<script>alert(1)</script>",
+        "data:text/html;charset=utf-8,<script>alert(1)</script>",
+        "data:text/html,<img src=x onerror=alert(1)>",
+        "data:text/html,<svg onload=alert(1)>",
+    )
+
+    for payload_value in payloads:
+        suggestion = Suggestion.create(
+            kind=SuggestionKind.CLEANUP_HINT,
+            title=f"Review {payload_value}",
+            description=f"Saw {payload_value}",
+            confidence=0.5,
+            evidence_summary=f"Saw {payload_value}",
+            evidence_count=2,
+            proposed_actions=(
+                {
+                    "action": "review_cleanup_hint",
+                    "kind": "cleanup_hint",
+                    "label": payload_value,
+                },
+            ),
+            privacy_level=SuggestionPrivacyLevel.REVIEW,
+        )
+
+        payload = suggestion.to_dict()
+        text = str(payload)
+        assert "data:text" not in text
+        assert "<script>" not in text
+        assert "<img" not in text
+        assert "<svg" not in text
+        assert "onerror" not in text
+        assert "onload" not in text
+        assert "alert(1)" not in text
+        assert payload["title"] == "[redacted]"
+        assert payload["description"] == "[redacted]"
+        assert payload["evidence_summary"] == "[redacted]"
+        assert payload["proposed_actions"] == [
+            {
+                "action": "review_cleanup_hint",
+                "kind": "cleanup_hint",
+                "label": "[redacted]",
+            }
+        ]
+
+
+def test_suggestion_text_fields_redact_html_and_javascript_markers() -> None:
+    payloads = (
+        "<img src=x onerror=alert(1)>",
+        "<svg onload=alert(1)>",
+        "javascript alert(1)",
+    )
+
+    for payload_value in payloads:
+        suggestion = Suggestion.create(
+            kind=SuggestionKind.CLEANUP_HINT,
+            title=f"Review {payload_value}",
+            description=f"Saw {payload_value}",
+            confidence=0.5,
+            evidence_summary=f"Saw {payload_value}",
+            evidence_count=2,
+            proposed_actions=(
+                {
+                    "action": "review_cleanup_hint",
+                    "kind": "cleanup_hint",
+                    "label": payload_value,
+                },
+            ),
+            privacy_level=SuggestionPrivacyLevel.REVIEW,
+        )
+
+        payload = suggestion.to_dict()
+        text = str(payload)
+        assert "<img" not in text
+        assert "<svg" not in text
+        assert "onerror" not in text
+        assert "onload" not in text
+        assert "javascript" not in text
+        assert "alert(1)" not in text
+        assert payload["title"] == "[redacted]"
+        assert payload["description"] == "[redacted]"
+        assert payload["evidence_summary"] == "[redacted]"
+        assert payload["proposed_actions"] == [
+            {
+                "action": "review_cleanup_hint",
+                "kind": "cleanup_hint",
+                "label": "[redacted]",
+            }
+        ]
+
+
+def test_suggestion_text_fields_redact_bare_dotted_hosts() -> None:
+    suggestion = Suggestion.create(
+        kind="shortcut_component",
+        title="Open project.example.test",
+        description="Repeated project.example.test use",
+        confidence=0.4,
+        evidence_summary="Saw project.example.test",
+        evidence_count=2,
+        proposed_actions=(
+            {
+                "label": "project.example.test",
+                "description": "Use project.example.test",
+                "notes": "project.example.test",
+                "placeholder": "folder_path",
+            },
+        ),
+    )
+
+    payload = suggestion.to_dict()
+    text = str(payload)
+    assert "project.example.test" not in text
+    assert payload["title"] == "Open [redacted]"
+    assert payload["description"] == "Repeated [redacted] use"
+    assert payload["evidence_summary"] == "Saw [redacted]"
+    assert payload["proposed_actions"] == [
+        {
+            "label": "[redacted]",
+            "description": "Use [redacted]",
+            "notes": "[redacted]",
+            "placeholder": "folder_path",
+        }
+    ]
+
+
+def test_suggestion_text_fields_redact_host_port_locators() -> None:
+    suggestion = Suggestion.create(
+        kind="shortcut_component",
+        title="Open localhost:3000 and 127.0.0.1 and ::1",
+        description="Repeated [::1]:8000 use with 192.168.1.5:8080",
+        confidence=0.4,
+        evidence_summary="Saw [fe80::1%25eth0]:443 and 2001:db8::1/admin",
+        evidence_count=2,
+        proposed_actions=(
+            {
+                "label": "127.0.0.1",
+                "description": "Use 2001:db8::1/admin",
+                "notes": "fe80::1%eth0",
+                "placeholder": "folder_path",
+            },
+        ),
+    )
+
+    payload = suggestion.to_dict()
+    text = str(payload)
+    assert "localhost:3000" not in text
+    assert "127.0.0.1" not in text
+    assert "192.168.1.5" not in text
+    assert "::1" not in text
+    assert "2001:db8" not in text
+    assert "fe80" not in text
+    assert "eth0" not in text
+    assert payload["title"] == "Open [redacted] and [redacted] and [redacted]"
+    assert payload["description"] == "Repeated [redacted] use with [redacted]"
+    assert payload["evidence_summary"] == "Saw [redacted] and [redacted]"
+    assert payload["proposed_actions"] == [
+        {
+            "label": "[redacted]",
+            "description": "Use [redacted]",
+            "notes": "[redacted]",
+            "placeholder": "folder_path",
+        }
+    ]
+
+
 def test_suggestion_public_text_redacts_command_like_values() -> None:
     for command_text in (
         "launch calc.exe",
@@ -163,6 +456,42 @@ def test_suggestion_public_text_redacts_command_like_values() -> None:
         assert payload["proposed_actions"] == [{"label": "[redacted]", "notes": "[redacted]"}]
 
 
+def test_suggestion_public_text_redacts_forbidden_capture_app_labels() -> None:
+    for forbidden_text in (
+        "Screen Recorder",
+        "ScreenRecorder",
+        "ScreenCapture",
+        "Recorder",
+        "Windows Recall",
+        "WindowsRecall",
+        "Teach By Watching",
+        "TeachByWatching",
+        "teach_by_watching",
+        "Keylog",
+        "Keylogger",
+        "Keyboard Logger",
+        "KeyboardLogger",
+        "BrowserHistory",
+    ):
+        suggestion = Suggestion.create(
+            kind="cleanup_hint",
+            title=forbidden_text,
+            description=f"Observed {forbidden_text}",
+            confidence=0.2,
+            evidence_summary=forbidden_text,
+            evidence_count=1,
+            proposed_actions=({"label": forbidden_text, "notes": forbidden_text},),
+            missing_inputs=(forbidden_text,),
+        )
+
+        payload = suggestion.to_dict()
+        assert forbidden_text not in str(payload)
+        assert payload["title"] == "[redacted]"
+        assert payload["evidence_summary"] == "[redacted]"
+        assert payload["proposed_actions"] == [{"label": "[redacted]", "notes": "[redacted]"}]
+        assert payload["missing_inputs"] == []
+
+
 def test_suggestion_values_redact_forbidden_capture_source_names() -> None:
     suggestion = Suggestion.create(
         kind="cleanup_hint",
@@ -183,7 +512,10 @@ def test_suggestion_values_redact_forbidden_capture_source_names() -> None:
         missing_inputs=(
             "keylogging",
             "keylogger",
+            "key logger",
+            "key_logger",
             "click_coordinates",
+            "coordinates",
             "folder_path",
         ),
     )
@@ -195,7 +527,9 @@ def test_suggestion_values_redact_forbidden_capture_source_names() -> None:
     assert "screenshot" not in text
     assert "ocr_result" not in text
     assert "click_coordinates" not in text
+    assert "coordinates" not in text
     assert "keylogging" not in text
+    assert "key_logger" not in text
     assert payload["missing_inputs"] == ["folder_path"]
     assert payload["proposed_actions"] == [
         {

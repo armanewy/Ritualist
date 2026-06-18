@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, Mapping, Sequence
+import ipaddress
 import uuid
 import re
 
@@ -19,8 +20,48 @@ MAX_TEXT_LENGTH = 500
 MAX_COLLECTION_ITEMS = 50
 SENSITIVE_TEXT_REPLACEMENT = "[redacted]"
 URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+DATA_URI_RE = re.compile(r"(?<![\w:])data:[^\s]+", re.IGNORECASE)
+GENERIC_URI_RE = re.compile(
+    r"(?<![\w:])(?:\[)?([A-Za-z][A-Za-z0-9+.-]*):"
+    r"(?://[^\s,;\]]+|[^\s,;\]]+)(?:\])?"
+)
+HTML_OR_SCRIPT_MARKER_RE = re.compile(
+    r"<\s*/?\s*[A-Za-z][^>]*>"
+    r"|\bon[A-Za-z]+\s*="
+    r"|\bjavascript\b"
+    r"|\balert\s*\(",
+    re.IGNORECASE,
+)
+SCHEMELESS_URL_RE = re.compile(
+    r"(?<![@\w])localhost(?::\d{1,5})?(?:[\\/?#][^\s,;]*)?"
+    r"|(?<![@\w])\[[0-9A-Fa-f:.]+(?:%[0-9A-Za-z_.~-]+)?\]"
+    r"(?::\d{1,5})?(?:[\\/?#][^\s,;]*)?"
+    r"|(?<![@\w])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?:[\\/?#][^\s,;]*)?"
+    r"|(?<![@\w])(?:www\.)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+    r"(?::\d{1,5})?(?:[\\/?#][^\s,;]*)"
+    r"|(?<![@\w])www\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+    r"(?::\d{1,5})?(?!\w)",
+    re.IGNORECASE,
+)
+BARE_DOTTED_HOST_RE = re.compile(
+    r"(?<![@\w])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,63}(?::\d{1,5})?(?![\w-])",
+    re.IGNORECASE,
+)
+UNBRACKETED_IPV6_CANDIDATE_RE = re.compile(
+    r"(?<![\w\[])(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f]{0,4}"
+    r"(?:%[0-9A-Za-z_.~-]+)?"
+    r"(?:[\\/?#][^\s,;]*)?",
+    re.IGNORECASE,
+)
+PROTOCOL_RELATIVE_URL_RE = re.compile(
+    r"(?<![:\w])//(?:www\.)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+    r"(?::\d{1,5})?(?:/[^\s,;]*)?",
+    re.IGNORECASE,
+)
 WINDOWS_ABSOLUTE_PATH_RE = re.compile(r"\b[A-Za-z]:[\\/][^\s,;]+")
 POSIX_ABSOLUTE_PATH_RE = re.compile(r"(?<!\w)/(?:[^\s,;]+/)*[^\s,;]+")
+WINDOWS_DRIVE_PATH_TOKEN_RE = re.compile(r"^[A-Za-z]:[\\/](?![\\/])")
+LOCALHOST_PORT_TOKEN_RE = re.compile(r"^localhost:\d{1,5}(?:[\\/?#].*)?$", re.IGNORECASE)
 COMMAND_TEXT_RE = re.compile(
     r"("
     r"\b[\w.-]+\.(?:bat|cmd|com|exe|js|msi|ps1|py|sh|vbs)\b"
@@ -34,22 +75,39 @@ COMMAND_TEXT_RE = re.compile(
 FORBIDDEN_VALUE_TOKENS = frozenset(
     {
         "browser_history",
+        "browserhistory",
         "click_coordinates",
         "click_coordinate",
+        "coordinate",
         "coordinate_capture",
+        "coordinates",
+        "key_log",
+        "key_logger",
+        "keyboard_logger",
+        "keyboardlogger",
+        "keylog",
         "keylogger",
         "keylogging",
         "keystroke",
         "ocr",
         "ocr_result",
+        "recall",
+        "recorder",
         "recording",
         "recording_file",
         "screen_capture",
+        "screen_recorder",
+        "screenrecorder",
+        "screencapture",
         "screen_recording",
         "screenshot",
         "screenshot_path",
+        "teach_by_watching",
+        "teachbywatching",
         "watch_me",
         "watchme",
+        "windows_recall",
+        "windowsrecall",
     }
 )
 MISSING_INPUT_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -111,6 +169,21 @@ PROPOSED_ACTION_ALLOWED_KEYS = frozenset(
         "source_id",
         "title",
         "type",
+    }
+)
+PROPOSED_ACTION_TAXONOMY_KEYS = frozenset({"component_type", "kind", "type"})
+SAFE_PROPOSED_ACTION_TAXONOMY_VALUES = frozenset(
+    {
+        "cleanup_hint",
+        "ritual_recipe",
+        "room_canvas",
+        "shortcut.app",
+        "shortcut.folder",
+        "shortcut.url",
+        "shortcut_app",
+        "shortcut_component",
+        "shortcut_folder",
+        "shortcut_url",
     }
 )
 
@@ -319,8 +392,18 @@ def _sanitize_proposed_action(raw: Mapping[str, Any]) -> Mapping[str, Any]:
             or _is_executable_key(normalized_key)
         ):
             continue
-        sanitized[normalized_key] = _sanitize_value(value)
+        if normalized_key in PROPOSED_ACTION_TAXONOMY_KEYS:
+            sanitized[normalized_key] = _sanitize_taxonomy_value(value)
+        else:
+            sanitized[normalized_key] = _sanitize_value(value)
     return sanitized
+
+
+def _sanitize_taxonomy_value(value: Any) -> Any:
+    text = _clean_text(value)
+    if text.casefold() in SAFE_PROPOSED_ACTION_TAXONOMY_VALUES:
+        return text
+    return _sanitize_value(value)
 
 
 def _sanitize_value(value: Any) -> Any:
@@ -394,9 +477,20 @@ def _clean_public_text(value: object) -> str:
         return ""
     if _contains_forbidden_value_token(text):
         return SENSITIVE_TEXT_REPLACEMENT
+    if HTML_OR_SCRIPT_MARKER_RE.search(text):
+        return SENSITIVE_TEXT_REPLACEMENT
+    if DATA_URI_RE.search(text):
+        return SENSITIVE_TEXT_REPLACEMENT
+    if _contains_non_http_uri_scheme(text):
+        return SENSITIVE_TEXT_REPLACEMENT
+    text = GENERIC_URI_RE.sub(_redact_generic_uri_match, text)
     if COMMAND_TEXT_RE.search(text):
         return SENSITIVE_TEXT_REPLACEMENT
     text = URL_RE.sub(SENSITIVE_TEXT_REPLACEMENT, text)
+    text = PROTOCOL_RELATIVE_URL_RE.sub(SENSITIVE_TEXT_REPLACEMENT, text)
+    text = SCHEMELESS_URL_RE.sub(SENSITIVE_TEXT_REPLACEMENT, text)
+    text = UNBRACKETED_IPV6_CANDIDATE_RE.sub(_redact_unbracketed_ipv6_match, text)
+    text = BARE_DOTTED_HOST_RE.sub(_redact_bare_dotted_host_match, text)
     text = WINDOWS_ABSOLUTE_PATH_RE.sub(SENSITIVE_TEXT_REPLACEMENT, text)
     text = POSIX_ABSOLUTE_PATH_RE.sub(SENSITIVE_TEXT_REPLACEMENT, text)
     if COMMAND_TEXT_RE.search(text):
@@ -408,10 +502,97 @@ def _contains_sensitive_text(value: object) -> bool:
     text = _clean_text(value)
     return bool(
         URL_RE.search(text)
+        or HTML_OR_SCRIPT_MARKER_RE.search(text)
+        or DATA_URI_RE.search(text)
+        or _contains_non_http_uri_scheme(text)
+        or PROTOCOL_RELATIVE_URL_RE.search(text)
+        or SCHEMELESS_URL_RE.search(text)
+        or _contains_unbracketed_ipv6_locator(text)
+        or _contains_bare_dotted_host(text)
         or WINDOWS_ABSOLUTE_PATH_RE.search(text)
         or POSIX_ABSOLUTE_PATH_RE.search(text)
         or COMMAND_TEXT_RE.search(text)
     )
+
+
+def _contains_bare_dotted_host(value: object) -> bool:
+    text = _clean_text(value)
+    return any(
+        not COMMAND_TEXT_RE.fullmatch(match.group(0))
+        for match in BARE_DOTTED_HOST_RE.finditer(text)
+    )
+
+
+def _contains_non_http_uri_scheme(value: object) -> bool:
+    return any(
+        _generic_uri_should_redact(match)
+        for match in GENERIC_URI_RE.finditer(_clean_text(value))
+    )
+
+
+def _redact_generic_uri_match(match: re.Match[str]) -> str:
+    if not _generic_uri_should_redact(match):
+        return match.group(0)
+    return SENSITIVE_TEXT_REPLACEMENT
+
+
+def _generic_uri_should_redact(match: re.Match[str]) -> bool:
+    scheme = match.group(1).casefold()
+    if scheme in {"http", "https"}:
+        return False
+    if _looks_like_bracketed_ip_uri_token(match.group(0)):
+        return False
+    if WINDOWS_DRIVE_PATH_TOKEN_RE.match(match.group(0)):
+        return False
+    if LOCALHOST_PORT_TOKEN_RE.match(match.group(0)):
+        return False
+    return True
+
+
+def _looks_like_bracketed_ip_uri_token(value: object) -> bool:
+    text = _clean_text(value)
+    if not text.startswith("["):
+        return False
+    end = text.find("]")
+    if end <= 1:
+        return False
+    try:
+        ipaddress.ip_address(text[1:end])
+        return True
+    except ValueError:
+        return False
+
+
+def _redact_bare_dotted_host_match(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if COMMAND_TEXT_RE.fullmatch(value):
+        return value
+    return SENSITIVE_TEXT_REPLACEMENT
+
+
+def _contains_unbracketed_ipv6_locator(value: object) -> bool:
+    return any(
+        _looks_like_unbracketed_ipv6_locator(match.group(0))
+        for match in UNBRACKETED_IPV6_CANDIDATE_RE.finditer(_clean_text(value))
+    )
+
+
+def _redact_unbracketed_ipv6_match(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if _looks_like_unbracketed_ipv6_locator(value):
+        return SENSITIVE_TEXT_REPLACEMENT
+    return value
+
+
+def _looks_like_unbracketed_ipv6_locator(value: object) -> bool:
+    raw = _clean_text(value).strip().rstrip(".,;!?)]}'\"").replace("\\", "/")
+    if not raw or raw.startswith("[") or ":" not in raw:
+        return False
+    host = raw.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+    try:
+        return ipaddress.ip_address(host).version == 6
+    except ValueError:
+        return False
 
 
 def _contains_forbidden_value_token(value: object) -> bool:
