@@ -61,8 +61,9 @@ Use this sequence for a real packaged `gaming_mode` trace:
 
 - This is an alpha candidate, not a signed installer or stable release.
 - The packaged app is a one-folder PyInstaller build.
-- The automated gate can verify build/startup/perf paths, but final release tagging still requires a human packaged desktop dogfood pass.
+- The packaged acceptance harness now records build/startup/runtime/perf dogfood evidence; no `v0.2.0-alpha.1` tag has been created yet.
 - Canvas Use/Edit Mode is functional but still an alpha surface.
+- Desktop Work-Area preserves the taskbar/work area and wallpaper passthrough, but blank-area click-through remains intentionally unimplemented and frozen.
 - Real Battle.net/UIA labels can change by locale, app state, and launcher updates.
 - Target resolution can report `not_found` if Diablo IV is not discoverable through running processes, shortcuts, explicit paths, installed-app metadata, removable media, or local memory.
 - Local Learning, Activity Journal, Activity Signals, Ritual Suggestions, and

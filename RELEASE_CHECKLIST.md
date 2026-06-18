@@ -633,14 +633,78 @@ Release note:
 
 - No `v0.2.0-alpha.1` tag was created.
 
+## Post-removal Packaged Release Acceptance - 2026-06-18T01:33:17Z
+
+Status: Current packaged release evidence after Watch Me/recording-surface
+removal. The harness summary reports the top-level v0.2 release checks as
+`taggable: true`; no release tag was created.
+
+Command evidence:
+
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed.
+- `python -m pytest -q`: `789 passed, 1 skipped`.
+- `python -m compileall -q ritualist tests`: passed.
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Ritualist\Ritualist.exe`; the build script now throws if PyInstaller
+  exits nonzero.
+- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
+  passed with `22` `PASS`, `0` `FAIL`, and `0` `NEEDS_HUMAN_REVIEW`.
+
+Acceptance artifacts:
+
+- Summary JSON:
+  `artifacts\release-acceptance\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance\evidence`
+- E2E runtime JSONL events:
+  `artifacts\release-acceptance\evidence\e2e-events`
+- Screen-frame manifests:
+  `artifacts\release-acceptance\evidence\screen-frames`
+- Run-log copies:
+  `artifacts\release-acceptance\evidence\run-logs`
+
+Objective checks that passed:
+
+- Packaged Home, Canvas Use Mode, and classic GUI opened and stayed alive.
+- Packaged Canvas Edit Mode opened with nonblank visual evidence and expected
+  builder controls.
+- `gaming_desktop` rendered with expected controls and component evidence.
+- `target.card` preview passed with packaged Canvas status evidence and
+  structured target-plan JSON.
+- Ritual Doctor, Dry Run, safe Run, `ritual.status`, Pause/Resume/Stop,
+  declined Play handling, `show-run` declined-confirmation output, recent
+  activity update, and hard-kill repair to `interrupted` all passed.
+- Native confirmation appeared above the fake Battle.net fixture.
+- `no_recording_or_preview_capture` passed: CLI help plus saved packaged Home,
+  Canvas, classic GUI, live Canvas, and target-preview UIA text snapshots
+  exposed no Watch Me, recording, capture preview, record/replay, OCR,
+  screenshot, or macro surface, and no old Watch Me data directory was created.
+- Canvas/theme pack import/export stayed quarantined and did not auto-run
+  behavior.
+- Arbitrary component-code content was rejected.
+- 100/300 component performance outputs and packaged UI heartbeat/frame timing
+  were recorded without an obvious freeze.
+
+Release blockers:
+
+- None in the current top-level v0.2 packaged acceptance evidence.
+- Nested Desktop Work-Area evidence still reports
+  `blank_area_click_through_status: NEEDS_HUMAN_REVIEW` because native
+  per-component click-through is intentionally unimplemented and frozen; that is
+  a documented limitation, not a v0.2 release blocker.
+
+Release note:
+
+- No `v0.2.0-alpha.1` tag was created.
+
 ## Packaged Release Acceptance Harness - 2026-06-17
 
 Status: Historical pre-removal packaged GUI/runtime acceptance plus source CLI
 supplemental command evidence. This run passed at the time it was captured, but
-it is obsolete for the current release gate after recording-surface absence
-became a release blocker. Treat `v0.2.0-alpha.1` as not taggable until the
-updated harness records structured passing evidence for
-`no_recording_or_preview_capture`.
+it is superseded by the post-removal packaged acceptance evidence above.
 
 Harness/spec added:
 
@@ -720,12 +784,13 @@ Objective checks that passed:
   heartbeat gap of `261.9` ms against the `1500` ms conservative harness
   threshold.
 
-Release blockers still open:
+Historical release blockers left open at that time:
 
 - `no_recording_or_preview_capture`: not yet validated by a post-removal
-  packaged acceptance run.
+  packaged acceptance run. This blocker is closed by the current post-removal
+  evidence above.
 
 Release note:
 
 - No `v0.2.0-alpha.1` tag was created. The pre-removal acceptance summary is no
-  longer sufficient to tag the release.
+  longer the current taggability evidence.

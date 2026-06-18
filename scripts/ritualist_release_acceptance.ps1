@@ -554,6 +554,42 @@ function Stop-AcceptanceProcess {
     }
 }
 
+function Wait-ProcessExit {
+    param([int]$ProcessId, [int]$TimeoutSeconds = 10)
+    if ($ProcessId -le 0) {
+        return $true
+    }
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if (-not $process) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    return -not [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+}
+
+function Stop-RunOwnerProcess {
+    param([string]$RunId)
+    $metadata = if ($RunId) { Read-RunJson $RunId } else { $null }
+    $runProcessId = 0
+    if ($metadata -and $metadata.process_id) {
+        $runProcessId = [int]$metadata.process_id
+    }
+    $wasRunning = if ($runProcessId -gt 0) { [bool](Get-Process -Id $runProcessId -ErrorAction SilentlyContinue) } else { $false }
+    if ($wasRunning) {
+        Stop-Process -Id $runProcessId -Force -ErrorAction SilentlyContinue
+    }
+    $exited = if ($runProcessId -gt 0) { Wait-ProcessExit $runProcessId 10 } else { $false }
+    return [ordered]@{
+        run_id = $RunId
+        process_id = $runProcessId
+        process_was_running = $wasRunning
+        process_exited = $exited
+    }
+}
+
 function Stop-FakeExternalApps {
     $fakeScript = Join-Path $FixtureRoot "fake-battlenet.ps1"
     $windows = @(Get-TopLevelWindows | Where-Object { $_.title -eq $FakeBattleNetTitle })
@@ -695,6 +731,19 @@ function Read-RunJson {
     return Get-Content -Path $path -Raw | ConvertFrom-Json
 }
 
+function Wait-RunStatus {
+    param([string]$RunId, [string]$Status, [int]$TimeoutSeconds = 20)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $metadata = Read-RunJson $RunId
+        if ($metadata -and $metadata.status -eq $Status) {
+            return $metadata
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    return Read-RunJson $RunId
+}
+
 function Get-E2EEvents {
     if (-not (Test-Path $E2ERoot)) {
         return @()
@@ -764,6 +813,29 @@ function Get-CanvasStatusEvents {
         $events = $events | Where-Object { $_.payload.component_id -eq $ComponentId }
     }
     return @($events)
+}
+
+function Wait-CanvasStatusEvent {
+    param(
+        [string]$ComponentId,
+        [string]$MessagePattern,
+        [string]$Status = "success",
+        [int]$TimeoutSeconds = 15
+    )
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $event = Get-CanvasStatusEvents $ComponentId |
+            Where-Object {
+                $_.payload.status -eq $Status -and
+                $_.payload.message -match $MessagePattern
+            } |
+            Select-Object -First 1
+        if ($event) {
+            return $event
+        }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+    return $null
 }
 
 function Get-RuntimeEventsForRun {
@@ -1345,6 +1417,33 @@ function Invoke-CanvasStaticActions {
             }
         }
 
+        $previewTree = Save-WindowTree "target-card-preview-before" $window
+        $previewInvoked = Invoke-NamedButton $window "preview_plan" 15
+        $previewStatus = Wait-CanvasStatusEvent "diablo_target" "target plan preview completed" "success" 15
+        $previewShot = Save-Screenshot "target-card-preview-after"
+        $previewCommand = Invoke-CapturedCommand "target-preview" "python" @(
+            "-m", "ritualist", "canvas", "action", "gaming_desktop", "diablo_target", "preview_plan", "--json"
+        )
+        if ($previewInvoked -and $previewStatus -and $previewCommand.exit_code -eq 0 -and $previewCommand.stdout_text -match "target_plan") {
+            Set-Check "target_card_preview" "PASS" "Packaged Canvas preview completed and source CLI returned structured target plan JSON." @{
+                screenshot = $previewShot
+                window_tree = $previewTree
+                command_stdout = $previewCommand.stdout
+                command_stderr = $previewCommand.stderr
+                packaged_e2e_event = $previewStatus
+            }
+        }
+        else {
+            Set-Check "target_card_preview" "FAIL" "Target plan preview did not return expected evidence." @{
+                invoked = $previewInvoked
+                packaged_e2e_event = $previewStatus
+                screenshot = $previewShot
+                window_tree = $previewTree
+                command_stdout = $previewCommand.stdout
+                command_stderr = $previewCommand.stderr
+            }
+        }
+
         $doctorInvoked = Invoke-NamedButton $window "doctor" 10
         Start-Sleep -Seconds 4
         $doctorShot = Save-Screenshot "canvas-doctor"
@@ -1387,41 +1486,35 @@ function Invoke-CanvasStaticActions {
             }
         }
 
-        $previewInvoked = Invoke-NamedButton $window "preview_plan" 10
-        Start-Sleep -Seconds 3
-        $previewCommand = Invoke-CapturedCommand "target-preview" "python" @(
-            "-m", "ritualist", "canvas", "action", "gaming_desktop", "diablo_target", "preview_plan", "--json"
-        )
-        $previewStatus = Get-CanvasStatusEvents "diablo_target" |
-            Where-Object {
-                $_.payload.status -eq "success" -and
-                $_.payload.message -match "target plan preview completed"
-            } |
-            Select-Object -First 1
-        if ($previewInvoked -and $previewStatus -and $previewCommand.exit_code -eq 0 -and $previewCommand.stdout_text -match "target_plan") {
-            Set-Check "target_card_preview" "PASS" "Packaged Canvas preview completed and source CLI returned structured target plan JSON." @{
-                command_stdout = $previewCommand.stdout
-                command_stderr = $previewCommand.stderr
-                packaged_e2e_event = $previewStatus
-            }
-        }
-        else {
-            Set-Check "target_card_preview" "FAIL" "Target plan preview did not return expected evidence." @{
-                invoked = $previewInvoked
-                command_stdout = $previewCommand.stdout
-                command_stderr = $previewCommand.stderr
-            }
-        }
-
         $rootHelp = Invoke-CapturedCommand "cli-help-no-recording-surface" "python" @("-m", "ritualist", "--help")
         $canvasHelp = Invoke-CapturedCommand "canvas-help-no-recording-surface" "python" @("-m", "ritualist", "canvas", "--help")
         $helpText = "$($rootHelp.stdout_text)`n$($rootHelp.stderr_text)`n$($canvasHelp.stdout_text)`n$($canvasHelp.stderr_text)"
         $helpMatches = Find-TermMatches $helpText $RecordingSurfaceTerms
 
-        $uiRows = Get-UiTextSnapshot $window
+        $uiRows = @(Get-UiTextSnapshot $window | ForEach-Object {
+                $_ | Add-Member -NotePropertyName surface -NotePropertyValue "canvas-live" -Force -PassThru
+            })
+        $savedSurfaceSnapshots = @(
+            "packaged-home-window-tree.json",
+            "packaged-canvas-window-tree.json",
+            "packaged-classic-gui-window-tree.json",
+            "canvas-initial-window-tree.json",
+            "target-card-preview-before-window-tree.json"
+        )
+        foreach ($snapshotName in $savedSurfaceSnapshots) {
+            $snapshotPath = Join-Path $SnapshotRoot $snapshotName
+            if (Test-Path $snapshotPath) {
+                $surfaceName = $snapshotName -replace "-window-tree\.json$", ""
+                $snapshotRows = @(Get-Content -Path $snapshotPath -Raw | ConvertFrom-Json)
+                foreach ($row in $snapshotRows) {
+                    $row | Add-Member -NotePropertyName surface -NotePropertyValue $surfaceName -Force
+                    $uiRows += $row
+                }
+            }
+        }
         $uiSnapshot = Join-Path $SnapshotRoot "no-recording-ui-text.json"
         Write-JsonFile $uiSnapshot $uiRows 8 | Out-Null
-        $uiText = ($uiRows | ForEach-Object { "$($_.name)`n$($_.automation_id)" }) -join "`n"
+        $uiText = ($uiRows | ForEach-Object { "$($_.surface)`n$($_.name)`n$($_.automation_id)" }) -join "`n"
         $uiMatches = Find-TermMatches $uiText $RecordingSurfaceTerms
 
         $captureDataRoot = Join-Path $script:FixtureAppData "watch-me"
@@ -1791,14 +1884,15 @@ function Invoke-HardKillRecovery {
         if ($newRun) {
             $runId = $newRun.Name
         }
+        $runOwnerKill = Stop-RunOwnerProcess $runId
         Stop-AcceptanceProcess $process -Force
         $process = $null
         Start-Sleep -Seconds 2
         $homeProcess = Start-AcceptanceProcess $script:RitualistExe @()
-        Start-Sleep -Seconds 8
+        Start-Sleep -Seconds 5
+        $runJson = if ($runId) { Wait-RunStatus $runId "interrupted" 20 } else { $null }
         $homeShot = Save-Screenshot "hard-kill-relaunch-home"
         Stop-AcceptanceProcess $homeProcess
-        $runJson = if ($runId) { Read-RunJson $runId } else { $null }
         $runEvidence = if ($runId) { Copy-RunLogEvidence $runId } else { $null }
         $show = if ($runId) {
             Invoke-CapturedCommand "show-run-interrupted" "python" @("-m", "ritualist", "show-run", $runId, "--no-repair")
@@ -1810,6 +1904,7 @@ function Invoke-HardKillRecovery {
             Set-Check "hard_kill_repairs_interrupted" "PASS" "Hard-kill recovery repaired abandoned run to interrupted." @{
                 run_id = $runId
                 run_log = $runEvidence
+                run_owner_kill = $runOwnerKill
                 relaunch_home_screenshot = $homeShot
                 show_run_stdout = $show.stdout
             }
@@ -1818,6 +1913,8 @@ function Invoke-HardKillRecovery {
             Set-Check "hard_kill_repairs_interrupted" "FAIL" "Hard-kill recovery evidence was missing or not interrupted." @{
                 run_id = $runId
                 run_log = $runEvidence
+                run_owner_kill = $runOwnerKill
+                observed_status = if ($runJson) { $runJson.status } else { $null }
                 relaunch_home_screenshot = $homeShot
                 show_run_stdout = if ($show) { $show.stdout } else { $null }
             }
