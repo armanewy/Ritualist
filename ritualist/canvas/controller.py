@@ -266,6 +266,15 @@ def _success(
 def _result_data(result: Any) -> dict[str, Any]:
     if result is None:
         return {}
+    if hasattr(result, "results") and hasattr(result, "recipe_id"):
+        return {
+            "recipe_id": str(getattr(result, "recipe_id", "") or ""),
+            "recipe_name": str(getattr(result, "recipe_name", "") or ""),
+            "success": bool(getattr(result, "success", False)),
+            "status": "success" if bool(getattr(result, "success", False)) else "failed",
+            "run_dir": str(getattr(result, "run_dir", "") or ""),
+            "results": [_step_result_data(item) for item in getattr(result, "results", [])],
+        }
     if hasattr(result, "to_dict"):
         converted = result.to_dict()
         if isinstance(converted, dict):
@@ -273,3 +282,15 @@ def _result_data(result: Any) -> dict[str, Any]:
     if isinstance(result, dict):
         return dict(result)
     return {"result": str(result)}
+
+
+def _step_result_data(result: Any) -> dict[str, Any]:
+    return {
+        "index": getattr(result, "index", None),
+        "step_name": str(getattr(result, "step_name", "") or ""),
+        "action": str(getattr(result, "action", "") or ""),
+        "status": str(getattr(result, "status", "") or ""),
+        "message": str(getattr(result, "message", "") or ""),
+        "phase": str(getattr(result, "phase", "") or ""),
+        "dry_run": bool(getattr(result, "dry_run", False)),
+    }

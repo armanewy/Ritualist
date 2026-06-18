@@ -115,6 +115,8 @@ class ConfirmationRequested(RuntimeEventBase):
     step_name: str
     action: str
     prompt: str
+    target: str | None = None
+    target_type: str | None = None
     state: StepState = StepState.CONFIRMING
 
 

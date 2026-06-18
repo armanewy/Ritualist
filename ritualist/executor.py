@@ -887,6 +887,13 @@ class WorkflowExecutor:
                 step_name=step.display_name,
                 action=step.action,
                 prompt=prompt_text,
+                target=str(
+                    metadata.get("target_text")
+                    or metadata.get("target_role")
+                    or metadata.get("target_test_id")
+                    or ""
+                ),
+                target_type=str(metadata.get("target_type") or ""),
             )
         )
         approved = bool(self.confirmer(prompt))

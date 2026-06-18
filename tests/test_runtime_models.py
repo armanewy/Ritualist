@@ -170,6 +170,8 @@ def test_run_started_serializes_to_stable_payload():
                 "step_name",
                 "action",
                 "prompt",
+                "target",
+                "target_type",
                 "state",
             ),
         ),

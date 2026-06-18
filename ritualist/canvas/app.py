@@ -29,6 +29,7 @@ from .host import (
     resolve_canvas_host_config,
 )
 from .models import CanvasBindingKind, CanvasDocument
+from .ritual_state import ritual_state_from_action_result, ritual_state_from_runtime_event
 from .runtime import CanvasRuntimeContext
 from .storage import create_mock_canvas
 from .view_model import build_canvas_view_model
@@ -40,6 +41,8 @@ def build_canvas_use_payload(
     runtime_state: dict[str, dict[str, Any]] | None = None,
     recipe_ids: set[str] | None = None,
     target_ids: set[str] | None = None,
+    doctor_summaries: dict[str, dict[str, Any]] | None = None,
+    dry_run_summaries: dict[str, dict[str, Any]] | None = None,
     load_recent_runs: bool = False,
 ) -> dict[str, object]:
     """Build a Canvas Use payload from explicit context.
@@ -54,6 +57,8 @@ def build_canvas_use_payload(
             recipe_ids=set(recipe_ids or ()),
             target_ids=set(target_ids or ()),
             runtime_state=runtime_state or {},
+            doctor_summaries=doctor_summaries or {},
+            dry_run_summaries=dry_run_summaries or {},
             recent_runs=None if load_recent_runs else (),
             resolve_targets=False,
         ),
@@ -450,6 +455,7 @@ def run_canvas_use(
             message: str,
             *,
             state: str | None = None,
+            ritual_state: dict[str, Any] | None = None,
         ) -> None:
             record_event(
                 "canvas.status",
@@ -459,11 +465,17 @@ def run_canvas_use(
                 message=message,
             )
             reference = _component_reference(self._document, component_id)
-            self._runtime_state[reference] = {
-                "status": state or status,
-                "message": message,
-                "current_step": message,
-            }
+            current = dict(self._runtime_state.get(reference, {}))
+            current.update(
+                {
+                    "status": state or status,
+                    "message": message,
+                    "current_step": message,
+                }
+            )
+            if ritual_state is not None:
+                current["ritual_state"] = ritual_state
+            self._runtime_state[reference] = current
             self._last_event_label = f"{component_id}: {message or status}"
             self.payloadChanged.emit()
             self.metricsChanged.emit()
@@ -474,7 +486,20 @@ def run_canvas_use(
             data = getattr(result, "data", None)
             if isinstance(data, dict) and "path" in data:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(data["path"])))
-            self._publish_status(component_id, status, message, state="success")
+            reference = _component_reference(self._document, component_id)
+            action_id = str(getattr(result, "action_id", "") or "")
+            current = self._runtime_state.get(reference, {})
+            ritual_state = (
+                ritual_state_from_action_result(
+                    reference,
+                    action_id,
+                    getattr(result, "data", None),
+                    existing=current.get("ritual_state"),
+                )
+                if action_id in {"doctor", "dry_run", "run"}
+                else None
+            )
+            self._publish_status(component_id, status, message, state="success", ritual_state=ritual_state)
             self._runtime_control = None
             self._runtime_paused = False
             self._set_action_busy(False)
@@ -486,6 +511,13 @@ def run_canvas_use(
             self._set_action_busy(False)
 
         def _apply_runtime_event(self, component_id: str, event: object) -> None:
+            reference = _component_reference(self._document, component_id)
+            current = dict(self._runtime_state.get(reference, {}))
+            current["ritual_state"] = ritual_state_from_runtime_event(
+                current.get("ritual_state"),
+                event,
+            )
+            self._runtime_state[reference] = current
             home_event = home_event_from_runtime(component_id, event)
             self._apply_home_event(component_id, home_event)
 

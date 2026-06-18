@@ -28,6 +28,7 @@ from ritualist.target_resolution import (
 
 from .models import CanvasBindingKind, CanvasComponent, CanvasComponentBinding, CanvasDocument
 from .registry import create_component_registry, normalize_canvas_bindings, validate_canvas_structure
+from .ritual_state import RitualStateInputs, build_ritual_state, normalize_ritual_state
 from .theme_bridge import resolve_canvas_theme
 
 CANVAS_RUNTIME_SCHEMA_VERSION = "ritualist.canvas.runtime.v1"
@@ -139,6 +140,7 @@ class CanvasRuntimeModel:
     recent_activity: tuple[dict[str, Any], ...] = ()
     last_run_messages: dict[str, str] = field(default_factory=dict)
     doctor_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ritual_states: dict[str, dict[str, Any]] = field(default_factory=dict)
     target_plan_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)
     unresolved_binding_warnings: tuple[str, ...] = ()
     performance_counters: dict[str, float | int] = field(default_factory=dict)
@@ -160,6 +162,7 @@ class CanvasRuntimeModel:
             "recent_activity": list(self.recent_activity),
             "last_run_messages": self.last_run_messages,
             "doctor_summaries": self.doctor_summaries,
+            "ritual_states": self.ritual_states,
             "target_plan_summaries": self.target_plan_summaries,
             "unresolved_binding_warnings": list(self.unresolved_binding_warnings),
             "performance_counters": self.performance_counters,
@@ -177,6 +180,7 @@ class CanvasRuntimeContext:
     recent_runs_loader: Callable[..., Sequence[RunRecord]] | None = None
     target_plan_summaries: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     doctor_summaries: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    dry_run_summaries: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     resolve_targets: bool = False
     target_resolver: Callable[[str], TargetResolutionResult] | None = None
     clock: Callable[[], datetime] | None = None
@@ -196,11 +200,20 @@ def build_canvas_runtime_model(
     registry = create_component_registry()
     recipe_ids = _recipe_ids(resolved_context)
     target_ids = _target_ids(resolved_context)
-    recent_activity, last_run_messages, last_run_status = _recent_activity(resolved_context)
+    recent_records = _recent_records(resolved_context)
+    recent_activity, last_run_messages, last_run_status = _recent_activity(
+        resolved_context,
+        records=recent_records,
+    )
     states: list[CanvasComponentRuntimeState] = []
     warnings: list[str] = list(structural_validation.errors) + list(structural_validation.warnings)
     target_summaries: dict[str, dict[str, Any]] = dict(resolved_context.target_plan_summaries)
     doctor_summaries = dict(resolved_context.doctor_summaries)
+    ritual_states = _build_ritual_states(
+        normalized,
+        context=resolved_context,
+        recent_records=recent_records,
+    )
 
     for component in normalized.components:
         state = _component_runtime_state(
@@ -212,6 +225,7 @@ def build_canvas_runtime_model(
             last_run_messages=last_run_messages,
             last_run_status=last_run_status,
             target_summaries=target_summaries,
+            ritual_states=ritual_states,
         )
         states.append(state)
         warnings.extend(state.warnings)
@@ -223,6 +237,7 @@ def build_canvas_runtime_model(
         recent_activity=tuple(recent_activity),
         last_run_messages=last_run_messages,
         doctor_summaries=doctor_summaries,
+        ritual_states=ritual_states,
         target_plan_summaries=target_summaries,
         unresolved_binding_warnings=tuple(dict.fromkeys(warnings)),
         performance_counters={
@@ -245,6 +260,7 @@ def _component_runtime_state(
     last_run_messages: dict[str, str],
     last_run_status: dict[str, str],
     target_summaries: dict[str, dict[str, Any]],
+    ritual_states: dict[str, dict[str, Any]],
 ) -> CanvasComponentRuntimeState:
     props = component.props_dict()
     binding = component.binding
@@ -267,7 +283,8 @@ def _component_runtime_state(
         reference = reference or str(props.get("recipe_id") or component.id)
         warnings.extend(_unresolved_recipe_warnings(component.id, reference, recipe_ids))
         active = _active_state(context, reference)
-        status = str(active.get("status") or last_run_status.get(reference) or "ready")
+        active_payload = _sanitized_runtime_mapping(active)
+        status = str(active_payload.get("status") or last_run_status.get(reference) or "ready")
         return CanvasComponentRuntimeState(
             component.id,
             component.type,
@@ -275,49 +292,55 @@ def _component_runtime_state(
             status=_status_for_run(status),
             title=title,
             subtitle=str(props.get("subtitle") or ""),
-            message=str(active.get("message") or last_run_messages.get(reference, "")),
+            message=str(active_payload.get("message") or last_run_messages.get(reference, "")),
             binding_kind=CanvasBindingKind.RECIPE.value,
             binding_reference=reference,
             enabled_actions=() if warnings else ("run", "dry_run", "doctor", "edit_recipe", "open_logs"),
             disabled_actions=("run", "dry_run", "doctor", "edit_recipe", "open_logs") if warnings else (),
             warnings=tuple(warnings),
-            data={"recipe_id": reference, "active_run": active},
+            data={"recipe_id": reference, "active_run": active_payload, "ritual_state": ritual_states.get(reference, {})},
         )
 
     if component.type == "ritual.status":
         reference = reference or str(props.get("recipe_id") or "")
         warnings.extend(_unresolved_recipe_warnings(component.id, reference, recipe_ids))
         active = _active_state(context, reference)
-        status = str(active.get("status") or last_run_status.get(reference) or "idle")
+        active_payload = _sanitized_runtime_mapping(active)
+        status = str(active_payload.get("status") or last_run_status.get(reference) or "idle")
         return CanvasComponentRuntimeState(
             component.id,
             component.type,
             state=status,
             status=_status_for_run(status),
             title=title or reference,
-            message=str(active.get("current_step") or last_run_messages.get(reference, "")),
+            message=str(active_payload.get("current_step") or last_run_messages.get(reference, "")),
             binding_kind=CanvasBindingKind.RECIPE.value,
             binding_reference=reference,
             warnings=tuple(warnings),
-            data={"recipe_id": reference, "current_step": active.get("current_step", "")},
+            data={
+                "recipe_id": reference,
+                "current_step": active_payload.get("current_step", ""),
+                "ritual_state": ritual_states.get(reference, {}),
+            },
         )
 
     if component.type == "ritual.controller":
         reference = reference or str(props.get("recipe_id") or "")
         active = _active_state(context, reference)
-        enabled = ("pause", "resume", "stop", "open_run_log") if active else ()
+        active_payload = _sanitized_runtime_mapping(active)
+        enabled = ("pause", "resume", "stop", "open_run_log") if active_payload else ()
         return CanvasComponentRuntimeState(
             component.id,
             component.type,
-            state=str(active.get("status") or "idle"),
-            status="enabled" if active else "disabled",
+            state=str(active_payload.get("status") or "idle"),
+            status="enabled" if active_payload else "disabled",
             title=title,
-            message=str(active.get("message") or ""),
+            message=str(active_payload.get("message") or ""),
             binding_kind=binding_kind.value,
             binding_reference=reference,
             enabled_actions=enabled,
-            disabled_actions=() if active else ("pause", "resume", "stop", "open_run_log"),
-            data={"recipe_id": reference, "active_run": active},
+            disabled_actions=() if active_payload else ("pause", "resume", "stop", "open_run_log"),
+            data={"recipe_id": reference, "active_run": active_payload, "ritual_state": ritual_states.get(reference, {})},
         )
 
     if component.type in {"target.card", "target.status"}:
@@ -354,7 +377,7 @@ def _component_runtime_state(
             binding_reference=reference,
             enabled_actions=("doctor",) if reference else (),
             warnings=tuple(_unresolved_recipe_warnings(component.id, reference, recipe_ids) if reference else ()),
-            data={"summary": summary},
+            data={"summary": summary, "ritual_state": ritual_states.get(reference, {})},
         )
 
     if component.type == "recent.activity":
@@ -441,25 +464,74 @@ def _recipe_ids(context: CanvasRuntimeContext) -> set[str]:
     return ids
 
 
+def _build_ritual_states(
+    document: CanvasDocument,
+    *,
+    context: CanvasRuntimeContext,
+    recent_records: Sequence[RunRecord],
+) -> dict[str, dict[str, Any]]:
+    recipe_refs = _ritual_recipe_refs(document)
+    recipe_refs.update(str(key) for key in context.runtime_state)
+    recipe_refs.update(str(key) for key in context.doctor_summaries)
+    recipe_refs.update(str(key) for key in context.dry_run_summaries)
+    recipe_refs.update(str(record.metadata.get("recipe_id") or "") for record in recent_records)
+    states: dict[str, dict[str, Any]] = {}
+    for recipe_id in sorted(item for item in recipe_refs if item):
+        active = dict(context.runtime_state.get(recipe_id, {}))
+        existing = active.get("ritual_state")
+        if isinstance(existing, dict):
+            states[recipe_id] = normalize_ritual_state(recipe_id, existing)
+            continue
+        states[recipe_id] = build_ritual_state(
+            RitualStateInputs(
+                recipe_id=recipe_id,
+                active=active,
+                doctor=context.doctor_summaries.get(recipe_id),
+                dry_run=context.dry_run_summaries.get(recipe_id),
+                recent_runs=recent_records,
+            )
+        )
+    return states
+
+
+def _ritual_recipe_refs(document: CanvasDocument) -> set[str]:
+    refs: set[str] = set()
+    for component in document.components:
+        if component.type not in {"ritual.card", "ritual.status", "ritual.controller", "doctor.badge"}:
+            continue
+        binding = component.binding
+        if binding is not None and binding.kind is CanvasBindingKind.RECIPE:
+            refs.add(binding.reference)
+            continue
+        props = component.props_dict()
+        refs.add(str(props.get("recipe_id") or "").strip())
+    return {item for item in refs if item}
+
+
 def _target_ids(context: CanvasRuntimeContext) -> set[str]:
     if context.target_ids is not None:
         return set(context.target_ids)
     return {target.id for target in builtin_target_catalog().targets}
 
 
+def _recent_records(context: CanvasRuntimeContext) -> list[RunRecord]:
+    if context.recent_runs is not None:
+        return list(context.recent_runs)
+    if context.recent_runs_loader is not None:
+        return list(context.recent_runs_loader(limit=20))
+    return list_recent_runs(limit=20)
+
+
 def _recent_activity(
     context: CanvasRuntimeContext,
+    *,
+    records: Sequence[RunRecord] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
-    if context.recent_runs is not None:
-        records = list(context.recent_runs)
-    elif context.recent_runs_loader is not None:
-        records = list(context.recent_runs_loader(limit=20))
-    else:
-        records = list_recent_runs(limit=20)
+    resolved_records = list(records) if records is not None else _recent_records(context)
     activity: list[dict[str, Any]] = []
     messages: dict[str, str] = {}
     statuses: dict[str, str] = {}
-    for record in records[:20]:
+    for record in resolved_records[:20]:
         recipe_id = str(record.metadata.get("recipe_id") or "").strip()
         summary = summarize_run_record(record)
         status = str(record.metadata.get("final_state") or summary.final_status or "")
@@ -512,6 +584,48 @@ def _active_state(context: CanvasRuntimeContext, reference: str) -> dict[str, An
         return {}
     state = context.runtime_state.get(reference) or context.active_runs.get(reference) or {}
     return dict(state)
+
+
+def _sanitized_runtime_mapping(value: Mapping[str, Any], *, depth: int = 0) -> dict[str, Any]:
+    if depth > 3:
+        return {}
+    sanitized: dict[str, Any] = {}
+    for key, item in value.items():
+        key_text = str(key)
+        if key_text == "ritual_state":
+            continue
+        if isinstance(item, Mapping):
+            sanitized[key_text] = _sanitized_runtime_mapping(item, depth=depth + 1)
+        elif isinstance(item, (list, tuple)):
+            sanitized[key_text] = [
+                _sanitize_runtime_value(child, depth=depth + 1)
+                for child in item[:20]
+            ]
+        else:
+            sanitized[key_text] = _sanitize_runtime_value(item, depth=depth)
+    return sanitized
+
+
+def _sanitize_runtime_value(value: Any, *, depth: int = 0) -> Any:
+    if isinstance(value, Mapping):
+        return _sanitized_runtime_mapping(value, depth=depth + 1)
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_runtime_value(item, depth=depth + 1) for item in value[:20]]
+    if isinstance(value, str):
+        return _sanitize_runtime_text(value)
+    return value
+
+
+def _sanitize_runtime_text(value: str) -> str:
+    text = value.replace("\r", " ").replace("\n", " ").strip()
+    for marker in ("token=", "password=", "passwd=", "secret=", "api_key=", "apikey="):
+        lowered = text.casefold()
+        index = lowered.find(marker)
+        if index >= 0:
+            text = text[: index + len(marker)] + "[redacted]"
+    if len(text) > 240:
+        return text[:239].rstrip() + "..."
+    return text
 
 
 def _target_summary(
