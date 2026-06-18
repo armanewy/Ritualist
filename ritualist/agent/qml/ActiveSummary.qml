@@ -5,6 +5,10 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
+    RitualistTokens {
+        id: tokens
+    }
+
     property var activeRitual: null
     property bool hasActiveRitual: activeRitual !== null && activeRitual !== undefined
     property bool pendingConfirmation: hasActiveRitual && (
@@ -14,14 +18,14 @@ Rectangle {
     )
     property string ritualName: hasActiveRitual ? (activeRitual.title || activeRitual.name || "Active ritual") : ""
     property string stateLabel: hasActiveRitual ? (activeRitual.state || activeRitual.status || "running") : ""
-    property string detailText: hasActiveRitual ? (activeRitual.current_step || activeRitual.message || activeRitual.description || "") : ""
+    property string detailText: hasActiveRitual ? (activeRitual.summary || activeRitual.current_step || activeRitual.message || activeRitual.description || "") : ""
 
     signal requestOpenActive()
 
     height: hasActiveRitual ? 78 : 0
     radius: 6
-    color: pendingConfirmation ? "#251f14" : "#12241d"
-    border.color: pendingConfirmation ? "#f5c96b" : "#58d2a3"
+    color: pendingConfirmation ? tokens.confirmationPanel : tokens.runningPanel
+    border.color: pendingConfirmation ? tokens.confirmation : tokens.running
     border.width: 1
     Accessible.role: Accessible.Pane
     Accessible.name: "Active ritual summary"
@@ -36,7 +40,7 @@ Rectangle {
             Layout.preferredWidth: 10
             Layout.preferredHeight: 10
             radius: 5
-            color: root.pendingConfirmation ? "#f5c96b" : "#58d2a3"
+            color: root.pendingConfirmation ? tokens.confirmation : tokens.running
         }
 
         ColumnLayout {
@@ -46,8 +50,9 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: "Active ritual"
-                color: root.pendingConfirmation ? "#f6d37a" : "#bbf5d1"
-                font.pixelSize: 11
+                color: root.pendingConfirmation ? tokens.confirmation : tokens.running
+                font.family: tokens.fontFamily
+                font.pixelSize: tokens.captionFontEpx
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
             }
@@ -55,8 +60,9 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: root.ritualName
-                color: "#f2f6fb"
-                font.pixelSize: 13
+                color: tokens.text
+                font.family: tokens.fontFamily
+                font.pixelSize: tokens.bodyFontEpx
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
             }
@@ -64,8 +70,9 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: root.stateLabel + (root.detailText ? " - " + root.detailText : "")
-                color: "#aebbd0"
-                font.pixelSize: 11
+                color: tokens.textMuted
+                font.family: tokens.fontFamily
+                font.pixelSize: tokens.captionFontEpx
                 elide: Text.ElideRight
             }
         }

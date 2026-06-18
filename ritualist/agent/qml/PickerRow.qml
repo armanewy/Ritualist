@@ -5,20 +5,24 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
+    RitualistTokens {
+        id: tokens
+    }
+
     property var ritual: ({})
     property bool selected: false
     property string ritualId: ritual.id || ritual.recipe_id || ""
     property string title: ritual.title || ritual.name || "Untitled ritual"
-    property string subtitle: ritual.room || ritual.description || "Recent ritual"
-    property string status: ritual.status || ritual.last_run_status || "ready"
+    property string subtitle: ritual.room_name || ritual.room || ritual.readiness_summary || ritual.description || "Recent ritual"
+    property string status: ritual.status || ritual.last_run_status || (ritual.active_summary ? "running" : "ready")
 
     signal rowSelected()
     signal preflightRequested(string ritualId)
 
     height: 62
     radius: 6
-    color: selected ? "#1b2a3a" : (pointer.containsMouse ? "#151f2b" : "#101720")
-    border.color: selected ? "#6ea8e8" : "#223044"
+    color: selected ? tokens.runningPanel : (pointer.containsMouse ? tokens.panelAlt : tokens.panel)
+    border.color: selected ? tokens.focusRing : tokens.border
     border.width: 1
     activeFocusOnTab: true
 
@@ -61,7 +65,7 @@ Rectangle {
             Layout.preferredWidth: 10
             Layout.preferredHeight: 10
             radius: 5
-            color: status === "failed" ? "#d96d7e" : (status === "running" ? "#63d6a3" : "#7fb8ff")
+            color: status === "failed" ? tokens.failure : (status === "running" ? tokens.running : tokens.accent)
         }
 
         ColumnLayout {
@@ -71,8 +75,9 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: root.title
-                color: "#f2f6fb"
-                font.pixelSize: 13
+                color: tokens.text
+                font.family: tokens.fontFamily
+                font.pixelSize: tokens.bodyFontEpx
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
             }
@@ -80,16 +85,18 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: root.subtitle
-                color: "#91a2b8"
-                font.pixelSize: 11
+                color: tokens.textMuted
+                font.family: tokens.fontFamily
+                font.pixelSize: tokens.captionFontEpx
                 elide: Text.ElideRight
             }
         }
 
         Text {
             text: "Preflight"
-            color: "#b8d8ff"
-            font.pixelSize: 11
+            color: tokens.accent
+            font.family: tokens.fontFamily
+            font.pixelSize: tokens.captionFontEpx
             font.weight: Font.DemiBold
             visible: root.selected
         }

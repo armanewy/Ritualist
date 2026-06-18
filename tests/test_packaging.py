@@ -23,6 +23,7 @@ def test_windows_build_script_targets_home_onedir_bundle():
     assert "--hidden-import" in script
     assert "ritualist.home.confirmation" in script
     assert "--collect-data" in script
+    assert "ritualist.agent.qml" in script
     assert "ritualist.canvas.qml" in script
     assert "ritualist.sample_canvases" in script
     assert "ritualist.home.qml" in script
@@ -37,6 +38,11 @@ def test_windows_build_script_targets_home_onedir_bundle():
 
 
 def test_package_data_includes_home_canvas_qml_and_sample_templates():
+    agent_qml_names = {
+        child.name
+        for child in files("ritualist.agent.qml").iterdir()
+        if child.name.endswith(".qml")
+    }
     qml = files("ritualist.home.qml").joinpath("Home.qml")
     canvas_qml = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
     canvas_qml_names = {
@@ -56,6 +62,16 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
     }
     paper_theme = Path("themes/ritualist-paper/theme.yaml")
 
+    assert {
+        "ActiveSummary.qml",
+        "Picker.qml",
+        "PickerRow.qml",
+        "QuietButton.qml",
+        "QuietDivider.qml",
+        "QuietStatusIcon.qml",
+        "QuietTextField.qml",
+        "RitualistTokens.qml",
+    }.issubset(agent_qml_names)
     assert qml.is_file()
     assert "ritualistHomeController" in qml.read_text(encoding="utf-8")
     assert canvas_qml.is_file()

@@ -6,19 +6,24 @@ import QtQuick.Window
 Window {
     id: root
 
+    RitualistTokens {
+        id: tokens
+    }
+
     width: 400
     height: 520
     minimumWidth: 336
     maximumHeight: 520
-    visible: true
+    visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: "transparent"
     title: "Ritualist Picker"
 
     property var pickerController: typeof ritualistPickerController === "undefined" ? null : ritualistPickerController
     property var pickerPayload: pickerController && pickerController.payload ? pickerController.payload : ({
-        "room": { "id": "", "name": "Current Room" },
+        "current_room": { "room_id": "", "name": "Current Room" },
         "recent_rituals": [],
+        "matching_rituals": [],
         "active_ritual": null
     })
     property string query: ""
@@ -34,7 +39,7 @@ Window {
     signal requestReturnFocusToPriorApp()
 
     function roomName() {
-        var room = pickerPayload && pickerPayload.room ? pickerPayload.room : {}
+        var room = pickerPayload && pickerPayload.current_room ? pickerPayload.current_room : (pickerPayload && pickerPayload.room ? pickerPayload.room : {})
         return room.name || room.label || "Current Room"
     }
 
@@ -46,17 +51,20 @@ Window {
     }
 
     function recentRituals() {
-        if (!pickerPayload || !pickerPayload.recent_rituals) {
+        if (!pickerPayload) {
             return []
         }
+        var source = pickerPayload.recent_rituals && pickerPayload.recent_rituals.length > 0
+                ? pickerPayload.recent_rituals
+                : (pickerPayload.matching_rituals || [])
         var needle = query.trim().toLowerCase()
         if (needle === "") {
-            return pickerPayload.recent_rituals
+            return source
         }
         var filtered = []
-        for (var i = 0; i < pickerPayload.recent_rituals.length; i += 1) {
-            var item = pickerPayload.recent_rituals[i]
-            var haystack = String((item.title || item.name || "") + " " + (item.room || "") + " " + (item.description || "")).toLowerCase()
+        for (var i = 0; i < source.length; i += 1) {
+            var item = source[i]
+            var haystack = String((item.title || item.name || "") + " " + (item.room_name || item.room || "") + " " + (item.description || "") + " " + (item.intent_summary || "")).toLowerCase()
             if (haystack.indexOf(needle) >= 0) {
                 filtered.push(item)
             }
@@ -75,6 +83,9 @@ Window {
     function openPreflight(ritualId) {
         if (!ritualId || actionBusy) {
             return
+        }
+        if (pickerController && pickerController.openPreflight) {
+            pickerController.openPreflight(ritualId)
         }
         requestPreflight(ritualId)
         dismissIfIdle("preflight")
@@ -106,8 +117,8 @@ Window {
 
         anchors.fill: parent
         radius: 8
-        color: "#0d1118"
-        border.color: "#2a3748"
+        color: tokens.panel
+        border.color: tokens.border
         border.width: 1
         focus: true
 
@@ -175,8 +186,8 @@ Window {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 48
                 radius: 6
-                color: "#121a24"
-                border.color: "#273549"
+                color: tokens.panelAlt
+                border.color: tokens.border
 
                 RowLayout {
                     anchors.fill: parent
@@ -185,15 +196,17 @@ Window {
 
                     Text {
                         text: "Current Room"
-                        color: "#8fa0b8"
-                        font.pixelSize: 11
+                        color: tokens.textMuted
+                        font.family: tokens.fontFamily
+                        font.pixelSize: tokens.captionFontEpx
                         font.weight: Font.DemiBold
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: root.roomName()
-                        color: "#f2f6fb"
+                        color: tokens.text
+                        font.family: tokens.fontFamily
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
@@ -221,8 +234,9 @@ Window {
                 Text {
                     Layout.fillWidth: true
                     text: "Recent rituals"
-                    color: "#dce6f2"
-                    font.pixelSize: 13
+                    color: tokens.text
+                    font.family: tokens.fontFamily
+                    font.pixelSize: tokens.bodyFontEpx
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
@@ -230,7 +244,12 @@ Window {
                 ToolButton {
                     text: "Browse all rituals"
                     Accessible.name: "Browse all rituals"
-                    onClicked: root.requestBrowseAllRituals()
+                    onClicked: {
+                        if (root.pickerController && root.pickerController.browseAll) {
+                            root.pickerController.browseAll()
+                        }
+                        root.requestBrowseAllRituals()
+                    }
                 }
             }
 
@@ -269,7 +288,12 @@ Window {
                     text: "New ritual"
                     visible: !root.compactActions
                     Accessible.name: "New ritual"
-                    onClicked: root.requestOpenBuilder()
+                    onClicked: {
+                        if (root.pickerController && root.pickerController.openBuilder) {
+                            root.pickerController.openBuilder()
+                        }
+                        root.requestOpenBuilder()
+                    }
                 }
 
                 ToolButton {
@@ -277,7 +301,12 @@ Window {
                     text: "Open Builder"
                     visible: !root.compactActions
                     Accessible.name: "Open Builder"
-                    onClicked: root.requestOpenBuilder()
+                    onClicked: {
+                        if (root.pickerController && root.pickerController.openBuilder) {
+                            root.pickerController.openBuilder()
+                        }
+                        root.requestOpenBuilder()
+                    }
                 }
 
                 ToolButton {
@@ -294,12 +323,22 @@ Window {
 
                         MenuItem {
                             text: "New ritual"
-                            onTriggered: root.requestOpenBuilder()
+                            onTriggered: {
+                                if (root.pickerController && root.pickerController.openBuilder) {
+                                    root.pickerController.openBuilder()
+                                }
+                                root.requestOpenBuilder()
+                            }
                         }
 
                         MenuItem {
                             text: "Open Builder"
-                            onTriggered: root.requestOpenBuilder()
+                            onTriggered: {
+                                if (root.pickerController && root.pickerController.openBuilder) {
+                                    root.pickerController.openBuilder()
+                                }
+                                root.requestOpenBuilder()
+                            }
                         }
                     }
                 }

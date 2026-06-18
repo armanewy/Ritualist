@@ -51,6 +51,7 @@ class TrayQtTypes:
     QAction: Any
     QIcon: Any
     QSystemTrayIcon: Any
+    QTimer: Any | None = None
 
 
 @dataclass
@@ -149,6 +150,15 @@ class FakeApplication:
         return 0
 
 
+class FakeTimer:
+    def __init__(self) -> None:
+        self.timeout = FakeSignal()
+        self.interval_ms: int | None = None
+
+    def start(self, interval_ms: int) -> None:
+        self.interval_ms = int(interval_ms)
+
+
 def fake_qt_types() -> TrayQtTypes:
     return TrayQtTypes(
         QApplication=FakeApplication,
@@ -156,6 +166,7 @@ def fake_qt_types() -> TrayQtTypes:
         QAction=FakeAction,
         QIcon=FakeIcon,
         QSystemTrayIcon=FakeSystemTrayIcon,
+        QTimer=FakeTimer,
     )
 
 
@@ -188,6 +199,7 @@ def create_agent_tray(
 
 def load_tray_qt_types() -> TrayQtTypes:
     try:
+        from PySide6.QtCore import QTimer
         from PySide6.QtGui import QAction, QIcon
         from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
     except ImportError as exc:
@@ -200,6 +212,7 @@ def load_tray_qt_types() -> TrayQtTypes:
         QAction=QAction,
         QIcon=QIcon,
         QSystemTrayIcon=QSystemTrayIcon,
+        QTimer=QTimer,
     )
 
 
