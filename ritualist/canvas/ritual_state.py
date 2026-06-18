@@ -148,6 +148,13 @@ def ritual_state_from_runtime_event(
             "run_log_path": "",
             "artifacts": (),
             "finished_at": _datetime_value(getattr(event, "occurred_at", None)),
+            "step_summaries": (),
+            "steps_total": 0,
+            "steps_completed": 0,
+            "steps_failed": 0,
+            "not_run_count": 0,
+            "operator_notes_count": 0,
+            "last_operator_note_at": "",
         }
         if state_name == "interrupted":
             state["recovery"] = {
@@ -265,17 +272,10 @@ def _active_run_state(value: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def _last_run_state(record: RunRecord | None) -> dict[str, Any]:
     if record is None:
-        return {
-            "state": "none",
-            "final_message": "",
-            "stopped_reason": "",
-            "last_step": "",
-            "run_log_path": "",
-            "artifacts": (),
-            "finished_at": "",
-        }
+        return _empty_last_run_state()
     metadata = record.metadata
     summary = summarize_run_record(record)
+    ledger = _last_run_ledger(record)
     return {
         "state": _safe_text(metadata.get("final_state") or metadata.get("status") or summary.final_status),
         "final_message": _safe_text(metadata.get("final_message") or summary.last_step),
@@ -284,6 +284,7 @@ def _last_run_state(record: RunRecord | None) -> dict[str, Any]:
         "run_log_path": str(record.path),
         "artifacts": tuple(_artifact_metadata(record)),
         "finished_at": _safe_text(metadata.get("ended_at") or metadata.get("interrupted_at") or ""),
+        **ledger,
     }
 
 
@@ -298,6 +299,17 @@ def _normalize_last_run_state(data: Mapping[str, Any]) -> dict[str, Any]:
             :MAX_ARTIFACTS
         ],
         "finished_at": _safe_text(data.get("finished_at") or ""),
+        "step_summaries": tuple(
+            _step_summary_from_mapping(item)
+            for item in _sequence(data.get("step_summaries"))
+            if isinstance(item, Mapping)
+        )[:MAX_STEP_SUMMARIES],
+        "steps_total": _int_value(data.get("steps_total")) or 0,
+        "steps_completed": _int_value(data.get("steps_completed")) or 0,
+        "steps_failed": _int_value(data.get("steps_failed")) or 0,
+        "not_run_count": _int_value(data.get("not_run_count")) or 0,
+        "operator_notes_count": _int_value(data.get("operator_notes_count")) or 0,
+        "last_operator_note_at": _safe_text(data.get("last_operator_note_at") or ""),
     }
 
 
@@ -317,6 +329,13 @@ def _last_run_state_from_result(result: Any) -> dict[str, Any]:
         "run_log_path": str(run_dir) if run_dir else "",
         "artifacts": (),
         "finished_at": datetime.now(timezone.utc).isoformat(),
+        "step_summaries": (),
+        "steps_total": 0,
+        "steps_completed": 0,
+        "steps_failed": 0,
+        "not_run_count": 0,
+        "operator_notes_count": 0,
+        "last_operator_note_at": "",
     }
 
 
@@ -380,6 +399,61 @@ def _result_steps(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         if converted:
             steps.append(converted)
     return steps
+
+
+def _empty_last_run_state() -> dict[str, Any]:
+    return {
+        "state": "none",
+        "final_message": "",
+        "stopped_reason": "",
+        "last_step": "",
+        "run_log_path": "",
+        "artifacts": (),
+        "finished_at": "",
+        "step_summaries": (),
+        "steps_total": 0,
+        "steps_completed": 0,
+        "steps_failed": 0,
+        "not_run_count": 0,
+        "operator_notes_count": 0,
+        "last_operator_note_at": "",
+    }
+
+
+def _last_run_ledger(record: RunRecord) -> dict[str, Any]:
+    steps = [
+        _step_summary_from_mapping(step)
+        for step in record.steps
+        if isinstance(step, Mapping)
+    ]
+    steps_total = _int_value(record.metadata.get("steps_total")) or _max_step_index(steps) or len(steps)
+    attempted_count = len(steps)
+    completed_count = sum(1 for step in steps if step["state"] in {"success", "dry-run", "skipped"})
+    failed_count = sum(1 for step in steps if step["state"] in {"failed", "error", "cancelled"})
+    notes_count = _int_value(record.metadata.get("operator_notes_count"))
+    if notes_count is None:
+        notes_count = len(record.notes)
+    last_note_at = _safe_text(record.metadata.get("last_operator_note_at") or "")
+    if not last_note_at and record.notes:
+        last_note_at = _safe_text(record.notes[-1].get("at") or "")
+    return {
+        "step_summaries": tuple(steps[:MAX_STEP_SUMMARIES]),
+        "steps_total": steps_total,
+        "steps_completed": completed_count,
+        "steps_failed": failed_count,
+        "not_run_count": max(0, steps_total - attempted_count),
+        "operator_notes_count": notes_count,
+        "last_operator_note_at": last_note_at,
+    }
+
+
+def _max_step_index(steps: Sequence[Mapping[str, Any]]) -> int:
+    values = [
+        int(step["index"])
+        for step in steps
+        if isinstance(step.get("index"), int)
+    ]
+    return max(values, default=0)
 
 
 def _step_summary_from_mapping(step: Mapping[str, Any]) -> dict[str, Any]:

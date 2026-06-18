@@ -165,7 +165,7 @@ components:
     height: 120
     z: 11
     props:
-      title: Recent Activity / Open Logs
+      title: Runbook Ledger / Open Logs
       limit: 2
     binding:
       kind: recent_runs

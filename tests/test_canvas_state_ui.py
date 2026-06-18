@@ -227,6 +227,20 @@ def test_canvas_use_qml_recent_activity_adds_ledger_context_without_paths() -> N
 
     for snippet in (
         "function activityLedgerSummary(item)",
+        "function stepLedgerRowText(row)",
+        "function lastRunLedgerSummary(component)",
+        "function lastRunLedgerRowSummary(component)",
+        "function operatorReviewSummary(component)",
+        "Runbook ledger",
+        "Completed \" + Number(last.steps_completed || 0) + \"/\" + Number(last.steps_total)",
+        "Failed \" + Number(last.steps_failed)",
+        "Not run \" + Number(last.not_run_count)",
+        "Operator review: \" + Number(last.operator_notes_count)",
+        "root.lastRunLedgerSummary(componentData)",
+        "root.lastRunLedgerRowSummary(componentData)",
+        "root.operatorReviewSummary(componentData)",
+        "Steps \" + Number(item.steps_completed || 0) + \"/\" + Number(item.steps_total)",
+        "Number(item.not_run_count) + \" not run\"",
         "Declined confirmation",
         "Cleanup available",
         "Cleanup: \" + root.formatLedgerToken(item.cleanup_choice)",
@@ -238,6 +252,9 @@ def test_canvas_use_qml_recent_activity_adds_ledger_context_without_paths() -> N
     ledger_section = qml[qml.index("function activityLedgerSummary(item)") : qml.index("function delegateFor")]
     assert "item.path" not in ledger_section
     assert "run_log_path" not in ledger_section
+    assert "root.dispatch" not in ledger_section
+    assert '"inspect_run"' not in ledger_section
+    assert '"start_fresh"' not in ledger_section
 
 
 def test_shortcut_components_stay_separate_from_ritual_state_controls(tmp_path: Path) -> None:

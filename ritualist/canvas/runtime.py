@@ -547,6 +547,7 @@ def _recent_activity(
             "cleanup_available": _cleanup_available(record.metadata.get("cleanup_offer")),
             "cleanup_choice": _cleanup_choice(record.metadata.get("cleanup_choice")),
             "ownership_count": _ownership_count(record.metadata.get("ownership_ledger")),
+            **_recent_ledger_metadata(record),
         }
         activity.append(row)
         if recipe_id and recipe_id not in messages:
@@ -577,6 +578,58 @@ def _ownership_count(value: object) -> int:
     if isinstance(value, list):
         return len(value)
     return 0
+
+
+def _recent_ledger_metadata(record: RunRecord) -> dict[str, Any]:
+    steps = [
+        _recent_step_summary(step)
+        for step in record.steps
+        if isinstance(step, Mapping)
+    ]
+    steps_total = _safe_int(record.metadata.get("steps_total")) or _max_step_index(steps) or len(steps)
+    notes_count = _safe_int(record.metadata.get("operator_notes_count"))
+    if notes_count is None:
+        notes_count = len(record.notes)
+    last_note_at = str(record.metadata.get("last_operator_note_at") or "")
+    if not last_note_at and record.notes:
+        last_note_at = str(record.notes[-1].get("at") or "")
+    return {
+        "step_summaries": steps[:6],
+        "steps_total": steps_total,
+        "steps_completed": sum(1 for step in steps if step["state"] in {"success", "dry-run", "skipped"}),
+        "steps_failed": sum(1 for step in steps if step["state"] in {"failed", "error", "cancelled"}),
+        "not_run_count": max(0, steps_total - len(steps)),
+        "operator_notes_count": notes_count,
+        "last_operator_note_at": last_note_at[:80],
+    }
+
+
+def _recent_step_summary(step: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "index": _safe_int(step.get("index") or step.get("step_index")),
+        "name": _sanitize_runtime_text(str(step.get("step_name") or step.get("name") or "")),
+        "action": _sanitize_runtime_text(str(step.get("action") or "")),
+        "state": _sanitize_runtime_text(str(step.get("status") or step.get("state") or "")),
+        "message": _sanitize_runtime_text(str(step.get("message") or "")),
+    }
+
+
+def _safe_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _max_step_index(steps: Sequence[Mapping[str, Any]]) -> int:
+    values = [
+        int(step["index"])
+        for step in steps
+        if isinstance(step.get("index"), int)
+    ]
+    return max(values, default=0)
 
 
 def _active_state(context: CanvasRuntimeContext, reference: str) -> dict[str, Any]:

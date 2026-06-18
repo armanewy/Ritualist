@@ -21,6 +21,7 @@ from ritualist.canvas.ritual_state import (
     RITUAL_STATE_SCHEMA_VERSION,
     RitualStateInputs,
     build_ritual_state,
+    normalize_ritual_state,
     ritual_state_from_action_result,
     ritual_state_from_runtime_event,
 )
@@ -301,6 +302,60 @@ def test_last_run_artifacts_and_interrupted_recovery_are_bounded(tmp_path: Path)
     assert state["recovery"]["safe_next_actions"] == ("inspect_run", "doctor", "start_fresh")
 
 
+def test_last_run_ledger_summarizes_failed_not_run_and_operator_review(tmp_path: Path) -> None:
+    run_dir = tmp_path / "20260618T000000Z_failed"
+    run_dir.mkdir()
+    record = RunRecord(
+        run_id=run_dir.name,
+        path=run_dir,
+        metadata={
+            "recipe_id": "gaming_mode",
+            "final_state": "failed",
+            "final_message": "Support run stopped",
+            "steps_total": 4,
+            "operator_notes_count": 2,
+            "last_operator_note_at": "2026-06-18T00:02:00+00:00",
+        },
+        steps=[
+            {
+                "index": 1,
+                "step_name": "Open approved checklist",
+                "action": "browser.open",
+                "status": "success",
+                "message": "opened",
+                "metadata": {"raw": "not exposed"},
+            },
+            {
+                "index": 2,
+                "step_name": "Launch meeting app",
+                "action": "app.launch",
+                "status": "failed",
+                "message": "token=secret",
+            },
+        ],
+        notes=[
+            {"at": "older", "note": "not exposed"},
+            {"at": "2026-06-18T00:02:00+00:00", "note": "not exposed"},
+        ],
+    )
+
+    state = build_ritual_state(RitualStateInputs(recipe_id="gaming_mode", recent_runs=(record,)))
+    last_run = state["last_run"]
+    payload = json.dumps(last_run)
+
+    assert last_run["steps_total"] == 4
+    assert last_run["steps_completed"] == 1
+    assert last_run["steps_failed"] == 1
+    assert last_run["not_run_count"] == 2
+    assert last_run["operator_notes_count"] == 2
+    assert last_run["last_operator_note_at"] == "2026-06-18T00:02:00+00:00"
+    assert last_run["step_summaries"][0]["name"] == "Open approved checklist"
+    assert last_run["step_summaries"][1]["state"] == "failed"
+    assert "metadata" not in payload
+    assert "token=secret" not in payload
+    assert "token=[redacted]" in payload
+
+
 def test_ritual_state_sanitizes_sensitive_text_and_has_no_raw_log_payload(tmp_path: Path) -> None:
     record = _run_record(tmp_path, status="failed", message="browser failed with token=secret")
     state = build_ritual_state(
@@ -420,6 +475,58 @@ def test_canvas_use_payload_exposes_ritual_state_for_qml() -> None:
     assert components["card"]["data"]["ritual_state"]["dry_run"]["step_summaries"][0]["name"] == "Open"
 
 
+def test_recent_activity_rows_include_sanitized_ledger_metadata() -> None:
+    canvas = CanvasDocument(
+        id="support_recent",
+        name="Support Recent",
+        components=(
+            CanvasComponent(id="recent", type="recent.activity", width=320, height=160),
+        ),
+    )
+    record = RunRecord(
+        run_id="support-run",
+        path=Path("runs") / "support-run",
+        metadata={
+            "recipe_id": "support_triage_workspace",
+            "final_state": "failed",
+            "final_message": "Runbook stopped",
+            "steps_total": 3,
+            "operator_notes_count": 1,
+            "last_operator_note_at": "2026-06-18T00:00:00+00:00",
+        },
+        steps=[
+            {
+                "index": 1,
+                "step_name": "Open checklist",
+                "action": "browser.open",
+                "status": "success",
+            },
+            {
+                "index": 2,
+                "step_name": "Launch app",
+                "action": "app.launch",
+                "status": "failed",
+                "message": "password=secret",
+                "metadata": {"raw": "not exposed"},
+            },
+        ],
+    )
+
+    model = build_canvas_runtime_model(canvas, context=CanvasRuntimeContext(recent_runs=(record,)))
+    item = model.component_state("recent").data["items"][0]
+    payload = json.dumps(item)
+
+    assert item["steps_total"] == 3
+    assert item["steps_completed"] == 1
+    assert item["steps_failed"] == 1
+    assert item["not_run_count"] == 1
+    assert item["operator_notes_count"] == 1
+    assert item["step_summaries"][1]["state"] == "failed"
+    assert "metadata" not in payload
+    assert "password=secret" not in payload
+    assert "password=[redacted]" in payload
+
+
 def test_existing_cached_ritual_state_is_renormalized_before_qml() -> None:
     model = build_canvas_runtime_model(
         _canvas(),
@@ -452,3 +559,32 @@ def test_existing_cached_ritual_state_is_renormalized_before_qml() -> None:
     assert "token=secret" not in payload
     assert "password=secret" not in payload
     assert '"metadata"' not in payload
+
+
+def test_cached_last_run_ledger_is_renormalized_and_bounded() -> None:
+    state = normalize_ritual_state(
+        "support_triage_workspace",
+        {
+            "last_run": {
+                "state": "failed",
+                "step_summaries": [
+                    {"index": index, "name": f"Step {index}", "action": "browser.open", "state": "success"}
+                    for index in range(1, 20)
+                ],
+                "steps_total": 19,
+                "steps_completed": 12,
+                "steps_failed": 1,
+                "not_run_count": 6,
+                "operator_notes_count": 1,
+                "last_operator_note_at": "2026-06-18T00:00:00+00:00",
+            }
+        },
+    )
+    last_run = state["last_run"]
+
+    assert len(last_run["step_summaries"]) == 12
+    assert last_run["steps_total"] == 19
+    assert last_run["steps_completed"] == 12
+    assert last_run["steps_failed"] == 1
+    assert last_run["not_run_count"] == 6
+    assert last_run["operator_notes_count"] == 1

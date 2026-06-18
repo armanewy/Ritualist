@@ -75,6 +75,7 @@ def test_support_desk_canvas_exposes_five_cards_and_main_run_surface() -> None:
     assert components["run_status"].type == "ritual.status"
     assert components["run_controller"].type == "ritual.controller"
     assert components["recent_runs"].type == "recent.activity"
+    assert "Runbook Ledger" in components["recent_runs"].props_dict()["title"]
     assert "Open Logs" in components["recent_runs"].props_dict()["title"]
     assert "Open Logs / Evidence" in components["evidence_note"].props_dict()["text"]
 

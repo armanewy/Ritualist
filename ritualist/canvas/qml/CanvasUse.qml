@@ -561,6 +561,61 @@ ApplicationWindow {
         return names.length ? "Artifacts: " + names.join(", ") : ""
     }
 
+    function stepLedgerRowText(row) {
+        var pieces = []
+        if (row.index !== undefined && row.index !== null) {
+            var indexText = String(row.index)
+            if (Number(row.index) >= 0 && Number(row.index) < 10) {
+                indexText = "0" + indexText
+            }
+            pieces.push(indexText)
+        }
+        pieces.push(row.name || "Step")
+        if (row.state) {
+            pieces.push(root.formatLedgerToken(row.state))
+        }
+        return pieces.join(" | ")
+    }
+
+    function lastRunLedgerSummary(component) {
+        var last = root.lastRun(component)
+        if (!last || !last.state || last.state === "none") {
+            return ""
+        }
+        var details = []
+        if (last.steps_total !== undefined && last.steps_total !== null && Number(last.steps_total) > 0) {
+            details.push("Completed " + Number(last.steps_completed || 0) + "/" + Number(last.steps_total))
+        }
+        if (last.steps_failed !== undefined && last.steps_failed !== null && Number(last.steps_failed) > 0) {
+            details.push("Failed " + Number(last.steps_failed))
+        }
+        if (last.not_run_count !== undefined && last.not_run_count !== null && Number(last.not_run_count) > 0) {
+            details.push("Not run " + Number(last.not_run_count))
+        }
+        return details.join(" | ")
+    }
+
+    function lastRunLedgerRowSummary(component) {
+        var rows = root.lastRun(component).step_summaries || []
+        if (rows.length === 0) {
+            return ""
+        }
+        return root.stepLedgerRowText(rows[Math.min(rows.length - 1, 2)])
+    }
+
+    function operatorReviewSummary(component) {
+        var last = root.lastRun(component)
+        if (!last || !last.operator_notes_count || Number(last.operator_notes_count) <= 0) {
+            return ""
+        }
+        var text = "Operator review: " + Number(last.operator_notes_count) + " note" +
+                   (Number(last.operator_notes_count) === 1 ? "" : "s")
+        if (last.last_operator_note_at) {
+            text += " | " + last.last_operator_note_at
+        }
+        return text
+    }
+
     function formatLedgerToken(value) {
         return String(value || "").replace(/_/g, " ").trim()
     }
@@ -582,6 +637,19 @@ ApplicationWindow {
         }
         if (item.cleanup_choice) {
             details.push("Cleanup: " + root.formatLedgerToken(item.cleanup_choice))
+        }
+        if (item.steps_total !== undefined && item.steps_total !== null && Number(item.steps_total) > 0) {
+            details.push("Steps " + Number(item.steps_completed || 0) + "/" + Number(item.steps_total))
+        }
+        if (item.steps_failed !== undefined && item.steps_failed !== null && Number(item.steps_failed) > 0) {
+            details.push("Failed " + Number(item.steps_failed))
+        }
+        if (item.not_run_count !== undefined && item.not_run_count !== null && Number(item.not_run_count) > 0) {
+            details.push(Number(item.not_run_count) + " not run")
+        }
+        if (item.operator_notes_count !== undefined && item.operator_notes_count !== null && Number(item.operator_notes_count) > 0) {
+            details.push("Operator review: " + Number(item.operator_notes_count) + " note" +
+                         (Number(item.operator_notes_count) === 1 ? "" : "s"))
         }
         if (item.ownership_count !== undefined && item.ownership_count !== null && Number(item.ownership_count) > 0) {
             details.push(Number(item.ownership_count) + " Ritualist-opened resource" + (Number(item.ownership_count) === 1 ? "" : "s"))
@@ -2098,6 +2166,57 @@ ApplicationWindow {
 
                     Text {
                         text: root.artifactSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                id: editorialLedgerPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                radius: root.radiusMd
+                color: root.token("panel_alt", "#101720")
+                border.color: root.token("border", "#203044")
+                visible: root.lastRunLedgerSummary(componentData).length > 0 &&
+                         !supportingRest && !compactRestCard && componentData.height >= 260
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 2
+
+                    Text {
+                        text: "Runbook ledger"
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.lastRunLedgerSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.lastRunLedgerRowSummary(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: root.operatorReviewSummary(componentData)
                         color: root.token("muted", "#91a2b8")
                         font.pixelSize: 10
                         elide: Text.ElideRight

@@ -139,3 +139,14 @@ The fourth implementation milestone is bundled Room composition:
   Support Desk ledger/runbook first;
 - keep the change data-only: no runtime behavior, automation surface, import,
   suggestion, or confirmation semantics change.
+
+## Fifth Milestone
+
+The fifth implementation milestone is Support Desk Editorial Ledger:
+
+- expose bounded, sanitized run-log chronology to the Room surface;
+- distinguish completed, failed, not-run, stopped, interrupted, and operator
+  review metadata without showing raw log paths;
+- keep `Open Logs` as the existing explicit action for deeper evidence;
+- do not add recovery buttons, approval controls, automation actions, or new
+  run semantics inside the Room.
