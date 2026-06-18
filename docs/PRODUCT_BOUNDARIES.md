@@ -1,8 +1,107 @@
 # Ritualist Product Boundaries
 
-Ritualist is a local, visible, policy-gated Windows command surface for Rooms
-and rituals. It sits on top of the user's desktop; it does not become the
-desktop.
+Ritualist turns Windows into activity-specific Rooms powered by safe local
+rituals that can be previewed, checked, run, paused, logged, recovered, and
+improved over time.
+
+Ritualist is a local ritual/runbook engine with a desktop-native body. Recipes
+and rituals are the center of gravity. Rooms and Canvas make those rituals
+visible and daily-usable, but they must not become an independent desktop
+customizer, widget platform, shell, or wallpaper product.
+
+The product hierarchy is:
+
+```text
+Rituals are the brain.
+Rooms and Canvas are the body.
+Safety, Doctor, dry-run, logs, and recovery are the soul.
+Shortcuts are connective tissue.
+Suggestions are the helper.
+Windows remains the world underneath.
+```
+
+Every roadmap item must improve at least one of:
+
+- ritual quality
+- Room usefulness
+- trust and safety
+- the Suggestion-to-draft loop
+- pack and template reuse
+
+If a feature does not improve one of those, it does not ship.
+
+## Core Product Nouns
+
+Ritualist has six product nouns:
+
+- **Room**: user-facing desktop for an activity.
+- **Ritual**: multi-step local procedure with Doctor, dry-run, confirmation,
+  logs, and recovery.
+- **Component**: visual, control, or status block in a Room.
+- **Shortcut**: instant native handoff with no run log or ritual controller.
+- **Suggestion**: review-only recommendation from local signals.
+- **Pack**: portable bundle quarantined and reviewed before use.
+
+Avoid adding more product nouns unless the feature cannot be explained through
+these six.
+
+## Containment Doctrine
+
+Ritualist is allowed to be excellent at:
+
+- preparing a PC for repeated activities
+- running attended local procedures
+- making ritual state visible
+- showing target readiness
+- asking for confirmation at risk boundaries
+- logging what happened
+- recovering interrupted runs
+- letting users build Rooms for activities
+- suggesting safe drafts from local patterns
+- sharing and reusing safe templates after quarantine and review
+
+Ritualist is not allowed to become:
+
+- a Windows shell replacement
+- a file manager
+- a live wallpaper renderer
+- a generic widget marketplace
+- a general RPA suite
+- a macro recorder
+- a screen recorder, OCR tool, or Recall clone
+- a remote execution tool
+- a cloud automation service
+- a gameplay automation system
+- a password or credential automation system
+- an arbitrary-code component platform
+
+## Feature Freeze
+
+The v0.2 release line is in feature freeze. Do not add new product systems,
+primitive families, desktop-host experiments, browser-history collection,
+marketplace behavior, recording surfaces, or generic widgets while release
+acceptance is still open.
+
+After Desktop Work-Area Mode and wallpaper passthrough, desktop-host expansion
+is frozen. Do not pursue native blank-area click-through, component-island
+windows, WorkerW/Progman attachment, desktop icon integration, fullscreen couch
+mode, shell replacement, or taskbar manipulation until the ritual/Room loop is
+proven.
+
+Browser history and Recall-like sources are frozen. They are sensitive and not
+needed for the core loop.
+
+New primitive families are frozen unless a hero Room or runbook requires them
+and they pass the full gate: Doctor can check them, dry-run can explain them,
+policy can classify them, risky boundaries are confirmed, logs are useful,
+failure is recoverable, and imported packs remain safe.
+
+Marketplace behavior is frozen. Packs are allowed; marketplace distribution is
+not.
+
+Recording remains frozen permanently for this product direction: no Watch Me,
+record mode, teach-by-watching, macro recorder, global hooks, keylogging,
+screenshots, screen recording, OCR, or coordinate capture.
 
 ## Current Desktop Baseline
 

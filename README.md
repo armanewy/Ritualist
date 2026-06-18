@@ -1,6 +1,8 @@
 # Ritualist
 
-Ritualist is a local-first Windows desktop workflow automation app for repeatable personal routines. A ritual is a readable YAML recipe with explicit steps, validation, dry-run support, logs, and confirmation gates for risky actions.
+Ritualist turns Windows into activity-specific Rooms powered by safe local rituals that can be previewed, checked, run, paused, logged, and recovered. A ritual is a readable YAML recipe with explicit steps, validation, dry-run support, logs, recovery, and confirmation gates for risky actions.
+
+Ritualist is a local ritual/runbook engine with a desktop-native body. Recipes and rituals remain the center of gravity; Rooms, Canvas, shortcuts, packs, and future Suggestions exist to make rituals more visible, useful, and trustworthy. Ritualist is not a shell replacement, file manager, wallpaper engine, generic widget platform, general RPA suite, macro recorder, Recall clone, marketplace, cloud automation service, remote execution tool, password automation tool, or gameplay automation tool.
 
 This alpha implementation includes:
 
@@ -17,7 +19,7 @@ This alpha implementation includes:
 - Step-by-step logging, per-run logs, and status
 - Tests for the workflow engine using fake adapters
 
-Release-candidate details for `v0.2.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Product boundaries are documented in [docs/PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
+Release-candidate details for `v0.2.0-alpha.1` are in [CHANGELOG.md](CHANGELOG.md), [RELEASE_NOTES.md](RELEASE_NOTES.md), and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Product boundaries, feature freeze rules, and the six core product nouns are documented in [docs/PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md). Future risky primitive work is tracked in [docs/roadmap.md](docs/roadmap.md) and must follow [docs/mutating_risky_primitives_design.md](docs/mutating_risky_primitives_design.md).
 
 ## Install
 
@@ -94,7 +96,7 @@ The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status 
 
 ## Canvas Foundation
 
-Canvas is the next Ritualist product layer: a typed, customizable desktop command surface that Home can gradually render. It is not a true Windows shell replacement, does not hide the taskbar, and does not allow arbitrary QML, JavaScript, HTML, Python, shell snippets, or remote widgets.
+Canvas is the Room implementation layer: a typed desktop command surface that Home can gradually render. Canvas exists to express rituals, shortcut handoffs, target readiness, runtime status, and recovery; it is not a generic widget engine, true Windows shell replacement, taskbar hider, wallpaper renderer, or arbitrary QML, JavaScript, HTML, Python, shell, or remote-widget platform.
 
 Canvas documents are local YAML layouts made of native Ritualist components bound to recipes, intents, targets, runtime state, and static display data. Canvas validation is side-effect free; it does not run recipes, launch apps, click, type, open browsers, call UI Automation, or execute bindings.
 

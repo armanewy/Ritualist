@@ -1,18 +1,47 @@
 # Ritualist Roadmap
 
-This roadmap is intentionally conservative. Ritualist should expand by adding
-inspectable, typed, local primitives only after the policy, Doctor, dry-run,
-artifact, and test contracts are clear.
+This roadmap is intentionally conservative. Ritualist should be narrower than
+its architecture: a local ritual/runbook engine with a desktop-native Room
+surface. Recipes and rituals remain the center of gravity; Canvas, Rooms,
+shortcuts, Suggestions, and packs must serve ritual quality, Room usefulness,
+trust and safety, the Suggestion-to-draft loop, or pack/template reuse.
+
+Ritualist should not expand horizontally while release acceptance is open.
 
 ## Current Focus
 
+- Stabilize the v0.2 release line and cut feature creep.
+- Keep product boundaries executable through tests and release acceptance
+  evidence.
 - Keep Home and CLI workflows responsive and diagnosable.
-- Evolve Home toward Canvas, the typed customizable desktop command surface,
-  without replacing Explorer or adding arbitrary widget code.
-- Keep recipes local-first and structured.
+- Evolve Home toward Canvas as the Room implementation layer, without
+  replacing Explorer, hiding the taskbar, rendering wallpapers, or adding
+  arbitrary widget code.
+- Keep recipes local-first, structured, Doctor-checkable, dry-runnable,
+  confirmable, logged, and recoverable.
 - Improve target resolution and intent planning without adding arbitrary code
   execution.
 - Preserve imported-pack quarantine, disclosure, and policy checks.
+
+## Active Feature Freeze
+
+The current release line is frozen against new product systems and horizontal
+platform work. Do not add:
+
+- desktop-host expansion beyond Desktop Work-Area Mode and wallpaper
+  passthrough
+- native blank-area click-through, component-island windows, WorkerW/Progman
+  attachment, desktop icon integration, fullscreen couch mode, shell
+  replacement, or taskbar manipulation
+- browser history collection, Recall-like sources, screenshots, OCR, or
+  activity snapshots
+- Watch Me, record mode, macro recording, teach-by-watching, global hooks, or
+  coordinate capture
+- marketplace behavior
+- generic widget families or arbitrary-code component surfaces
+- new primitive families unless a hero Room or runbook requires them and the
+  full Doctor, dry-run, policy, confirmation, logging, recovery, and pack-safety
+  gates are designed first
 
 ## Canvas Sequence
 
@@ -21,14 +50,16 @@ artifact, and test contracts are clear.
   and explicit action dispatch through existing safe services.
 - Canvas Use Mode: current. The MVP renderer uses the Canvas view model,
   component geometry, runtime state, and explicit safe dispatch.
-- Canvas Edit Mode: later. Editing should configure typed native components,
-  never arbitrary user-supplied QML, JavaScript, HTML, or Python.
-- Visual polish: after packaged Canvas Use Mode dogfood.
+- Canvas Edit Mode / Room Builder: later, after the release gate. Editing
+  should configure typed native components, never arbitrary user-supplied QML,
+  JavaScript, HTML, or Python.
+- Visual polish: only when it improves one of the hero Room loops.
 
 ## Near-Term Primitive Direction
 
-- Continue adding read-only primitives that improve Doctor, planning, and
-  diagnostics.
+- Do not add new primitive families during the active feature freeze.
+- Keep existing read-only primitives focused on Doctor, planning, diagnostics,
+  and hero Room needs.
 - Keep mutation out of imported packs by default.
 - Keep target and intent plans previewable before execution.
 - Use fake adapters and golden JSON fixtures for all new primitive families.
