@@ -68,6 +68,26 @@ def test_canvas_use_qml_renders_structured_ritual_state_hierarchy() -> None:
         assert snippet in qml
 
 
+def test_canvas_use_qml_has_quiet_instrument_active_run_layout() -> None:
+    qml = _qml()
+
+    for snippet in (
+        "function quietInstrumentState(status)",
+        "function componentIsQuietInstrument(component)",
+        "function quietInstrumentEngaged()",
+        'component.type !== "ritual.card"',
+        "property bool quietInstrument: root.componentIsQuietInstrument(modelData)",
+        "property bool receded: !quietInstrument && root.quietInstrumentEngaged()",
+        "property real quietWidth",
+        "property real quietHeight",
+        "x: quietInstrument ? Math.max(root.spaceLg",
+        "z: quietInstrument ? 900 : modelData.z",
+        "opacity: componentShell.receded ? 0.46",
+        "enabled: root.animationsEnabled && !root.editMode",
+    ):
+        assert snippet in qml
+
+
 def test_canvas_use_qml_uses_existing_ritual_actions_with_state_specific_labels() -> None:
     qml = _qml()
 
@@ -104,6 +124,23 @@ def test_canvas_use_qml_gives_shortcuts_distinct_instant_action_visuals() -> Non
         '"URL"',
         '"Instant " + kind + " shortcut"',
         "componentData.data.shortcut.target_label",
+    ):
+        assert snippet in qml
+
+
+def test_canvas_use_qml_gives_target_cards_dedicated_readiness_surface() -> None:
+    qml = _qml()
+
+    for snippet in (
+        'if (typeName === "target.card")',
+        "return targetDelegate",
+        "id: targetDelegate",
+        "property var targetData",
+        "Target readiness",
+        "targetData.status || componentData.status || \"ready\"",
+        "targetData.summary || root.detailText(componentData)",
+        "text: root.actionLabel(modelData, componentData)",
+        "root.dispatch(componentData.id, modelData)",
     ):
         assert snippet in qml
 

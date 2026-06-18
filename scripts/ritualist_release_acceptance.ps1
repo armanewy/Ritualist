@@ -2065,7 +2065,7 @@ function Invoke-CanvasStaticActions {
         }
 
         $previewTree = Save-WindowTree "target-card-preview-before" $window
-        $previewInvoked = Invoke-NamedButton $window "preview_plan" 15
+        $previewInvoked = Invoke-AnyNamedButton $window @("preview_plan", "Preview Plan") 15
         $previewStatus = Wait-CanvasStatusEvent "diablo_target" "target plan preview completed" "success" 15
         $previewShot = Save-Screenshot "target-card-preview-after"
         $previewCommand = Invoke-CapturedCommand "target-preview" "python" @(

@@ -235,6 +235,30 @@ ApplicationWindow {
                typeName === "shortcut.url" || typeName === "app.launcher"
     }
 
+    function quietInstrumentState(status) {
+        return root.stateIsActive(status) || root.stateIsDanger(status)
+    }
+
+    function componentIsQuietInstrument(component) {
+        if (!component || root.editMode || component.type !== "ritual.card") {
+            return false
+        }
+        return root.quietInstrumentState(root.activeState(component))
+    }
+
+    function quietInstrumentEngaged() {
+        if (root.editMode) {
+            return false
+        }
+        var all = root.components()
+        for (var i = 0; i < all.length; i += 1) {
+            if (root.componentIsQuietInstrument(all[i])) {
+                return true
+            }
+        }
+        return false
+    }
+
     function ritualState(component) {
         var data = component.data || {}
         return data.ritual_state || {}
@@ -487,6 +511,9 @@ ApplicationWindow {
         }
         if (typeName === "category.dock") {
             return dockDelegate
+        }
+        if (typeName === "target.card") {
+            return targetDelegate
         }
         if (typeName === "target.status") {
             return statusDelegate
@@ -1086,13 +1113,39 @@ ApplicationWindow {
                             id: componentShell
                             property string componentId: modelData.id
                             property bool selected: root.editMode && root.selectedComponentId() === componentId
+                            property string componentVisualState: root.activeState(modelData)
+                            property bool quietInstrument: root.componentIsQuietInstrument(modelData)
+                            property bool receded: !quietInstrument && root.quietInstrumentEngaged()
+                            property real quietAvailableWidth: Math.max(320, scroll.width - root.spaceLg * 2)
+                            property real quietWidth: Math.min(quietAvailableWidth, Math.max(520, Math.round(scroll.width * 0.36)), 640)
+                            property real quietHeight: Math.min(Math.max(280, modelData.height), Math.max(280, scroll.height - root.spaceLg * 2), 360)
 
-                            x: modelData.x
-                            y: modelData.y
-                            z: modelData.z
-                            width: modelData.width
-                            height: modelData.height
+                            x: quietInstrument ? Math.max(root.spaceLg, Math.round(scroll.width - quietWidth - root.spaceLg)) : modelData.x
+                            y: quietInstrument ? Math.max(root.spaceLg, Math.round((scroll.height - quietHeight) / 2)) : modelData.y
+                            z: quietInstrument ? 900 : modelData.z
+                            width: quietInstrument ? quietWidth : modelData.width
+                            height: quietInstrument ? quietHeight : modelData.height
                             visible: modelData.visible
+
+                            Behavior on x {
+                                enabled: root.animationsEnabled && !root.editMode
+                                NumberAnimation { duration: root.motionNormalMs }
+                            }
+
+                            Behavior on y {
+                                enabled: root.animationsEnabled && !root.editMode
+                                NumberAnimation { duration: root.motionNormalMs }
+                            }
+
+                            Behavior on width {
+                                enabled: root.animationsEnabled && !root.editMode
+                                NumberAnimation { duration: root.motionNormalMs }
+                            }
+
+                            Behavior on height {
+                                enabled: root.animationsEnabled && !root.editMode
+                                NumberAnimation { duration: root.motionNormalMs }
+                            }
 
                             Rectangle {
                                 id: componentShadow
@@ -1102,7 +1155,7 @@ ApplicationWindow {
                                 height: parent.height
                                 radius: root.radiusLg
                                 color: root.token("border", "#203044")
-                                opacity: root.shadowMode === "rich" ? 0.22 : 0.12
+                                opacity: componentShell.receded ? 0.04 : (root.shadowMode === "rich" ? 0.22 : 0.12)
                                 visible: root.shadowMode !== "none" && index < root.maxAnimatedComponents
                             }
 
@@ -1113,10 +1166,10 @@ ApplicationWindow {
 
                             anchors.fill: parent
                             radius: root.radiusLg
-                            color: root.componentColor(modelData.status, modelData.type)
-                            border.color: selected ? root.token("accent", "#3dd6a5") : root.borderColor(modelData.status)
+                            color: root.componentColor(componentShell.componentVisualState, modelData.type)
+                            border.color: selected ? root.token("accent", "#3dd6a5") : root.borderColor(componentShell.componentVisualState)
                             border.width: selected ? 3 : 1
-                            opacity: root.actionBusy && !selected ? 0.92 : 1.0
+                            opacity: componentShell.receded ? 0.46 : (root.actionBusy && !selected ? 0.92 : 1.0)
 
                             Behavior on opacity {
                                 enabled: root.animationsEnabled && index < root.maxAnimatedComponents
@@ -2191,6 +2244,120 @@ ApplicationWindow {
                         compact: true
                         enabled: !root.actionBusy && !root.mockMode
                         Layout.preferredWidth: 104
+                        onClicked: root.dispatch(componentData.id, modelData)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: targetDelegate
+
+        ColumnLayout {
+            property var componentData: ({})
+            property var targetData: componentData.data && componentData.data.target ? componentData.data.target : ({})
+
+            spacing: root.spaceSm
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: root.borderColor(componentData.status)
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 1
+
+                    Text {
+                        text: componentData.title || componentData.id
+                        color: root.token("foreground", "#f4f7fb")
+                        font.family: root.token("font_family", "Segoe UI")
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: "Target readiness"
+                        color: root.borderColor(componentData.status)
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 54
+                radius: root.radiusMd
+                color: root.token("panel_alt", "#101720")
+                border.color: root.token("border", "#203044")
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.spaceSm
+                    spacing: 1
+
+                    Text {
+                        text: targetData.status || componentData.status || "ready"
+                        color: root.token("foreground", "#f4f7fb")
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: targetData.summary || root.detailText(componentData)
+                        color: root.token("muted", "#91a2b8")
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            Text {
+                text: componentData.warnings && componentData.warnings.length ? componentData.warnings.join("; ") : ""
+                color: root.token("warning", "#f5c45b")
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                visible: text.length > 0
+                Layout.fillWidth: true
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: root.spaceSm
+                visible: !root.editMode && componentData.enabled_actions && componentData.enabled_actions.length > 0
+
+                Repeater {
+                    model: componentData.enabled_actions || []
+
+                    PaperButton {
+                        text: root.actionLabel(modelData, componentData)
+                        role: root.actionRole(modelData)
+                        compact: true
+                        width: Math.max(116, Math.min(150, parent.width))
+                        enabled: !root.actionBusy && !root.mockMode
                         onClicked: root.dispatch(componentData.id, modelData)
                     }
                 }
