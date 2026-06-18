@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from .learning_config import LocalLearningConfig
 from .paths import config_file_path, default_log_file
 
 if TYPE_CHECKING:
@@ -57,6 +58,7 @@ class AppConfig:
     ui: UIConfig = field(default_factory=UIConfig)
     home: HomeConfig = field(default_factory=HomeConfig)
     canvas: CanvasConfig = field(default_factory=CanvasConfig)
+    learning: LocalLearningConfig = field(default_factory=LocalLearningConfig)
 
 
 def load_app_config(path: Path | None = None) -> AppConfig:
@@ -76,6 +78,10 @@ def load_app_config(path: Path | None = None) -> AppConfig:
     home = _load_home_config(home_raw if isinstance(home_raw, dict) else {})
     canvas_raw = raw.get("canvas")
     canvas = _load_canvas_config(canvas_raw if isinstance(canvas_raw, dict) else {})
+    learning_raw = raw.get("learning")
+    learning = LocalLearningConfig.from_mapping(
+        learning_raw if isinstance(learning_raw, dict) else {}
+    )
     log_file = Path(str(raw["log_file"])) if raw.get("log_file") else default_log_file()
     return AppConfig(
         default_browser=str(raw.get("default_browser") or "chromium"),
@@ -84,6 +90,7 @@ def load_app_config(path: Path | None = None) -> AppConfig:
         ui=ui,
         home=home,
         canvas=canvas,
+        learning=learning,
     )
 
 
