@@ -94,6 +94,21 @@ setpiece home --mock
 
 The Home mock uses bundled QML, 100+ generated cards, and coalesced fake status updates only; it does not run recipes, click windows, open browsers, or call runtime automation.
 
+## Tray Agent Prototype
+
+The tray-first Agent is the current UX direction for Setpiece. In the packaged
+build, `dist\Setpiece\Setpiece.exe --agent --startup` starts silently with one
+tray icon and no startup window, and `dist\Setpiece\Setpiece.exe --agent
+--open-picker` opens the Picker directly. `Win+Ctrl+R` toggles the same Picker
+while idle and reveals the same Quiet Instrument when a preflight or active
+ritual is present.
+
+Home remains the default packaged entry and compatibility/support surface in
+this release line until default-entry migration is explicitly completed. The
+latest UX3 physical gate evidence is recorded in
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md); the release remains untaggable
+until the separate live Gaming integration gate passes.
+
 ## Canvas Foundation
 
 Canvas is the Room implementation layer: a typed desktop command surface that Home can gradually render. Canvas exists to express rituals, shortcut handoffs, target readiness, runtime status, and recovery; it is not a generic widget engine, true Windows shell replacement, taskbar hider, wallpaper renderer, or arbitrary QML, JavaScript, HTML, Python, shell, or remote-widget platform.
@@ -489,7 +504,14 @@ The build script runs PyInstaller in one-folder/windowed mode and writes:
 dist\Setpiece\Setpiece.exe
 ```
 
-`Setpiece.exe` launches Home through `setpiece.desktop_entry`; it does not run any ritual automatically. The classic GUI remains available with `dist\Setpiece\Setpiece.exe --classic-gui` or `dist\Setpiece\Setpiece.exe --gui`. The normal development CLI stays available through `python -m setpiece` and the `setpiece` console command.
+`Setpiece.exe` launches Home through `setpiece.desktop_entry`; it does not run
+any ritual automatically. The tray Agent prototype is available with
+`dist\Setpiece\Setpiece.exe --agent --startup` for silent tray startup and
+`dist\Setpiece\Setpiece.exe --agent --open-picker` for direct Picker launch.
+The classic GUI remains available with `dist\Setpiece\Setpiece.exe
+--classic-gui` or `dist\Setpiece\Setpiece.exe --gui`. The normal development
+CLI stays available through `python -m setpiece` and the `setpiece` console
+command.
 
 Home QML files and bundled sample recipes are collected into the app bundle so Home can load and **Initialize App** in the classic GUI can still install `gaming_mode.yaml`; starter workspace templates remain available as packaged samples. User data still belongs in the platform user-data directory shown by `setpiece paths`; recipes, logs, runs, and browser profiles should not be stored inside `dist\Setpiece`.
 
@@ -499,6 +521,7 @@ Manual packaged-build smoke checks:
 Dev CLI: pytest, compileall, init, Doctor JSON, dry-run, actions JSON, perf fake-run, perf home-model 100/300, and pack export/import/list.
 Home/QML: python -m setpiece home --help, python -m setpiece home --mock, and offscreen optional-dependency tests where available.
 Packaged one-folder: build dist\Setpiece\Setpiece.exe, launch Home, launch --classic-gui, open diagnostics, initialize, refresh recipes, load installed recipes, dry-run gaming_mode, and open logs/runs.
+Tray Agent: run dist\Setpiece\Setpiece.exe --agent --startup, verify no startup window, tray left-click opens/toggles Picker, Win+Ctrl+R opens/toggles Picker, outside click dismisses the idle Picker, and an active preflight tray/hotkey interaction returns to the same Quiet Instrument.
 Real Windows UIA/Battle.net: run gaming_mode from Home, pause/resume a wait action, stop an active ritual, hard-kill during a run, relaunch, and verify interrupted repair.
 ```
 

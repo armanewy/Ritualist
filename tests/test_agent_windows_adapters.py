@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 import setpiece.agent.window_activation as window_activation
-from setpiece.agent.window_activation import _apply_transient_tool_window_style, place_qml_window
+from setpiece.agent.window_activation import (
+    _activate_win32_window,
+    _apply_transient_tool_window_style,
+    place_qml_window,
+)
 from setpiece.agent.windows.hotkey import (
     ERROR_HOTKEY_ALREADY_REGISTERED,
     DEFAULT_HOTKEY,
@@ -83,6 +87,59 @@ class FakeWindowStyleApi:
     def SetWindowPos(self, hwnd, _insert_after, _x, _y, _cx, _cy, flags):
         self.set_window_pos_calls.append((int(hwnd), 0, int(flags)))
         return True
+
+
+class FakeActivationUser32:
+    def __init__(self, *, foreground_after_set: bool = False, switch_succeeds: bool = True) -> None:
+        self.foreground_after_set = foreground_after_set
+        self.switch_succeeds = switch_succeeds
+        self.foreground = 999
+        self.calls: list[tuple[str, int]] = []
+
+    def ShowWindow(self, hwnd, _show):
+        self.calls.append(("ShowWindow", int(hwnd)))
+        return True
+
+    def SetWindowPos(self, hwnd, _insert_after, _x, _y, _cx, _cy, _flags):
+        self.calls.append(("SetWindowPos", int(hwnd)))
+        return True
+
+    def GetWindowThreadProcessId(self, hwnd, _pid):
+        return 20 if int(hwnd) == self.foreground else 10
+
+    def GetForegroundWindow(self):
+        return self.foreground
+
+    def AttachThreadInput(self, _source, _target, _attach):
+        return True
+
+    def BringWindowToTop(self, hwnd):
+        self.calls.append(("BringWindowToTop", int(hwnd)))
+        return True
+
+    def SetForegroundWindow(self, hwnd):
+        self.calls.append(("SetForegroundWindow", int(hwnd)))
+        if self.foreground_after_set:
+            self.foreground = int(hwnd)
+        return True
+
+    def SetActiveWindow(self, hwnd):
+        self.calls.append(("SetActiveWindow", int(hwnd)))
+        return hwnd
+
+    def SetFocus(self, hwnd):
+        self.calls.append(("SetFocus", int(hwnd)))
+        return hwnd
+
+    def SwitchToThisWindow(self, hwnd, _alt_tab):
+        self.calls.append(("SwitchToThisWindow", int(hwnd)))
+        if self.switch_succeeds:
+            self.foreground = int(hwnd)
+
+
+class FakeKernel32:
+    def GetCurrentThreadId(self):
+        return 30
 
 
 class FakeWinTypes:
@@ -181,6 +238,25 @@ def test_transient_tool_windows_are_removed_from_taskbar_style() -> None:
     assert api.set_window_pos_calls[0][2] & 0x0020
 
 
+def test_activate_win32_window_falls_back_when_foreground_lock_blocks_focus() -> None:
+    api = FakeActivationUser32(foreground_after_set=False)
+
+    _activate_win32_window(api, FakeKernel32(), FakeWinTypes, 123, api.SwitchToThisWindow)
+
+    assert ("SetForegroundWindow", 123) in api.calls
+    assert ("SwitchToThisWindow", 123) in api.calls
+    assert api.foreground == 123
+
+
+def test_activate_win32_window_skips_fallback_when_foreground_succeeds() -> None:
+    api = FakeActivationUser32(foreground_after_set=True)
+
+    _activate_win32_window(api, FakeKernel32(), FakeWinTypes, 123, api.SwitchToThisWindow)
+
+    assert ("SetForegroundWindow", 123) in api.calls
+    assert ("SwitchToThisWindow", 123) not in api.calls
+
+
 def test_picker_window_is_placed_near_bottom_right_work_area(monkeypatch) -> None:
     monkeypatch.setattr(window_activation, "_screen_at_cursor", lambda: None)
     root = FakePositionedRoot(FakeQtRect(100, 50, 1200, 800), width=400, height=520)
@@ -215,6 +291,20 @@ def test_hotkey_registers_against_message_window_when_available() -> None:
     assert winapi.register_calls == [(1234, 0x5254, 0x0008 | 0x0002, ord("R"))]
     assert winapi.unregister_calls == [(1234, 0x5254)]
     assert winapi.destroyed == [1234]
+
+
+def test_hotkey_poll_debounces_duplicate_messages_from_one_chord() -> None:
+    winapi = FakeHotkeyWinApi()
+    adapter = WindowsGlobalHotkeyAdapter(winapi=winapi, platform="win32")
+    adapter.register()
+    winapi.messages.extend([0x5254, 0x5254])
+
+    first = adapter.poll()
+    duplicate = adapter.poll()
+    adapter.unregister()
+
+    assert first is not None
+    assert duplicate is None
 
 
 def test_hotkey_conflict_reports_failure_without_marking_registered() -> None:

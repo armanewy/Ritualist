@@ -107,6 +107,7 @@ class QmlInstrumentSurface:
             self._root.show()
         place_qml_window(self._root, anchor="right-center", fallback_width=420, fallback_height=520)
         activate_qml_window(self._root)
+        _schedule_activation_retries(self._root)
         record_event("agent.instrument.show")
 
     def hide(self) -> None:
@@ -115,11 +116,13 @@ class QmlInstrumentSurface:
         record_event("agent.instrument.hide")
 
     def collapse(self, reason: str = "collapse") -> None:
+        if self._root is not None and hasattr(self._root, "setProperty"):
+            self._root.setProperty("collapsed", True)
         self.on_collapse(reason)
         record_event("agent.instrument.collapse", reason=reason)
 
     def toggle(self) -> None:
-        if self.visible:
+        if self.visible and not self._collapsed:
             self.collapse("toggle")
         else:
             self.show()
@@ -154,6 +157,16 @@ class QmlInstrumentSurface:
         if not roots:
             raise DependencyMissingError("Quiet Instrument QML failed to load")
         self._root = roots[0]
+
+    @property
+    def _collapsed(self) -> bool:
+        root = self._root
+        if root is None:
+            return False
+        try:
+            return bool(root.property("collapsed"))
+        except Exception:
+            return False
 
 
 @dataclass(frozen=True)
@@ -235,6 +248,27 @@ def _create_bridge(qt: _InstrumentQt, surface: QmlInstrumentSurface) -> Any:
             surface.set_keep_visible(keep_visible)
 
     return InstrumentBridge()
+
+
+def _schedule_activation_retries(root: Any) -> None:
+    try:
+        from PySide6.QtCore import QTimer
+    except ImportError:
+        return
+
+    for delay_ms in (75, 200):
+        QTimer.singleShot(delay_ms, lambda root=root: _activate_if_visible(root))
+
+
+def _activate_if_visible(root: Any) -> None:
+    try:
+        if hasattr(root, "isVisible") and not root.isVisible():
+            return
+        if hasattr(root, "property") and bool(root.property("collapsed")):
+            return
+    except Exception:
+        return
+    activate_qml_window(root)
 
 
 def _current_step_payload(model: InstrumentModel) -> dict[str, object]:

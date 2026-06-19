@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import sys
+from time import monotonic
 from typing import Any
 
 
@@ -111,6 +112,7 @@ class WindowsGlobalHotkeyAdapter:
         self._registered = False
         self._hwnd: Any | None = None
         self._api_instance: Any | None = winapi
+        self._last_event_at = 0.0
 
     def register(self) -> HotkeyRegistrationResult:
         if not self._is_windows():
@@ -211,6 +213,10 @@ class WindowsGlobalHotkeyAdapter:
         message = self._api().peek_hotkey_message()
         if message is None or int(message) != self.hotkey_id:
             return None
+        occurred_at = monotonic()
+        if occurred_at - self._last_event_at < 0.35:
+            return None
+        self._last_event_at = occurred_at
         return HotkeyEvent(hotkey_id=self.hotkey_id, hotkey=self.hotkey)
 
     def close(self) -> None:

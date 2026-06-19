@@ -31,6 +31,7 @@ Window {
     property bool actionBusy: pickerController ? pickerController.actionBusy : false
     property bool compactActions: width < 380
     property bool idle: !actionBusy && !activeSummary.pendingConfirmation
+    property bool outsideDismissArmed: false
 
     signal requestPreflight(string ritualId)
     signal requestBrowseAllRituals()
@@ -105,17 +106,36 @@ Window {
     }
 
     onActiveChanged: {
+        if (active) {
+            outsideDismissArmed = true
+            return
+        }
+        if (!outsideDismissArmed) {
+            return
+        }
         if (!active) {
             dismissIfIdle("outside")
         }
     }
     onVisibleChanged: {
         if (visible) {
+            outsideDismissArmed = false
+            outsideDismissArmTimer.restart()
             searchField.forceActiveFocus()
+        } else {
+            outsideDismissArmTimer.stop()
         }
     }
 
     Component.onCompleted: searchField.forceActiveFocus()
+
+    Timer {
+        id: outsideDismissArmTimer
+
+        interval: 250
+        repeat: false
+        onTriggered: root.outsideDismissArmed = true
+    }
 
     Rectangle {
         id: surface

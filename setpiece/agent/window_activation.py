@@ -70,6 +70,10 @@ def activate_qml_window(root: Any) -> None:
         user32.SetFocus.restype = wintypes.HWND
         user32.GetForegroundWindow.argtypes = []
         user32.GetForegroundWindow.restype = wintypes.HWND
+        switch_to_this_window = getattr(user32, "SwitchToThisWindow", None)
+        if switch_to_this_window is not None:
+            switch_to_this_window.argtypes = [wintypes.HWND, wintypes.BOOL]
+            switch_to_this_window.restype = None
         user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         kernel32.GetCurrentThreadId.argtypes = []
@@ -88,7 +92,7 @@ def activate_qml_window(root: Any) -> None:
         user32.SetWindowPos.restype = wintypes.BOOL
         handle = wintypes.HWND(hwnd)
         _apply_transient_tool_window_style(user32, wintypes, ctypes, handle)
-        _activate_win32_window(user32, kernel32, wintypes, handle)
+        _activate_win32_window(user32, kernel32, wintypes, handle, switch_to_this_window)
     except Exception:
         return
 
@@ -172,7 +176,13 @@ def _set_root_position(root: Any, x: int, y: int) -> None:
         return
 
 
-def _activate_win32_window(user32: Any, kernel32: Any, wintypes: Any, handle: Any) -> None:
+def _activate_win32_window(
+    user32: Any,
+    kernel32: Any,
+    wintypes: Any,
+    handle: Any,
+    switch_to_this_window: Any | None = None,
+) -> None:
     sw_show = 5
     hwnd_topmost = wintypes.HWND(-1)
     hwnd_notopmost = wintypes.HWND(-2)
@@ -202,6 +212,8 @@ def _activate_win32_window(user32: Any, kernel32: Any, wintypes: Any, handle: An
         user32.SetForegroundWindow(handle)
         user32.SetActiveWindow(handle)
         user32.SetFocus(handle)
+        if switch_to_this_window is not None and int(user32.GetForegroundWindow() or 0) != int(handle):
+            switch_to_this_window(handle, True)
     finally:
         for thread_id in attached:
             user32.AttachThreadInput(current_thread, thread_id, False)

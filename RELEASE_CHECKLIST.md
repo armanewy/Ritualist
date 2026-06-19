@@ -45,6 +45,76 @@ Remove-Item Env:\PYTHONFAULTHANDLER -ErrorAction SilentlyContinue
 
 On Linux CI, keep `QT_QPA_PLATFORM=offscreen` for optional GUI/Home tests.
 
+## UX3 Physical Gate - 2026-06-19
+
+Status: UX3 HUMAN PASS for the tray-first physical interaction gate. This did
+not start UX4, did not create a release tag, and does not satisfy the separate
+live Gaming integration gate.
+
+Starting HEAD:
+
+- `7a077759c9c9dc42e039a44accee917ff8f46f2a`
+  (`Fix packaged agent human review blockers`).
+
+Fixes applied for this gate:
+
+- Tray left-click now toggles the active Quiet Instrument when a preflight or
+  active ritual occupies the attended slot instead of opening an unrelated
+  Picker.
+- Picker hotkey dismissal now records a hotkey dismissal, returns focus, and
+  consumes the short focus-handoff race where the Picker can be outside-dismissed
+  immediately before the hotkey handler runs.
+- Agent and Win32 hotkey handling debounce duplicate messages from a single
+  hotkey chord.
+- Delayed foreground activation retries now skip hidden Picker surfaces and
+  hidden or collapsed Instrument surfaces so dismissals/collapses do not revive
+  stale surfaces.
+
+Validation evidence:
+
+- `python -m pytest -q tests/test_agent_app.py tests/test_agent_windows_adapters.py --basetemp=.tmp\pytest-ux3-focused`:
+  focused agent/window tests passed.
+- `python -m compileall -q setpiece\agent tests\test_agent_app.py tests\test_agent_windows_adapters.py`:
+  passed.
+- `.\scripts\build_windows_app.ps1`: passed and rebuilt
+  `dist\Setpiece\Setpiece.exe`.
+- UX3 physical gate command:
+  `python .tmp\ux3_physical_gate.py`.
+
+UX3 physical gate artifacts:
+
+- Summary JSON:
+  `artifacts\ux3-physical-gate-current\ux3-physical-gate-summary.json`
+- Summary Markdown:
+  `artifacts\ux3-physical-gate-current\ux3-physical-gate-summary.md`
+- Screenshots:
+  `artifacts\ux3-physical-gate-current\screenshots`
+- E2E events:
+  `artifacts\ux3-physical-gate-current\e2e-events`
+
+UX3 result:
+
+- Tray left-click: `PASS`.
+- `Win+Ctrl+R`: `PASS`.
+- Idle Picker outside-click dismissal: `PASS`.
+- Ready/preflight Instrument outside-click distinction: `PASS`; it stayed on the
+  same tray-resident Instrument surface without cancelling or duplicating.
+- Running/waiting and confirmation outside-click distinctions were not exercised
+  by this startup-only packaged Agent gate and are not claimed by this evidence.
+- Duplicate icon/process: `no`.
+- Unexpected taskbar or Alt+Tab entry: `no`.
+- Focus restored correctly: `yes`.
+- Severity-3/4 issue found: `no`.
+- Decision: `UX3 HUMAN PASS` for the tray-left-click, `Win+Ctrl+R`, idle Picker
+  outside-click, and ready/preflight Instrument checks covered by the artifact.
+
+Release note:
+
+- UX4 may begin from this UX3 gate result.
+- `v0.2.0-alpha.1` is still not taggable until the separate live Gaming
+  integration gate passes.
+- No release tag was created.
+
 ## Setpiece Rebrand UX3 Evidence - 2026-06-19
 
 Status: Atomic product identity integration for UX3 human prototype review.

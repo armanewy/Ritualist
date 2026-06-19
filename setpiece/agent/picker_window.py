@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib.resources import files
+from time import monotonic
 from typing import Any
 
 from setpiece.e2e import record_event
@@ -96,6 +97,8 @@ class QmlPickerSurface:
         self._engine: Any | None = None
         self._root: Any | None = None
         self._bridge: Any | None = None
+        self._last_dismissed_at: float = 0.0
+        self._last_dismissed_reason: str = ""
 
     @property
     def payload(self) -> dict[str, object]:
@@ -117,6 +120,7 @@ class QmlPickerSurface:
             self._root.show()
         place_qml_window(self._root, anchor="bottom-right", fallback_width=400, fallback_height=520)
         activate_qml_window(self._root)
+        _schedule_activation_retries(self._root)
         record_event("agent.picker.show")
 
     def hide(self) -> None:
@@ -126,7 +130,9 @@ class QmlPickerSurface:
 
     def toggle(self) -> None:
         if self.visible:
-            self.hide()
+            self.dismiss_from_hotkey()
+        elif self._recently_dismissed_by_focus_handoff():
+            record_event("agent.picker.hotkey_toggle_consumed", prior_reason=self._last_dismissed_reason)
         else:
             self.show()
 
@@ -164,8 +170,21 @@ class QmlPickerSurface:
         return intent
 
     def dismiss(self, reason: str) -> None:
+        self._last_dismissed_at = monotonic()
+        self._last_dismissed_reason = reason
         record_event("agent.picker.dismiss", reason=reason)
         self.hide()
+
+    def dismiss_from_hotkey(self) -> None:
+        root = self._root
+        if root is not None and hasattr(root, "dismissFromHotkey"):
+            try:
+                root.dismissFromHotkey()
+                return
+            except Exception:
+                pass
+        self.dismiss("hotkey")
+        self.return_focus_to_prior_app()
 
     def return_focus_to_prior_app(self) -> None:
         record_event("agent.picker.return_focus")
@@ -185,6 +204,11 @@ class QmlPickerSurface:
         self._root = roots[0]
         _connect_if_present(self._root, "requestDismiss", self.dismiss)
         _connect_if_present(self._root, "requestReturnFocusToPriorApp", self.return_focus_to_prior_app)
+
+    def _recently_dismissed_by_focus_handoff(self) -> bool:
+        if self._last_dismissed_reason != "outside":
+            return False
+        return monotonic() - self._last_dismissed_at <= 0.35
 
 
 @dataclass(frozen=True)
@@ -253,3 +277,22 @@ def _connect_if_present(root: Any, signal_name: str, callback: Callable[..., Non
     signal = getattr(root, signal_name, None)
     if signal is not None and hasattr(signal, "connect"):
         signal.connect(callback)
+
+
+def _schedule_activation_retries(root: Any) -> None:
+    try:
+        from PySide6.QtCore import QTimer
+    except ImportError:
+        return
+
+    for delay_ms in (75, 200):
+        QTimer.singleShot(delay_ms, lambda root=root: _activate_if_visible(root))
+
+
+def _activate_if_visible(root: Any) -> None:
+    try:
+        if hasattr(root, "isVisible") and not root.isVisible():
+            return
+    except Exception:
+        return
+    activate_qml_window(root)

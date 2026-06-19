@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any, Callable
 
 from setpiece.approvals import ConfirmationDecision
@@ -50,6 +51,8 @@ class ResidentAgent:
     runtime_events: list[str] = field(default_factory=list)
     blocked_start_requests: list[str] = field(default_factory=list)
     exit_requested: bool = False
+    hotkey_clock: Callable[[], float] = monotonic
+    _last_hotkey_at: float = 0.0
 
     def __post_init__(self) -> None:
         self.run_coordinator = AgentRunCoordinator(self.state)
@@ -84,13 +87,21 @@ class ResidentAgent:
             self.handle_activation(ActivationIntent("exit"))
             return
         if action == MenuAction.OPEN_SETPIECE:
-            self.open_picker(toggle=True)
+            if self.run_coordinator.attended_slot_occupied:
+                self.toggle_instrument()
+            else:
+                self.open_picker(toggle=True)
             return
         intent = _intent_for_menu_action(action)
         if intent is not None:
             self.handle_activation(intent)
 
     def handle_hotkey(self) -> None:
+        occurred_at = self.hotkey_clock()
+        if occurred_at - self._last_hotkey_at < 0.35:
+            record_event("agent.hotkey.debounce")
+            return
+        self._last_hotkey_at = occurred_at
         if self.state.state == AgentRunState.IDLE:
             self.open_picker(toggle=True)
         else:
@@ -143,6 +154,19 @@ class ResidentAgent:
         instrument = self._ensure_instrument()
         instrument.show()
         self.opened_surfaces.append("open_active_ritual")
+
+    def toggle_instrument(self) -> None:
+        instrument = self._ensure_instrument()
+        record_event(
+            "agent.instrument.toggle",
+            visible=bool(getattr(instrument, "visible", False)),
+            collapsed=_surface_collapsed(instrument),
+        )
+        if hasattr(instrument, "toggle"):
+            instrument.toggle()
+        else:
+            instrument.show()
+        self.opened_surfaces.append("toggle_active_ritual")
 
     def handle_instrument_primary_action(self, _state: str, action: str) -> None:
         if action == "start_ritual":
@@ -378,6 +402,16 @@ def _intent_for_menu_action(action: MenuAction) -> ActivationIntent | None:
         MenuAction.OPEN_SETTINGS: ActivationIntent("open_settings"),
     }
     return mapping.get(action)
+
+
+def _surface_collapsed(surface: Any) -> bool:
+    collapsed = getattr(surface, "collapsed", None)
+    if collapsed is not None:
+        return bool(collapsed)
+    collapsed = getattr(surface, "_collapsed", None)
+    if collapsed is not None:
+        return bool(collapsed)
+    return False
 
 
 def _default_picker_factory(agent: ResidentAgent) -> QmlPickerSurface:

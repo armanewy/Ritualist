@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from setpiece.agent.activation import ActivationIntent
 from setpiece.agent.app import start_agent
@@ -14,7 +15,7 @@ from setpiece.agent.picker_model import (
     PickerRitual,
     PickerRoom,
 )
-from setpiece.agent.picker_window import FakePickerSurface
+from setpiece.agent.picker_window import FakePickerSurface, QmlPickerSurface
 from setpiece.agent.single_instance import InstanceActivationResult
 from setpiece.agent.tray import FakeApplication, FakeSystemTrayIcon, fake_qt_types
 from setpiece.agent.windows.hotkey import DEFAULT_HOTKEY, HotkeyEvent, HotkeyRegistrationResult
@@ -183,6 +184,35 @@ def test_tray_left_click_routes_to_picker() -> None:
     assert surfaces[0].visible is False
 
 
+def test_tray_left_click_toggles_active_instrument_instead_of_picker() -> None:
+    coordinator, _server = _primary_coordinator()
+    pickers: list[FakePickerSurface] = []
+    instruments: list[FakeInstrumentSurface] = []
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        picker_factory=lambda agent: _fake_picker(agent, pickers),
+        instrument_factory=lambda agent: _fake_instrument(agent, instruments),
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+
+    result.agent.open_preflight("gaming_mode")
+    result.agent.tray.system_tray_icon.activated.emit(FakeSystemTrayIcon.ActivationReason.Trigger)
+
+    assert result.agent.opened_surfaces[-1] == "toggle_active_ritual"
+    assert pickers == []
+    assert instruments[0].visible is True
+    assert instruments[0].collapsed is True
+
+    result.agent.tray.system_tray_icon.activated.emit(FakeSystemTrayIcon.ActivationReason.Trigger)
+
+    assert instruments[0].visible is True
+    assert instruments[0].collapsed is False
+
+
 def test_hotkey_toggles_picker_while_idle() -> None:
     coordinator, _server = _primary_coordinator()
     surfaces: list[FakePickerSurface] = []
@@ -205,6 +235,39 @@ def test_hotkey_toggles_picker_while_idle() -> None:
     assert surfaces[0].visible is True
 
 
+def test_hotkey_duplicate_chord_event_is_debounced() -> None:
+    coordinator, _server = _primary_coordinator()
+    surfaces: list[FakePickerSurface] = []
+    hotkey = FakeHotkeyAdapter()
+    clock = {"value": 10.0}
+    result = start_agent(
+        startup=True,
+        application=FakeApplication(),
+        coordinator=coordinator,
+        qt_types=fake_qt_types(),
+        picker_factory=lambda agent: _fake_picker(agent, surfaces),
+        hotkey_adapter=hotkey,
+        run_event_loop=False,
+    )
+    assert result.agent is not None
+    result.agent.hotkey_clock = lambda: clock["value"]
+
+    hotkey.emit()
+    result.agent.hotkey_timer.timeout.emit()
+    hotkey.emit()
+    clock["value"] += 0.1
+    result.agent.hotkey_timer.timeout.emit()
+
+    assert surfaces[0].visible is True
+    assert result.agent.opened_surfaces == ["open_picker"]
+
+    hotkey.emit()
+    clock["value"] += 0.4
+    result.agent.hotkey_timer.timeout.emit()
+
+    assert surfaces[0].visible is False
+
+
 def test_qml_instrument_show_expands_collapsed_surface(monkeypatch) -> None:
     class Root:
         def __init__(self) -> None:
@@ -213,6 +276,9 @@ def test_qml_instrument_show_expands_collapsed_surface(monkeypatch) -> None:
 
         def setProperty(self, key: str, value: object) -> None:
             self.properties[key] = value
+
+        def property(self, key: str) -> object:
+            return self.properties.get(key)
 
         def show(self) -> None:
             self.shown = True
@@ -236,6 +302,169 @@ def test_qml_instrument_show_expands_collapsed_surface(monkeypatch) -> None:
 
     assert root.properties["collapsed"] is False
     assert root.shown is True
+
+
+def test_qml_instrument_toggle_reopens_collapsed_visible_surface(monkeypatch) -> None:
+    class Root:
+        def __init__(self) -> None:
+            self.properties: dict[str, object] = {"collapsed": True}
+            self.shown = False
+
+        def isVisible(self) -> bool:
+            return True
+
+        def setProperty(self, key: str, value: object) -> None:
+            self.properties[key] = value
+
+        def property(self, key: str) -> object:
+            return self.properties.get(key)
+
+        def show(self) -> None:
+            self.shown = True
+
+    root = Root()
+    collapse_calls: list[str] = []
+    surface = QmlInstrumentSurface(
+        model_provider=lambda: None,  # type: ignore[arg-type, return-value]
+        on_primary_action=lambda _state, _action: None,
+        on_collapse=collapse_calls.append,
+    )
+    surface._root = root
+    surface._bridge = None
+    monkeypatch.setattr(surface, "_ensure_loaded", lambda: None)
+    monkeypatch.setattr("setpiece.agent.instrument_window.activate_qml_window", lambda _root: None)
+    monkeypatch.setattr(
+        "setpiece.agent.instrument_window.instrument_payload_for_qml",
+        lambda _model: {"state": "ready"},
+    )
+
+    surface.toggle()
+
+    assert root.properties["collapsed"] is False
+    assert root.shown is True
+    assert collapse_calls == []
+
+
+def test_qml_instrument_toggle_collapses_visible_expanded_surface(monkeypatch) -> None:
+    class Root:
+        def __init__(self) -> None:
+            self.properties: dict[str, object] = {"collapsed": False}
+
+        def isVisible(self) -> bool:
+            return True
+
+        def setProperty(self, key: str, value: object) -> None:
+            self.properties[key] = value
+
+        def property(self, key: str) -> object:
+            return self.properties.get(key)
+
+    root = Root()
+    collapse_calls: list[str] = []
+    surface = QmlInstrumentSurface(
+        model_provider=lambda: None,  # type: ignore[arg-type, return-value]
+        on_primary_action=lambda _state, _action: None,
+        on_collapse=collapse_calls.append,
+    )
+    surface._root = root
+
+    surface.toggle()
+
+    assert root.properties["collapsed"] is True
+    assert collapse_calls == ["toggle"]
+
+
+def test_picker_qml_arms_outside_dismissal_after_activation_handoff() -> None:
+    qml = Path("setpiece/agent/qml/Picker.qml").read_text(encoding="utf-8")
+
+    assert "property bool outsideDismissArmed: false" in qml
+    assert "outsideDismissArmTimer.restart()" in qml
+    assert "if (!outsideDismissArmed)" in qml
+    assert "interval: 250" in qml
+
+
+def test_qml_picker_visible_hotkey_toggle_uses_hotkey_dismissal() -> None:
+    class Root:
+        dismiss_hotkey_calls = 0
+
+        def isVisible(self) -> bool:
+            return True
+
+        def dismissFromHotkey(self) -> None:
+            self.dismiss_hotkey_calls += 1
+
+    root = Root()
+    surface = QmlPickerSurface(on_intent=lambda _intent: None)
+    surface._root = root
+
+    surface.toggle()
+
+    assert root.dismiss_hotkey_calls == 1
+
+
+def test_qml_picker_hotkey_consumes_recent_focus_handoff_dismissal(monkeypatch) -> None:
+    class Root:
+        shown = False
+        hidden = False
+
+        def isVisible(self) -> bool:
+            return False
+
+        def show(self) -> None:
+            self.shown = True
+
+        def hide(self) -> None:
+            self.hidden = True
+
+    root = Root()
+    surface = QmlPickerSurface(on_intent=lambda _intent: None)
+    surface._root = root
+    monkeypatch.setattr(surface, "_ensure_loaded", lambda: None)
+
+    surface.dismiss("outside")
+    surface.toggle()
+
+    assert root.hidden is True
+    assert root.shown is False
+
+
+def test_qml_surfaces_schedule_delayed_activation_retries() -> None:
+    picker = Path("setpiece/agent/picker_window.py").read_text(encoding="utf-8")
+    instrument = Path("setpiece/agent/instrument_window.py").read_text(encoding="utf-8")
+
+    for source in (picker, instrument):
+        assert "_schedule_activation_retries(self._root)" in source
+        assert "for delay_ms in (75, 200)" in source
+        assert "QTimer.singleShot(delay_ms, lambda root=root: _activate_if_visible(root))" in source
+        assert "if hasattr(root, \"isVisible\") and not root.isVisible()" in source
+    assert "bool(root.property(\"collapsed\"))" in instrument
+
+
+def test_instrument_activation_retry_skips_collapsed_surface(monkeypatch) -> None:
+    from setpiece.agent import instrument_window
+
+    class Root:
+        def __init__(self, *, visible: bool, collapsed: bool) -> None:
+            self.visible = visible
+            self.collapsed = collapsed
+
+        def isVisible(self) -> bool:
+            return self.visible
+
+        def property(self, key: str) -> object:
+            if key == "collapsed":
+                return self.collapsed
+            return None
+
+    activations: list[Root] = []
+    monkeypatch.setattr(instrument_window, "activate_qml_window", activations.append)
+
+    instrument_window._activate_if_visible(Root(visible=True, collapsed=True))
+    instrument_window._activate_if_visible(Root(visible=False, collapsed=False))
+    expanded = Root(visible=True, collapsed=False)
+    instrument_window._activate_if_visible(expanded)
+
+    assert activations == [expanded]
 
 
 def test_picker_preflight_request_does_not_start_ritual() -> None:
