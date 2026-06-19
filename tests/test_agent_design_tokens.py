@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from setpiece.agent.design_tokens import quiet_instrument_tokens, token
 
 
@@ -30,6 +32,8 @@ def test_quiet_instrument_python_tokens_define_unified_shell_contract() -> None:
     assert tokens["color.semantic.waiting"] == "#A36B25"
     assert tokens["color.semantic.confirmation"] == "#6E5A8A"
     assert tokens["color.semantic.confirmation_panel"] == "#DDE7E8"
+    assert tokens["color.semantic.paused"] == "#70777C"
+    assert tokens["color.semantic.paused_panel"] == "#F7F4EE"
     assert tokens["color.semantic.failure"] == "#A84942"
     assert tokens["color.semantic.recovery"] == "#45715F"
 
@@ -65,8 +69,11 @@ def test_qml_tokens_mirror_agent_contract_without_runtime_dependencies() -> None
         'readonly property string textCase: "sentence case"',
         'readonly property color canvas: "#F7F4EE"',
         'readonly property color accent: "#3C6F82"',
+        'readonly property color accentText: "#FFFFFF"',
         'readonly property color confirmation: "#6E5A8A"',
         'readonly property color confirmationPanel: "#DDE7E8"',
+        'readonly property color paused: "#70777C"',
+        'readonly property color pausedPanel: "#F7F4EE"',
         "readonly property int outerRadiusEpx: 10",
         "readonly property int controlRadiusEpx: 6",
         "readonly property int primaryHitTargetEpx: 40",
@@ -84,6 +91,7 @@ def test_qml_tokens_mirror_agent_contract_without_runtime_dependencies() -> None
 
     assert "cardShadow" not in qml
     assert "DropShadow" not in qml
+    assert "property color onAccent" not in qml
 
 
 def test_quiet_qml_controls_expose_accessible_visual_contract() -> None:
@@ -119,6 +127,111 @@ def test_quiet_qml_controls_expose_accessible_visual_contract() -> None:
         "color: icon.tokens.semanticColor(icon.status)",
     ):
         assert snippet in combined
+
+
+def test_agent_qml_surfaces_load_with_qt_engine_offscreen(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qt_core = pytest.importorskip("PySide6.QtCore")
+    qt_qml = pytest.importorskip("PySide6.QtQml")
+    qt_widgets = pytest.importorskip("PySide6.QtWidgets")
+
+    try:
+        app = qt_widgets.QApplication.instance() or qt_widgets.QApplication([])
+    except Exception as exc:  # pragma: no cover - platform plugin availability varies in CI.
+        pytest.skip(f"Qt offscreen application is unavailable: {exc}")
+
+    class PickerBridge(qt_core.QObject):  # type: ignore[misc, valid-type]
+        payloadChanged = qt_core.Signal()
+        actionBusyChanged = qt_core.Signal()
+
+        @qt_core.Property("QVariant", notify=payloadChanged)
+        def payload(self) -> dict[str, object]:
+            return {
+                "current_room": {"room_id": "gaming", "name": "Gaming Room"},
+                "recent_rituals": [
+                    {
+                        "id": "gaming_mode",
+                        "title": "Diablo Night",
+                        "room_name": "Gaming Room",
+                        "description": "Prepare the desktop for a play session.",
+                    }
+                ],
+                "matching_rituals": [],
+                "active_ritual": None,
+            }
+
+        @qt_core.Property(bool, notify=actionBusyChanged)
+        def actionBusy(self) -> bool:
+            return False
+
+        @qt_core.Slot(str)
+        def openPreflight(self, recipe_id: str) -> None:
+            return None
+
+        @qt_core.Slot()
+        def browseAll(self) -> None:
+            return None
+
+        @qt_core.Slot()
+        def openBuilder(self) -> None:
+            return None
+
+        @qt_core.Slot()
+        def openActiveRitual(self) -> None:
+            return None
+
+    class InstrumentBridge(qt_core.QObject):  # type: ignore[misc, valid-type]
+        payloadChanged = qt_core.Signal()
+        keepVisibleChanged = qt_core.Signal()
+
+        @qt_core.Property("QVariant", notify=payloadChanged)
+        def payload(self) -> dict[str, object]:
+            return {
+                "title": "Diablo Night",
+                "state": "ready",
+                "summary": "Prepare the desktop for a play session.",
+                "steps": [{"index": 1, "title": "Open Battle.net", "status": "future"}],
+                "primary_action": "start",
+                "primary_action_label": "Start ritual",
+            }
+
+        @qt_core.Slot(str)
+        def primaryAction(self, state: str) -> None:
+            return None
+
+        @qt_core.Slot(str)
+        def collapseInstrument(self, reason: str) -> None:
+            return None
+
+        @qt_core.Slot()
+        def expandInstrument(self) -> None:
+            return None
+
+        @qt_core.Slot(bool)
+        def setKeepVisibleForRitual(self, keep_visible: bool) -> None:
+            return None
+
+    assert app is not None
+    bridges = [PickerBridge(), InstrumentBridge()]
+    surfaces = (
+        ("Picker.qml", "setpiecePickerController", bridges[0]),
+        ("QuietInstrument.qml", "setpieceInstrumentController", bridges[1]),
+    )
+    failures: list[str] = []
+    for qml_name, property_name, bridge in surfaces:
+        engine = qt_qml.QQmlApplicationEngine()
+        warnings: list[str] = []
+        engine.warnings.connect(
+            lambda warning_list, warnings=warnings: warnings.extend(
+                warning.toString() for warning in warning_list
+            )
+        )
+        engine.rootContext().setContextProperty(property_name, bridge)
+        engine.load(qt_core.QUrl.fromLocalFile(str(AGENT_QML / qml_name)))
+        if not engine.rootObjects():
+            failures.append(f"{qml_name}: {'; '.join(warnings) or 'no root object'}")
+
+    assert failures == []
 
 
 def test_agent_quiet_sources_do_not_add_forbidden_capabilities() -> None:

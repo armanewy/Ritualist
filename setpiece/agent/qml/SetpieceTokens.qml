@@ -24,7 +24,7 @@ QtObject {
     readonly property color borderStrong: "#70777C"
     readonly property color focusRing: "#3C6F82"
     readonly property color accent: "#3C6F82"
-    readonly property color onAccent: "#FFFFFF"
+    readonly property color accentText: "#FFFFFF"
 
     readonly property color running: "#3C6F82"
     readonly property color runningPanel: "#DDE7E8"
@@ -32,6 +32,8 @@ QtObject {
     readonly property color waitingPanel: "#F7F4EE"
     readonly property color confirmation: "#6E5A8A"
     readonly property color confirmationPanel: "#DDE7E8"
+    readonly property color paused: "#70777C"
+    readonly property color pausedPanel: "#F7F4EE"
     readonly property color failure: "#A84942"
     readonly property color failurePanel: "#F7F4EE"
     readonly property color recovery: "#45715F"
@@ -85,6 +87,9 @@ QtObject {
         if (state === "confirmation") {
             return confirmation
         }
+        if (state === "paused") {
+            return paused
+        }
         if (state === "failure") {
             return failure
         }
@@ -103,6 +108,9 @@ QtObject {
         }
         if (state === "confirmation") {
             return confirmationPanel
+        }
+        if (state === "paused") {
+            return pausedPanel
         }
         if (state === "failure") {
             return failurePanel
@@ -134,7 +142,7 @@ QtObject {
             return textMuted
         }
         if (role === "primary" || role === "confirmation") {
-            return onAccent
+            return accentText
         }
         if (role === "danger") {
             return failure

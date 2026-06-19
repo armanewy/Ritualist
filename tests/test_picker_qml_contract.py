@@ -17,7 +17,7 @@ def test_picker_qml_defines_tray_first_transient_surface_contract() -> None:
     qml = _read(PICKER_QML)
 
     assert "Window {" in qml
-    assert "flags: Qt.Tool | Qt.FramelessWindowHint" in qml
+    assert "flags: Qt.Window | Qt.FramelessWindowHint" in qml
     assert "NoActivate" not in qml
     assert "WindowStaysOnTopHint" not in qml
     assert "width: 400" in qml

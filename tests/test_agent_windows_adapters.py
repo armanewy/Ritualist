@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+import setpiece.agent.window_activation as window_activation
+from setpiece.agent.window_activation import _apply_transient_tool_window_style, place_qml_window
 from setpiece.agent.windows.hotkey import (
     ERROR_HOTKEY_ALREADY_REGISTERED,
     DEFAULT_HOTKEY,
@@ -50,6 +52,101 @@ class FakeHotkeyWinApi:
         return self.messages.pop(0)
 
 
+class FakeWindowHotkeyWinApi(FakeHotkeyWinApi):
+    def __init__(self) -> None:
+        super().__init__()
+        self.created: list[int] = []
+        self.destroyed: list[int] = []
+
+    def create_hotkey_window(self, hotkey_id):
+        self.created.append(hotkey_id)
+        return 1234
+
+    def destroy_hotkey_window(self, hwnd):
+        self.destroyed.append(hwnd)
+
+
+class FakeWindowStyleApi:
+    def __init__(self, style: int) -> None:
+        self.style = style
+        self.set_style_calls: list[tuple[int, int, int]] = []
+        self.set_window_pos_calls: list[tuple[int, int, int]] = []
+
+    def GetWindowLongPtrW(self, hwnd, index):
+        return self.style
+
+    def SetWindowLongPtrW(self, hwnd, index, style):
+        self.set_style_calls.append((int(hwnd), int(index), int(style)))
+        self.style = int(style)
+        return 1
+
+    def SetWindowPos(self, hwnd, _insert_after, _x, _y, _cx, _cy, flags):
+        self.set_window_pos_calls.append((int(hwnd), 0, int(flags)))
+        return True
+
+
+class FakeWinTypes:
+    HWND = int
+
+
+class FakeCtypes:
+    c_int = int
+    c_ssize_t = int
+
+
+class FakeQtRect:
+    def __init__(self, x: int, y: int, width: int, height: int) -> None:
+        self._x = x
+        self._y = y
+        self._width = width
+        self._height = height
+
+    def x(self) -> int:
+        return self._x
+
+    def y(self) -> int:
+        return self._y
+
+    def width(self) -> int:
+        return self._width
+
+    def height(self) -> int:
+        return self._height
+
+
+class FakeQtScreen:
+    def __init__(self, rect: FakeQtRect) -> None:
+        self.rect = rect
+
+    def availableGeometry(self) -> FakeQtRect:
+        return self.rect
+
+
+class FakePositionedRoot:
+    def __init__(self, rect: FakeQtRect, width: int, height: int) -> None:
+        self._screen = FakeQtScreen(rect)
+        self._width = width
+        self._height = height
+        self.positions: list[tuple[int, int]] = []
+
+    def screen(self) -> FakeQtScreen:
+        return self._screen
+
+    def width(self) -> int:
+        return self._width
+
+    def height(self) -> int:
+        return self._height
+
+    def setX(self, value: int) -> None:
+        y = self.positions[-1][1] if self.positions else 0
+        self.positions.append((value, y))
+
+    def setY(self, value: int) -> None:
+        x = self.positions[-1][0] if self.positions else 0
+        self.positions[-1:] = [(x, value)]
+
+
 class FakeShellNotifyApi:
     def __init__(self, rect: ScreenRect | None) -> None:
         self.rect = rect
@@ -72,6 +169,52 @@ def test_default_hotkey_is_win_ctrl_r_and_registers_with_register_hotkey() -> No
     assert result.hotkey == DEFAULT_HOTKEY
     assert winapi.register_calls == [(None, 0x5254, 0x0008 | 0x0002, ord("R"))]
     assert winapi.unregister_calls == [(None, 0x5254)]
+
+
+def test_transient_tool_windows_are_removed_from_taskbar_style() -> None:
+    api = FakeWindowStyleApi(style=0x00040000)
+
+    _apply_transient_tool_window_style(api, FakeWinTypes, FakeCtypes, 123)
+
+    assert api.set_style_calls == [(123, -20, 0x00000080)]
+    assert api.set_window_pos_calls
+    assert api.set_window_pos_calls[0][2] & 0x0020
+
+
+def test_picker_window_is_placed_near_bottom_right_work_area(monkeypatch) -> None:
+    monkeypatch.setattr(window_activation, "_screen_at_cursor", lambda: None)
+    root = FakePositionedRoot(FakeQtRect(100, 50, 1200, 800), width=400, height=520)
+
+    place_qml_window(root, anchor="bottom-right", margin=16)
+
+    assert root.positions[-1] == (884, 314)
+
+
+def test_instrument_window_is_placed_on_right_edge_work_area(monkeypatch) -> None:
+    monkeypatch.setattr(window_activation, "_screen_at_cursor", lambda: None)
+    root = FakePositionedRoot(FakeQtRect(-1920, 0, 1920, 1040), width=420, height=520)
+
+    place_qml_window(root, anchor="right-center", margin=16)
+
+    assert root.positions[-1] == (-436, 260)
+
+
+def test_hotkey_registers_against_message_window_when_available() -> None:
+    winapi = FakeWindowHotkeyWinApi()
+    adapter = WindowsGlobalHotkeyAdapter(winapi=winapi, platform="win32")
+
+    result = adapter.register()
+    winapi.messages.append(0x5254)
+    event = adapter.poll()
+    adapter.unregister()
+
+    assert result.registered is True
+    assert event is not None
+    assert event.hotkey == DEFAULT_HOTKEY
+    assert winapi.created == [0x5254]
+    assert winapi.register_calls == [(1234, 0x5254, 0x0008 | 0x0002, ord("R"))]
+    assert winapi.unregister_calls == [(1234, 0x5254)]
+    assert winapi.destroyed == [1234]
 
 
 def test_hotkey_conflict_reports_failure_without_marking_registered() -> None:

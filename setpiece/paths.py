@@ -77,6 +77,9 @@ def logs_dir() -> Path:
 
 
 def logs_path() -> Path:
+    e2e_path = _e2e_app_data_path()
+    if e2e_path is not None:
+        return e2e_path / "logs"
     return Path(user_log_dir(APP_NAME, APP_AUTHOR))
 
 
@@ -192,10 +195,16 @@ def ensure_app_dirs() -> dict[str, Path]:
 
 
 def legacy_app_data_path() -> Path:
+    e2e_path = _e2e_app_data_path()
+    if e2e_path is not None:
+        return e2e_path / "legacy" / LEGACY_APP_NAME
     return Path(user_data_dir(LEGACY_APP_NAME, LEGACY_APP_AUTHOR))
 
 
 def legacy_logs_path() -> Path:
+    e2e_path = _e2e_app_data_path()
+    if e2e_path is not None:
+        return e2e_path / "legacy" / f"{LEGACY_APP_NAME}-Logs"
     return Path(user_log_dir(LEGACY_APP_NAME, LEGACY_APP_AUTHOR))
 
 

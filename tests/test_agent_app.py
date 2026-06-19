@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from setpiece.agent.activation import ActivationIntent
 from setpiece.agent.app import start_agent
-from setpiece.agent.instrument_window import FakeInstrumentSurface
+from setpiece.agent.instrument_window import FakeInstrumentSurface, QmlInstrumentSurface
 from setpiece.agent.menu_model import MenuAction
 from setpiece.agent.models import AgentConfirmation, AgentRunState, AgentState
 from setpiece.agent.picker_model import (
@@ -203,6 +203,39 @@ def test_hotkey_toggles_picker_while_idle() -> None:
 
     assert hotkey.registered is True
     assert surfaces[0].visible is True
+
+
+def test_qml_instrument_show_expands_collapsed_surface(monkeypatch) -> None:
+    class Root:
+        def __init__(self) -> None:
+            self.properties: dict[str, object] = {"collapsed": True}
+            self.shown = False
+
+        def setProperty(self, key: str, value: object) -> None:
+            self.properties[key] = value
+
+        def show(self) -> None:
+            self.shown = True
+
+    root = Root()
+    surface = QmlInstrumentSurface(
+        model_provider=lambda: None,  # type: ignore[arg-type, return-value]
+        on_primary_action=lambda _state, _action: None,
+        on_collapse=lambda _reason: None,
+    )
+    surface._root = root
+    surface._bridge = None
+    monkeypatch.setattr(surface, "_ensure_loaded", lambda: None)
+    monkeypatch.setattr("setpiece.agent.instrument_window.activate_qml_window", lambda _root: None)
+    monkeypatch.setattr(
+        "setpiece.agent.instrument_window.instrument_payload_for_qml",
+        lambda _model: {"state": "ready"},
+    )
+
+    surface.show()
+
+    assert root.properties["collapsed"] is False
+    assert root.shown is True
 
 
 def test_picker_preflight_request_does_not_start_ritual() -> None:

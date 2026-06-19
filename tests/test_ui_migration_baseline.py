@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,15 @@ EXPECTED_SURFACES = {
 
 def _powershell() -> str | None:
     return shutil.which("powershell") or shutil.which("pwsh")
+
+
+def _external_or_repo_artifacts_tmp_dir(tmp_path: Path, name: str) -> Path:
+    candidate = tmp_path / name
+    try:
+        candidate.relative_to(REPO_ROOT)
+    except ValueError:
+        return candidate
+    return Path(tempfile.mkdtemp(prefix=f"setpiece-{name}-")) / name
 
 
 def test_ui_migration_baseline_spec_declares_before_state_contract() -> None:
@@ -116,7 +126,7 @@ def test_ui_migration_baseline_requires_explicit_packaged_screenshot_opt_in(tmp_
     if shell is None:
         pytest.skip("PowerShell is not available")
 
-    evidence_dir = tmp_path / "ui-baseline"
+    evidence_dir = _external_or_repo_artifacts_tmp_dir(tmp_path, "ui-baseline")
     result = subprocess.run(
         [
             shell,
@@ -148,7 +158,7 @@ def test_ui_migration_baseline_missing_packaged_app_marks_not_captured(tmp_path:
     if shell is None:
         pytest.skip("PowerShell is not available")
 
-    evidence_dir = tmp_path / "ui-baseline"
+    evidence_dir = _external_or_repo_artifacts_tmp_dir(tmp_path, "ui-baseline")
     missing_exe = tmp_path / "missing" / "Setpiece.exe"
     result = subprocess.run(
         [

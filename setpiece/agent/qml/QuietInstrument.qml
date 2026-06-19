@@ -18,12 +18,13 @@ Window {
         "steps": []
     })
     property bool collapsed: false
+    property bool focusCollapseArmed: false
     property bool keepVisibleForRitual: false
     property bool technicalDetailsOpen: false
     property bool reducedMotion: instrumentPayload && instrumentPayload.reduced_motion === true
     property int defaultWidthEpx: 420
     property int expandedWidthEpx: 560
-    property int collapsedWidthEpx: 64
+    property int collapsedWidthEpx: 112
     property real maxWorkAreaRatio: 0.70
     property int workAreaWidth: Screen.desktopAvailableWidth > 0 ? Screen.desktopAvailableWidth : Screen.width
     property int workAreaHeight: Screen.desktopAvailableHeight > 0 ? Screen.desktopAvailableHeight : Screen.height
@@ -40,14 +41,12 @@ Window {
     signal keepVisibleRequested(bool keepVisible)
 
     width: root.collapsed ? root.collapsedWidthEpx : Math.min(root.targetSurfaceWidth, root.maxSurfaceWidth)
-    height: root.collapsed ? 148 : Math.min(root.expandedState ? 640 : 520, root.maxSurfaceHeight)
+    height: root.collapsed ? 104 : Math.min(root.expandedState ? 640 : 520, root.maxSurfaceHeight)
     minimumWidth: root.collapsed ? root.collapsedWidthEpx : Math.min(336, root.maxSurfaceWidth)
     maximumWidth: root.maxSurfaceWidth
     maximumHeight: root.maxSurfaceHeight
-    x: Screen.desktopAvailableX + root.workAreaWidth - width - tokens.spaceLg
-    y: Screen.desktopAvailableY + Math.max(tokens.spaceLg, Math.floor((root.workAreaHeight - height) / 2))
     visible: false
-    flags: Qt.Tool | Qt.FramelessWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
     title: "Setpiece Quiet Instrument"
 
@@ -71,12 +70,12 @@ Window {
             return "running"
         }
         if (state === "confirming" || state === "confirmation" || state === "blocked") {
-            return "waiting"
+            return "confirmation"
         }
         if (state === "failed" || state === "error") {
             return "failure"
         }
-        if (state === "recovering") {
+        if (state === "recovering" || state === "interrupted") {
             return "recovery"
         }
         if (state === "idle" || state === "queued") {
@@ -87,6 +86,11 @@ Window {
 
     function titleText() {
         return instrumentPayload.title || instrumentPayload.name || "Quiet Instrument"
+    }
+
+    function stateLabel() {
+        var state = root.currentState || "ready"
+        return state.charAt(0).toUpperCase() + state.slice(1)
     }
 
     function summaryText() {
@@ -164,6 +168,12 @@ Window {
         if (currentState === "waiting") {
             return "Continue"
         }
+        if (currentState === "confirmation") {
+            return "Approve once"
+        }
+        if (currentState === "paused") {
+            return "Resume"
+        }
         if (currentState === "failure") {
             return "Review recovery"
         }
@@ -182,6 +192,12 @@ Window {
         }
         if (currentState === "waiting") {
             return "InstrumentWaiting.qml"
+        }
+        if (currentState === "confirmation") {
+            return "InstrumentConfirmation.qml"
+        }
+        if (currentState === "paused") {
+            return "InstrumentPaused.qml"
         }
         if (currentState === "failure") {
             return "InstrumentFailure.qml"
@@ -214,6 +230,7 @@ Window {
 
     function expand() {
         root.collapsed = false
+        root.focusCollapseArmed = false
         if (root.instrumentController && root.instrumentController.expandInstrument) {
             root.instrumentController.expandInstrument()
         }
@@ -237,9 +254,21 @@ Window {
         root.keepVisibleRequested(root.keepVisibleForRitual)
     }
     onTechnicalDetailsOpenChanged: root.technicalDetailsToggled(root.technicalDetailsOpen)
+    onCollapsedChanged: {
+        if (!root.collapsed) {
+            root.focusCollapseArmed = false
+        }
+    }
     onActiveChanged: {
-        if (!active && !root.keepVisibleForRitual && !root.collapsed) {
+        if (active) {
+            root.focusCollapseArmed = true
+        } else if (root.focusCollapseArmed && !root.keepVisibleForRitual && !root.collapsed) {
             root.collapse("focus")
+        }
+    }
+    onVisibleChanged: {
+        if (visible) {
+            surface.forceActiveFocus()
         }
     }
     Component.onCompleted: surface.forceActiveFocus()
@@ -277,7 +306,7 @@ Window {
 
             Text {
                 Layout.fillWidth: true
-                text: root.currentState
+                text: root.stateLabel()
                 color: tokens.textMuted
                 font.family: tokens.fontFamily
                 font.pixelSize: tokens.captionFontEpx
@@ -351,15 +380,49 @@ Window {
                 CheckBox {
                     id: keepVisibleCheck
 
-                    text: "Keep visible for this ritual"
+                    Layout.maximumWidth: 128
+                    text: "Keep visible"
                     checked: root.keepVisibleForRitual
                     font.family: tokens.fontFamily
                     font.pixelSize: tokens.captionFontEpx
                     Accessible.name: text
+                    Accessible.description: "Keep visible for this ritual"
                     onToggled: root.keepVisibleForRitual = checked
+
+                    indicator: Rectangle {
+                        implicitWidth: 18
+                        implicitHeight: 18
+                        x: keepVisibleCheck.leftPadding
+                        y: keepVisibleCheck.topPadding + (keepVisibleCheck.availableHeight - height) / 2
+                        radius: 4
+                        color: keepVisibleCheck.checked ? tokens.accent : tokens.panel
+                        border.color: keepVisibleCheck.activeFocus ? tokens.focusRing : tokens.borderStrong
+                        border.width: keepVisibleCheck.activeFocus ? 2 : 1
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 2
+                            visible: keepVisibleCheck.checked
+                            color: tokens.accentText
+                        }
+                    }
+
+                    contentItem: Text {
+                        text: keepVisibleCheck.text
+                        color: tokens.textMuted
+                        font.family: tokens.fontFamily
+                        font.pixelSize: tokens.captionFontEpx
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: keepVisibleCheck.indicator.width + tokens.spaceSm
+                        elide: Text.ElideRight
+                    }
                 }
 
                 ToolButton {
+                    Layout.preferredWidth: tokens.primaryHitTargetEpx
+                    Layout.preferredHeight: tokens.primaryHitTargetEpx
                     text: "X"
                     Accessible.name: "Collapse quiet instrument"
                     onClicked: root.collapse("close")

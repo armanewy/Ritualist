@@ -18,6 +18,7 @@ class InstrumentState(StrEnum):
     READY = "ready"
     PREFLIGHT = "preflight"
     RUNNING = "running"
+    PAUSED = "paused"
     WAITING = "waiting"
     CONFIRMATION = "confirmation"
     FAILURE = "failure"
@@ -243,6 +244,12 @@ def build_instrument_model(
         headline = current_verb or "Running ritual"
         subheadline = _step_position(current_step, step_count)
         actions = _running_actions(current_step, active_run)
+    elif state == InstrumentState.PAUSED:
+        current_verb = _current_verb(current_step) or "Paused"
+        next_step = _next_step(current_step, ordered_steps)
+        headline = f"Paused: {ritual_name}"
+        subheadline = _paused_reason(agent_state, active_run)
+        actions = _paused_actions()
     elif state == InstrumentState.WAITING:
         wait = _wait(agent_state, active_run, current_step)
         progress = InstrumentProgress(
@@ -355,7 +362,7 @@ def _instrument_state(agent_state: AgentState) -> InstrumentState:
         AgentRunState.READY: InstrumentState.READY,
         AgentRunState.PREFLIGHT: InstrumentState.PREFLIGHT,
         AgentRunState.RUNNING: InstrumentState.RUNNING,
-        AgentRunState.PAUSED: InstrumentState.RUNNING,
+        AgentRunState.PAUSED: InstrumentState.PAUSED,
         AgentRunState.WAITING: InstrumentState.WAITING,
         AgentRunState.CONFIRMATION: InstrumentState.CONFIRMATION,
         AgentRunState.FAILURE: InstrumentState.FAILURE,
@@ -713,6 +720,28 @@ def _pause_is_safe(current_step: Mapping[str, Any], active_run: Mapping[str, Any
         "target.wait_state",
         "browser.wait_media_playing",
     }
+
+
+def _paused_reason(agent_state: AgentState, active_run: Mapping[str, Any]) -> str:
+    paused = _mapping(active_run.get("paused"))
+    return _first_text(
+        paused.get("reason"),
+        agent_state.current_step.message if agent_state.current_step else "",
+        active_run.get("message"),
+        fallback="Paused by operator.",
+    )
+
+
+def _paused_actions() -> tuple[InstrumentAction, ...]:
+    return (
+        InstrumentAction("resume_ritual", "Resume", role=InstrumentActionRole.PRIMARY),
+        InstrumentAction(
+            "stop_ritual",
+            "Stop",
+            role=InstrumentActionRole.SECONDARY,
+            tone="destructive",
+        ),
+    )
 
 
 def _wait(

@@ -73,10 +73,31 @@ class FakeServerAdapter:
         self.handler()
 
 
+class FakeOwnerLock:
+    def __init__(self, *, acquired: bool = True) -> None:
+        self.acquired = acquired
+        self.acquire_calls = 0
+        self.released = False
+
+    def acquire(self) -> bool:
+        self.acquire_calls += 1
+        return self.acquired
+
+    def release(self) -> None:
+        self.released = True
+
+
 class FakeClientSocket:
-    def __init__(self, *, connected: bool = True, written: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        written: bool = True,
+        write_result: int | None = None,
+    ) -> None:
         self.connected = connected
         self.written = written
+        self.write_result = write_result
         self.server_name = None
         self.data = b""
         self.disconnected = False
@@ -89,6 +110,8 @@ class FakeClientSocket:
 
     def write(self, data: bytes) -> int:
         self.data += data
+        if self.write_result is not None:
+            return self.write_result
         return len(data)
 
     def flush(self) -> bool:
@@ -142,6 +165,23 @@ def test_activation_server_accepts_valid_intent_and_rejects_malformed_message() 
     assert malformed_socket.disconnected is True
 
 
+def test_activation_server_close_releases_owner_lock() -> None:
+    lock = FakeOwnerLock()
+    adapter = FakeServerAdapter()
+    server = ActivationServer(
+        lambda _intent: None,
+        server_name="setpiece-test",
+        server_adapter=adapter,
+        owner_lock=lock,
+    )
+
+    assert server.start() is True
+    server.close()
+
+    assert lock.released is True
+    assert adapter.closed is True
+
+
 def test_send_activation_intent_uses_local_socket_adapter_contract() -> None:
     client = FakeClientSocket()
 
@@ -154,6 +194,20 @@ def test_send_activation_intent_uses_local_socket_adapter_contract() -> None:
     assert redirected is True
     assert client.server_name == "setpiece-test"
     assert parse_activation_message(client.data).intent == "open_settings"
+    assert client.disconnected is True
+
+
+def test_send_activation_intent_accepts_positive_write_when_qt_wait_times_out() -> None:
+    client = FakeClientSocket(written=False)
+
+    redirected = send_activation_intent(
+        ActivationIntent("open_picker"),
+        server_name="setpiece-test",
+        socket_factory=lambda: client,
+    )
+
+    assert redirected is True
+    assert parse_activation_message(client.data).intent == "open_picker"
     assert client.disconnected is True
 
 
@@ -171,14 +225,29 @@ def test_send_activation_intent_reports_failed_connection() -> None:
     assert client.disconnected is True
 
 
+def test_send_activation_intent_reports_failed_write() -> None:
+    client = FakeClientSocket(write_result=0)
+
+    redirected = send_activation_intent(
+        ActivationIntent("open_picker"),
+        server_name="setpiece-test",
+        socket_factory=lambda: client,
+    )
+
+    assert redirected is False
+    assert client.disconnected is True
+
+
 def test_coordinator_redirects_second_process_when_primary_exists() -> None:
-    server = FakeServerAdapter(listen_result=False)
     client = FakeClientSocket()
+    lock = FakeOwnerLock(acquired=False)
     coordinator = SingleInstanceCoordinator(
         server_name="setpiece-test",
-        server_factory=lambda: server,
+        server_factory=lambda: (_ for _ in ()).throw(AssertionError("server should not start")),
         socket_factory=lambda: client,
         server_adapter_type=FakeServerAdapter,
+        lock_factory=lambda: lock,
+        redirect_attempts=1,
     )
 
     result = coordinator.become_primary_or_redirect(
@@ -189,6 +258,29 @@ def test_coordinator_redirects_second_process_when_primary_exists() -> None:
     assert result.is_primary is False
     assert result.redirected is True
     assert parse_activation_message(client.data).intent == "open_run_log"
+    assert lock.acquire_calls == 1
+
+
+def test_coordinator_primary_keeps_owner_lock_until_server_closes() -> None:
+    server = FakeServerAdapter(listen_result=True)
+    lock = FakeOwnerLock(acquired=True)
+    coordinator = SingleInstanceCoordinator(
+        server_name="setpiece-test",
+        server_factory=lambda: server,
+        server_adapter_type=FakeServerAdapter,
+        lock_factory=lambda: lock,
+    )
+
+    result = coordinator.become_primary_or_redirect(
+        ActivationIntent("open_picker"),
+        lambda _intent: None,
+    )
+
+    assert result.is_primary is True
+    assert result.server is not None
+    assert lock.released is False
+    result.server.close()
+    assert lock.released is True
 
 
 def test_coordinator_removes_stale_server_and_retries_primary_claim() -> None:
@@ -196,12 +288,15 @@ def test_coordinator_removes_stale_server_and_retries_primary_claim() -> None:
     first = FakeServerAdapter(listen_result=False, error="stale")
     second = FakeServerAdapter(listen_result=True)
     servers = [first, second]
+    locks = [FakeOwnerLock(acquired=True), FakeOwnerLock(acquired=True)]
     client = FakeClientSocket(connected=False)
     coordinator = SingleInstanceCoordinator(
         server_name="setpiece-test",
         server_factory=lambda: servers.pop(0),
         socket_factory=lambda: client,
         server_adapter_type=FakeServerAdapter,
+        lock_factory=lambda: locks.pop(0),
+        redirect_attempts=1,
     )
 
     result = coordinator.become_primary_or_redirect(

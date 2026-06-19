@@ -138,6 +138,39 @@ def test_running_model_omits_pause_when_safety_is_not_known() -> None:
     assert [action.label for action in model.actions] == ["Stop"]
 
 
+def test_paused_model_stays_distinct_from_running_and_failure() -> None:
+    model = build_instrument_model(
+        agent_state=AgentState(
+            state=AgentRunState.PAUSED,
+            active_ritual_id="gaming_mode",
+            active_ritual_name="Gaming Mode",
+            current_step=AgentStep(
+                index=2,
+                name="Wait for Battle.net",
+                action="target.wait_state",
+                state="paused",
+                message="operator requested pause",
+            ),
+            step_count=3,
+        ),
+        ritual_state={
+            "recipe_id": "gaming_mode",
+            "active_run": {
+                "state": "paused",
+                "message": "paused by operator",
+                "paused": {"active": True, "reason": "operator requested pause"},
+            },
+        },
+        recipe_transparency=_transparency(),
+    )
+
+    assert model.state == InstrumentState.PAUSED
+    assert model.headline == "Paused: Gaming Mode"
+    assert model.subheadline == "operator requested pause"
+    assert [action.label for action in model.actions] == ["Resume", "Stop"]
+    assert model.current_verb == "Wait for Battle.net"
+
+
 def test_waiting_model_reports_dependency_timing_and_idempotent_check_again_without_fake_progress(
 ) -> None:
     model = build_instrument_model(

@@ -63,3 +63,19 @@ def test_e2e_app_data_override_is_opt_in(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setenv("SETPIECE_E2E", "1")
     assert paths.app_data_path() == override
+
+
+def test_e2e_path_override_keeps_logs_and_legacy_paths_isolated(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    override = tmp_path / "isolated-app-data"
+
+    monkeypatch.setenv("SETPIECE_E2E", "1")
+    monkeypatch.setenv("SETPIECE_E2E_APP_DATA_DIR", str(override))
+
+    assert paths.app_data_path() == override
+    assert paths.logs_path() == override / "logs"
+    assert paths.default_log_file() == override / "logs" / "setpiece.log"
+    assert paths.legacy_app_data_path() == override / "legacy" / "Ritualist"
+    assert paths.legacy_logs_path() == override / "legacy" / "Ritualist-Logs"

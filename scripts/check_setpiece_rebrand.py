@@ -29,6 +29,7 @@ SCAN_SUFFIXES = {
 
 SKIP_PARTS = {
     ".git",
+    ".tmp",
     ".pytest_cache",
     "__pycache__",
     "build",
@@ -48,6 +49,7 @@ LEGACY_COMPAT_FILES = {
     "setpiece/canvas_packs.py",
     "setpiece/canvas/models.py",
     "setpiece/suite_packs.py",
+    "tests/test_e2e.py",
     "tests/test_setpiece_rebrand.py",
     "tests/test_packs.py",
     "tests/test_canvas_packs.py",

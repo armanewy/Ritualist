@@ -416,7 +416,12 @@ def _ritual_step_count(recipe_id: str) -> int:
 def _start_hotkey_polling(qt: TrayQtTypes, agent: ResidentAgent, hotkey_adapter: Any | None) -> None:
     adapter = hotkey_adapter or WindowsGlobalHotkeyAdapter()
     result = adapter.register()
-    record_event("agent.hotkey.register", status=result.status, registered=result.registered)
+    record_event(
+        "agent.hotkey.register",
+        status=result.status,
+        registered=result.registered,
+        message_window_handle=getattr(adapter, "_hwnd", None),
+    )
     if not result.registered:
         return
 

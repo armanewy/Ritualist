@@ -43,6 +43,8 @@ setpiece-desktop = "setpiece.desktop_entry:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--basetemp=.tmp/pytest"
+cache_dir = ".tmp/pytest-cache"
 
 [tool.ruff]
 line-length = 100

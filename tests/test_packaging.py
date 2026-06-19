@@ -64,7 +64,9 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
 
     assert {
         "ActiveSummary.qml",
+        "InstrumentConfirmation.qml",
         "InstrumentFailure.qml",
+        "InstrumentPaused.qml",
         "InstrumentReady.qml",
         "InstrumentRecovery.qml",
         "InstrumentRunning.qml",

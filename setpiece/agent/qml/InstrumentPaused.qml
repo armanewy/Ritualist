@@ -31,21 +31,21 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 142
+            Layout.preferredHeight: 118
             radius: root.tokens.controlRadiusEpx
-            color: root.tokens.semanticPanel("waiting")
-            border.color: root.tokens.waiting
+            color: root.tokens.semanticPanel("paused")
+            border.color: root.tokens.paused
             border.width: 1
 
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: root.tokens.spaceMd
-                spacing: 6
+                spacing: 5
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Waiting"
-                    color: root.tokens.waiting
+                    text: "Paused"
+                    color: root.tokens.paused
                     font.family: root.tokens.fontFamily
                     font.pixelSize: root.tokens.bodyFontEpx
                     font.weight: Font.DemiBold
@@ -54,21 +54,21 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: root.titleFor(root.currentStep, "Waiting for readiness")
+                    text: root.titleFor(root.currentStep, root.payload.title || "Ritual is paused")
                     color: root.tokens.text
                     font.family: root.tokens.fontFamily
                     font.pixelSize: root.tokens.titleFontEpx
                     font.weight: Font.DemiBold
-                    wrapMode: Text.WordWrap
+                    elide: Text.ElideRight
                 }
 
                 Text {
                     Layout.fillWidth: true
-                    text: root.detailFor(root.currentStep, root.payload.waiting_reason || "Setpiece is waiting for the required desktop condition.")
+                    text: root.detailFor(root.currentStep, root.payload.summary || "Resume when the desktop is ready.")
                     color: root.tokens.textMuted
                     font.family: root.tokens.fontFamily
                     font.pixelSize: root.tokens.captionFontEpx
-                    wrapMode: Text.WordWrap
+                    elide: Text.ElideRight
                 }
             }
         }

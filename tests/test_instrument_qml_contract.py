@@ -9,7 +9,9 @@ QUIET_INSTRUMENT_QML = AGENT_QML / "QuietInstrument.qml"
 STATE_QML = {
     "ready": AGENT_QML / "InstrumentReady.qml",
     "running": AGENT_QML / "InstrumentRunning.qml",
+    "paused": AGENT_QML / "InstrumentPaused.qml",
     "waiting": AGENT_QML / "InstrumentWaiting.qml",
+    "confirmation": AGENT_QML / "InstrumentConfirmation.qml",
     "failure": AGENT_QML / "InstrumentFailure.qml",
     "recovery": AGENT_QML / "InstrumentRecovery.qml",
 }
@@ -35,7 +37,7 @@ def test_quiet_instrument_is_one_edge_anchored_surface() -> None:
 
     assert "Window {" in qml
     assert qml.count("Window {") == 1
-    assert "flags: Qt.Tool | Qt.FramelessWindowHint" in qml
+    assert "flags: Qt.Window | Qt.FramelessWindowHint" in qml
     assert "WindowStaysOnTopHint" not in qml
     assert "Popup {" not in qml
     assert "Dialog {" not in qml
@@ -45,7 +47,8 @@ def test_quiet_instrument_is_one_edge_anchored_surface() -> None:
     assert "property real maxWorkAreaRatio: 0.70" in qml
     assert "Math.floor(workAreaWidth * maxWorkAreaRatio)" in qml
     assert "Math.floor(workAreaHeight * maxWorkAreaRatio)" in qml
-    assert "Screen.desktopAvailableX + root.workAreaWidth - width - tokens.spaceLg" in qml
+    assert "Screen.desktopAvailableX + root.workAreaWidth - width - tokens.spaceLg" not in qml
+    assert "Screen.desktopAvailableY + Math.max" not in qml
     assert "root.collapsed ? root.collapsedWidthEpx : Math.min(root.targetSurfaceWidth, root.maxSurfaceWidth)" in qml
 
 
@@ -53,8 +56,12 @@ def test_quiet_instrument_collapses_without_closing_runtime() -> None:
     qml = _read(QUIET_INSTRUMENT_QML)
 
     assert "property bool collapsed: false" in qml
+    assert "property bool focusCollapseArmed: false" in qml
     assert "function collapse(reason)" in qml
     assert "root.collapsed = true" in qml
+    assert "root.focusCollapseArmed = false" in qml
+    assert "if (active)" in qml
+    assert "root.focusCollapseArmed = true" in qml
     assert 'root.collapse("close")' in qml
     assert 'root.collapse("escape")' in qml
     assert "function expand()" in qml
@@ -72,7 +79,9 @@ def test_quiet_instrument_uses_structural_state_components() -> None:
     for filename in (
         "InstrumentReady.qml",
         "InstrumentRunning.qml",
+        "InstrumentPaused.qml",
         "InstrumentWaiting.qml",
+        "InstrumentConfirmation.qml",
         "InstrumentFailure.qml",
         "InstrumentRecovery.qml",
     ):
@@ -98,6 +107,8 @@ def test_quiet_instrument_has_one_primary_action_and_progressive_disclosure() ->
     assert "visible: root.technicalDetailsOpen" in qml
     assert "Accessible.name: \"Raw diagnostics\"" in qml
     assert "Keep visible for this ritual" in qml
+    assert "indicator: Rectangle" in qml
+    assert "contentItem: Text" in qml
 
 
 def test_running_state_condenses_completed_and_future_steps() -> None:
@@ -115,7 +126,9 @@ def test_each_state_has_distinct_semantic_structure() -> None:
     expected = {
         "ready": ("Ready", "First step"),
         "running": ("Now running", "Completed", "Upcoming"),
-        "waiting": ("Confirmation required",),
+        "paused": ("Paused",),
+        "waiting": ("Waiting", "Waiting for readiness"),
+        "confirmation": ("Confirmation required", "Target:", "Cancel stops"),
         "failure": ("Needs attention",),
         "recovery": ("Recovery", "Recovery step"),
     }

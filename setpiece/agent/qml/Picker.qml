@@ -15,7 +15,7 @@ Window {
     minimumWidth: 336
     maximumHeight: 520
     visible: false
-    flags: Qt.Tool | Qt.FramelessWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
     title: "Setpiece Picker"
 
@@ -107,6 +107,11 @@ Window {
     onActiveChanged: {
         if (!active) {
             dismissIfIdle("outside")
+        }
+    }
+    onVisibleChanged: {
+        if (visible) {
+            searchField.forceActiveFocus()
         }
     }
 

@@ -9,6 +9,7 @@ from setpiece.e2e import record_event
 from setpiece.errors import DependencyMissingError
 
 from .instrument_model import InstrumentModel, InstrumentSources, build_instrument_model
+from .window_activation import activate_qml_window, place_qml_window
 
 
 InstrumentModelProvider = Callable[[], InstrumentModel]
@@ -100,12 +101,12 @@ class QmlInstrumentSurface:
     def show(self) -> None:
         self._ensure_loaded()
         self.refresh()
+        if hasattr(self._root, "setProperty"):
+            self._root.setProperty("collapsed", False)
         if hasattr(self._root, "show"):
             self._root.show()
-        if hasattr(self._root, "raise_"):
-            self._root.raise_()
-        if hasattr(self._root, "requestActivate"):
-            self._root.requestActivate()
+        place_qml_window(self._root, anchor="right-center", fallback_width=420, fallback_height=520)
+        activate_qml_window(self._root)
         record_event("agent.instrument.show")
 
     def hide(self) -> None:
@@ -180,6 +181,10 @@ def instrument_payload_for_qml(model: InstrumentModel) -> dict[str, object]:
         "actions": actions,
         "primary_action": primary.action if primary else "",
         "primary_action_label": primary.label if primary else "",
+        "wait": model.wait.to_dict() if model.wait else None,
+        "confirmation": model.confirmation.to_dict() if model.confirmation else None,
+        "failure": model.failure.to_dict() if model.failure else None,
+        "recovery": model.recovery.to_dict() if model.recovery else None,
         "technical_details": _technical_details(model),
     }
 

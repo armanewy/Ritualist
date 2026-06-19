@@ -36,6 +36,8 @@ _TOKENS: Final[dict[str, TokenValue]] = {
     "color.semantic.waiting_panel": "#F7F4EE",
     "color.semantic.confirmation": "#6E5A8A",
     "color.semantic.confirmation_panel": "#DDE7E8",
+    "color.semantic.paused": "#70777C",
+    "color.semantic.paused_panel": "#F7F4EE",
     "color.semantic.failure": "#A84942",
     "color.semantic.failure_panel": "#F7F4EE",
     "color.semantic.recovery": "#45715F",

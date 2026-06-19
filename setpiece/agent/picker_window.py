@@ -10,6 +10,7 @@ from setpiece.errors import DependencyMissingError
 
 from .picker_controller import PickerController, PickerIntent, PickerIntentKind
 from .picker_model import PickerModel, build_picker_model
+from .window_activation import activate_qml_window, place_qml_window
 
 
 PickerModelProvider = Callable[[], PickerModel]
@@ -114,10 +115,8 @@ class QmlPickerSurface:
         self.refresh()
         if hasattr(self._root, "show"):
             self._root.show()
-        if hasattr(self._root, "raise_"):
-            self._root.raise_()
-        if hasattr(self._root, "requestActivate"):
-            self._root.requestActivate()
+        place_qml_window(self._root, anchor="bottom-right", fallback_width=400, fallback_height=520)
+        activate_qml_window(self._root)
         record_event("agent.picker.show")
 
     def hide(self) -> None:
