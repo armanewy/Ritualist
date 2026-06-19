@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.approvals import ConfirmationDecision
-from ritualist.actions.base import ActionContext
-from ritualist.actions.metadata import ALL_PLATFORMS, ActionMetadata
-from ritualist.actions.registry import ActionRegistry
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
-from ritualist.overlay import ScreenRect, TargetRegion
-from ritualist.runtime_control import RuntimeControl
-from ritualist.runtime_models import (
+from setpiece.approvals import ConfirmationDecision
+from setpiece.actions.base import ActionContext
+from setpiece.actions.metadata import ALL_PLATFORMS, ActionMetadata
+from setpiece.actions.registry import ActionRegistry
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
+from setpiece.overlay import ScreenRect, TargetRegion
+from setpiece.runtime_control import RuntimeControl
+from setpiece.runtime_models import (
     ConfirmationRequested,
     ConfirmationResolved,
     Heartbeat,

@@ -8,8 +8,8 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.canvas.models import CanvasComponent, CanvasDocument, CanvasTheme
-from ritualist.canvas_packs import (
+from setpiece.canvas.models import CanvasComponent, CanvasDocument, CanvasTheme
+from setpiece.canvas_packs import (
     CANVAS_NAME,
     CANVAS_PACK_SCHEMA,
     MANIFEST_NAME,
@@ -21,7 +21,7 @@ from ritualist.canvas_packs import (
     import_canvas_pack,
     import_theme_pack,
 )
-from ritualist.cli import app
+from setpiece.cli import app
 
 
 def _visual_canvas(tmp_path: Path) -> Path:
@@ -95,9 +95,9 @@ def _theme_manifest(*, theme_id: str = "minimal_theme", assets: list[str] | None
 
 
 def test_export_import_canvas_pack_quarantines_visual_canvas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ritualist.canvas_packs.imported_canvas_packs_dir", lambda: tmp_path / "imports")
+    monkeypatch.setattr("setpiece.canvas_packs.imported_canvas_packs_dir", lambda: tmp_path / "imports")
     canvas = _visual_canvas(tmp_path)
-    out = tmp_path / "visual_canvas.ritualistcanvas"
+    out = tmp_path / "visual_canvas.setpiececanvas"
 
     export_result = export_canvas_pack(canvas, out)
     import_record = import_canvas_pack(export_result.output_path)
@@ -113,9 +113,9 @@ def test_export_import_canvas_pack_quarantines_visual_canvas(tmp_path: Path, mon
 
 
 def test_export_import_theme_pack_is_visual_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ritualist.canvas_packs.imported_theme_packs_dir", lambda: tmp_path / "themes")
+    monkeypatch.setattr("setpiece.canvas_packs.imported_theme_packs_dir", lambda: tmp_path / "themes")
     theme = _theme_path(tmp_path)
-    out = tmp_path / "minimal_theme.ritualisttheme"
+    out = tmp_path / "minimal_theme.setpiecetheme"
 
     export_result = export_theme_pack(theme, out)
     import_record = import_theme_pack(export_result.output_path)
@@ -141,7 +141,7 @@ def test_canvas_pack_rejects_arbitrary_component_code(tmp_path: Path) -> None:
             ),
         ),
     )
-    pack = tmp_path / "bad.ritualistcanvas"
+    pack = tmp_path / "bad.setpiececanvas"
     _write_pack(pack, {MANIFEST_NAME: _canvas_manifest(), CANVAS_NAME: document.to_dict()})
 
     with pytest.raises(VisualPackError, match="script-like component content"):
@@ -162,7 +162,7 @@ def test_imported_canvas_pack_rejects_triggering_components(tmp_path: Path) -> N
             ),
         ),
     )
-    pack = tmp_path / "runner.ritualistcanvas"
+    pack = tmp_path / "runner.setpiececanvas"
     _write_pack(pack, {MANIFEST_NAME: _canvas_manifest(), CANVAS_NAME: document.to_dict()})
 
     with pytest.raises(VisualPackError, match="blocked in imported canvases"):
@@ -171,7 +171,7 @@ def test_imported_canvas_pack_rejects_triggering_components(tmp_path: Path) -> N
 
 def test_canvas_pack_rejects_undeclared_and_executable_assets(tmp_path: Path) -> None:
     document = CanvasDocument(id="visual_canvas", name="Visual Canvas")
-    undeclared = tmp_path / "undeclared.ritualistcanvas"
+    undeclared = tmp_path / "undeclared.setpiececanvas"
     _write_pack(
         undeclared,
         {
@@ -183,7 +183,7 @@ def test_canvas_pack_rejects_undeclared_and_executable_assets(tmp_path: Path) ->
     with pytest.raises(VisualPackError, match="undeclared assets"):
         import_canvas_pack(undeclared)
 
-    executable = tmp_path / "executable.ritualistcanvas"
+    executable = tmp_path / "executable.setpiececanvas"
     _write_pack(
         executable,
         {
@@ -211,7 +211,7 @@ def test_canvas_pack_rejects_non_raster_and_script_like_assets(tmp_path: Path) -
         ),
     )
 
-    html_pack = tmp_path / "html.ritualistcanvas"
+    html_pack = tmp_path / "html.setpiececanvas"
     _write_pack(
         html_pack,
         {
@@ -223,7 +223,7 @@ def test_canvas_pack_rejects_non_raster_and_script_like_assets(tmp_path: Path) -
     with pytest.raises(VisualPackError, match="raster image files"):
         import_canvas_pack(html_pack)
 
-    svg_pack = tmp_path / "svg.ritualistcanvas"
+    svg_pack = tmp_path / "svg.setpiececanvas"
     _write_pack(
         svg_pack,
         {
@@ -235,7 +235,7 @@ def test_canvas_pack_rejects_non_raster_and_script_like_assets(tmp_path: Path) -
     with pytest.raises(VisualPackError, match="raster image files"):
         import_canvas_pack(svg_pack)
 
-    disguised = tmp_path / "disguised.ritualistcanvas"
+    disguised = tmp_path / "disguised.setpiececanvas"
     _write_pack(
         disguised,
         {
@@ -263,12 +263,12 @@ def test_canvas_pack_requires_exact_referenced_assets(tmp_path: Path) -> None:
         ),
     )
 
-    missing = tmp_path / "missing.ritualistcanvas"
+    missing = tmp_path / "missing.setpiececanvas"
     _write_pack(missing, {MANIFEST_NAME: _canvas_manifest(), CANVAS_NAME: document.to_dict()})
     with pytest.raises(VisualPackError, match="references missing assets"):
         import_canvas_pack(missing)
 
-    unused = tmp_path / "unused.ritualistcanvas"
+    unused = tmp_path / "unused.setpiececanvas"
     _write_pack(
         unused,
         {
@@ -299,11 +299,11 @@ def test_canvas_pack_export_rejects_missing_local_asset_reference(tmp_path: Path
     path.write_text(yaml.safe_dump(document.to_dict(), sort_keys=False), encoding="utf-8")
 
     with pytest.raises(VisualPackError, match="references missing assets"):
-        export_canvas_pack(path, tmp_path / "missing_export.ritualistcanvas")
+        export_canvas_pack(path, tmp_path / "missing_export.setpiececanvas")
 
 
 def test_visual_packs_reject_cross_domain_documents(tmp_path: Path) -> None:
-    canvas_pack = tmp_path / "with_theme.ritualistcanvas"
+    canvas_pack = tmp_path / "with_theme.setpiececanvas"
     _write_pack(
         canvas_pack,
         {
@@ -315,7 +315,7 @@ def test_visual_packs_reject_cross_domain_documents(tmp_path: Path) -> None:
     with pytest.raises(VisualPackError, match="unexpected visual pack entry"):
         import_canvas_pack(canvas_pack)
 
-    theme_pack = tmp_path / "with_canvas.ritualisttheme"
+    theme_pack = tmp_path / "with_canvas.setpiecetheme"
     _write_pack(
         theme_pack,
         {
@@ -342,7 +342,7 @@ def test_visual_packs_reject_duplicate_asset_entries(tmp_path: Path) -> None:
             ),
         ),
     )
-    pack = tmp_path / "duplicate.ritualistcanvas"
+    pack = tmp_path / "duplicate.setpiececanvas"
     with ZipFile(pack, "w", ZIP_DEFLATED) as archive:
         archive.writestr(MANIFEST_NAME, yaml.safe_dump(_canvas_manifest(assets=["assets/a.png"])))
         archive.writestr(CANVAS_NAME, yaml.safe_dump(document.to_dict()))
@@ -368,7 +368,7 @@ def test_visual_pack_manifest_rejects_case_colliding_assets(tmp_path: Path) -> N
             ),
         ),
     )
-    pack = tmp_path / "case_collision.ritualistcanvas"
+    pack = tmp_path / "case_collision.setpiececanvas"
     _write_pack(
         pack,
         {
@@ -383,7 +383,7 @@ def test_visual_pack_manifest_rejects_case_colliding_assets(tmp_path: Path) -> N
 
 
 def test_theme_pack_rejects_assets_until_theme_asset_refs_exist(tmp_path: Path) -> None:
-    pack = tmp_path / "theme_asset.ritualisttheme"
+    pack = tmp_path / "theme_asset.setpiecetheme"
     _write_pack(
         pack,
         {
@@ -398,7 +398,7 @@ def test_theme_pack_rejects_assets_until_theme_asset_refs_exist(tmp_path: Path) 
 
 
 def test_theme_pack_rejects_recipes_actions_and_components(tmp_path: Path) -> None:
-    pack = tmp_path / "bad_theme.ritualisttheme"
+    pack = tmp_path / "bad_theme.setpiecetheme"
     _write_pack(
         pack,
         {
@@ -416,9 +416,9 @@ def test_theme_pack_rejects_recipes_actions_and_components(tmp_path: Path) -> No
 
 
 def test_canvas_pack_cli_export_import_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ritualist.canvas_packs.imported_canvas_packs_dir", lambda: tmp_path / "imports")
+    monkeypatch.setattr("setpiece.canvas_packs.imported_canvas_packs_dir", lambda: tmp_path / "imports")
     canvas = _visual_canvas(tmp_path)
-    out = tmp_path / "cli_canvas.ritualistcanvas"
+    out = tmp_path / "cli_canvas.setpiececanvas"
     runner = CliRunner()
 
     export_result = runner.invoke(app, ["canvas", "pack", "export", str(canvas), "--out", str(out), "--json"])

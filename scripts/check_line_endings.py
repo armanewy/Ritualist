@@ -1,4 +1,4 @@
-"""Check and optionally normalize Ritualist source line endings.
+"""Check and optionally normalize Setpiece source line endings.
 
 This script intentionally performs byte-level checks. Python's text helpers such
 as ``splitlines()`` can make CR-only files look normal on Windows while GitHub
@@ -25,12 +25,12 @@ LARGE_FILE_BYTES = 2_048
 SOURCE_PATTERNS: tuple[str, ...] = (
     ".gitattributes",
     "pyproject.toml",
-    "ritualist/canvas/**/*.py",
-    "ritualist/canvas/**/*.qml",
-    "ritualist/canvas/**/*.yaml",
-    "ritualist/canvas/**/*.yml",
-    "ritualist/sample_canvases/**/*.yaml",
-    "ritualist/sample_canvases/**/*.yml",
+    "setpiece/canvas/**/*.py",
+    "setpiece/canvas/**/*.qml",
+    "setpiece/canvas/**/*.yaml",
+    "setpiece/canvas/**/*.yml",
+    "setpiece/sample_canvases/**/*.yaml",
+    "setpiece/sample_canvases/**/*.yml",
     "tests/test_canvas*.py",
     "tests/test_line_endings.py",
     "docs/canvas.md",
@@ -106,9 +106,9 @@ class LineEndingProblem:
 def repo_root(start: Path | None = None) -> Path:
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
-        if (candidate / "pyproject.toml").exists() and (candidate / "ritualist").exists():
+        if (candidate / "pyproject.toml").exists() and (candidate / "setpiece").exists():
             return candidate
-    raise RuntimeError("Could not find Ritualist repository root")
+    raise RuntimeError("Could not find Setpiece repository root")
 
 
 def _is_excluded(path: Path) -> bool:

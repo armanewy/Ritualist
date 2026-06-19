@@ -1,6 +1,6 @@
-# Ritualist UI Design System Plan
+# Setpiece UI Design System Plan
 
-The Room UI should make Ritualist feel like a local, visible, policy-gated
+The Room UI should make Setpiece feel like a local, visible, policy-gated
 desktop command surface rather than a generic card dashboard. The design system
 must start with built-in components, declarative tokens, and measurable
 performance budgets before visual polish expands.
@@ -18,12 +18,12 @@ performance budgets before visual polish expands.
 
 ## Desktop Layering
 
-Windowed Canvas may keep the existing opaque Ritualist background. Desktop
+Windowed Canvas may keep the existing opaque Setpiece background. Desktop
 Work-Area Canvas must default to transparent / `system_wallpaper` passthrough
 so the user's static wallpaper or live wallpaper app remains visible.
 
 The design system should treat wallpaper as environmental context outside
-Ritualist. Ritualist surfaces still own their own tokens, contrast, borders,
+Setpiece. Setpiece surfaces still own their own tokens, contrast, borders,
 shadows, focus rings, and state treatments, but the full Canvas should not
 paint an opaque background in desktop-work-area mode unless a future explicit
 user choice enables that treatment.
@@ -32,9 +32,9 @@ Layer order:
 
 1. Windows wallpaper or third-party wallpaper app.
 2. Optional Windows desktop icons.
-3. Ritualist components, docks, status, and edit chrome.
+3. Setpiece components, docks, status, and edit chrome.
 4. Normal application windows.
-5. Native Ritualist confirmation dialogs.
+5. Native Setpiece confirmation dialogs.
 
 Design requirements:
 

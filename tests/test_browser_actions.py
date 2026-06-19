@@ -7,18 +7,18 @@ from textwrap import dedent
 
 import pytest
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.actions.base import ActionContext
-from ritualist.actions.browser_actions import BrowserWaitTextHandler
-from ritualist.actions.browser_actions import BrowserWaitMediaPlayingHandler
-from ritualist.actions.registry import create_default_registry
-from ritualist.config import AppConfig
-from ritualist.doctor import build_doctor_report
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import BrowserWaitMediaPlayingStep, BrowserWaitTextStep, Recipe
-from ritualist.overlay import ConfirmationRequest, NullOverlayController
-from ritualist.recipe_loader import load_recipe
-from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.actions.base import ActionContext
+from setpiece.actions.browser_actions import BrowserWaitTextHandler
+from setpiece.actions.browser_actions import BrowserWaitMediaPlayingHandler
+from setpiece.actions.registry import create_default_registry
+from setpiece.config import AppConfig
+from setpiece.doctor import build_doctor_report
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import BrowserWaitMediaPlayingStep, BrowserWaitTextStep, Recipe
+from setpiece.overlay import ConfirmationRequest, NullOverlayController
+from setpiece.recipe_loader import load_recipe
+from setpiece.runtime_control import RuntimeControl, RuntimeStoppedError
 
 
 def test_browser_wait_text_success_uses_fake_browser_adapter():
@@ -153,7 +153,7 @@ def test_browser_open_native_doctor_does_not_require_playwright(monkeypatch):
             "steps": [{"action": "browser.open_native", "url": "https://example.test"}],
         }
     )
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda _name: None)
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda _name: None)
 
     report = build_doctor_report(recipe)
 
@@ -621,7 +621,7 @@ def test_browser_wait_heartbeat_is_not_duplicated_per_poll_cycle(monkeypatch):
 
     context = _context(fakes, control=RuntimeControl(), heartbeat=heartbeat)
     ticks = iter([0.0, 1.0])
-    monkeypatch.setattr("ritualist.actions.browser_actions.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr("setpiece.actions.browser_actions.time.monotonic", lambda: next(ticks))
     step = BrowserWaitTextStep.model_validate(
         {"action": "browser.wait_text", "text": "Ready", "timeout_seconds": 1}
     )

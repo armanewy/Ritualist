@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ritualist.agent.notification_policy import (
+from setpiece.agent.notification_policy import (
     LONG_HIDDEN_RUN_SECONDS,
     NotificationAction,
     NotificationEvent,

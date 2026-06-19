@@ -4,18 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.recipe_loader import load_recipe_document
-from ritualist.suggestions.drafts_recipe import (
+from setpiece.recipe_loader import load_recipe_document
+from setpiece.suggestions.drafts_recipe import (
     DRAFT_RECIPE_SCHEMA_VERSION,
     RecipeDraftBuildError,
     build_draft_recipe,
 )
-from ritualist.suggestions.models import Suggestion
-from ritualist.suggestions.review import (
+from setpiece.suggestions.models import Suggestion
+from setpiece.suggestions.review import (
     SuggestionReviewRequiredError,
     approve_suggestion,
 )
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.suggestions.storage import SuggestionStore
 
 
 REVIEWED_AT = "2026-06-18T12:00:00Z"
@@ -32,7 +32,7 @@ def _suggestion(
         confidence=0.8,
         evidence_summary="Repeated local project handoff pattern",
         evidence_count=3,
-        sources=("ritualist_journal", "recent_items"),
+        sources=("setpiece_journal", "recent_items"),
         proposed_actions=(
             {
                 "action": "review_ritual_recipe",

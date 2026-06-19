@@ -1,6 +1,6 @@
 # Intents And Primitive Plans
 
-Ritualist intents are user-visible descriptions of local goals. They are not
+Setpiece intents are user-visible descriptions of local goals. They are not
 freeform prompts and they are not AI planning. Intent Plan Compiler v1 uses
 deterministic, reviewed rules to turn an `IntentSpec` into a `PrimitivePlan`.
 

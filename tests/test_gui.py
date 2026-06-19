@@ -9,11 +9,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
-from ritualist.doctor import DoctorCheck
-from ritualist.models import Recipe
-from ritualist.ui import main_window
-from ritualist.ui.diagnostics_dialog import DiagnosticsDialog
-from ritualist.ui.runner_thread import RunnerThread
+from setpiece.doctor import DoctorCheck
+from setpiece.models import Recipe
+from setpiece.ui import main_window
+from setpiece.ui.diagnostics_dialog import DiagnosticsDialog
+from setpiece.ui.runner_thread import RunnerThread
 
 
 def test_main_window_has_personal_app_controls_and_loads_selected_recipe(tmp_path, monkeypatch):

@@ -11,7 +11,7 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "ritualist_ui_baseline.ps1"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "setpiece_ui_baseline.ps1"
 SPEC_PATH = REPO_ROOT / "tests" / "acceptance" / "ui_migration_baseline.yaml"
 
 EXPECTED_SURFACES = {
@@ -34,7 +34,7 @@ def _powershell() -> str | None:
 def test_ui_migration_baseline_spec_declares_before_state_contract() -> None:
     spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
 
-    assert spec["schema"] == "ritualist.ui_migration_baseline.v1"
+    assert spec["schema"] == "setpiece.ui_migration_baseline.v1"
     assert spec["baseline_head"] == "4789b4c1b1795b89d91d109050c9153b9e41f13a"
     assert spec["scope"] == "current_before_state_only"
     assert "before-state only" in spec["product_goal_note"]
@@ -83,7 +83,7 @@ def test_ui_migration_baseline_script_declares_artifact_and_state_contracts() ->
         "screenshots",
         "window-tree.json",
         "process-tree.json",
-        "ritualist.ui_migration_baseline_summary.v1",
+        "setpiece.ui_migration_baseline_summary.v1",
         "current_before_state_only",
         "Legacy surfaces are recorded factually as before-state only",
         "CAPTURED",
@@ -102,8 +102,8 @@ def test_ui_migration_baseline_script_declares_artifact_and_state_contracts() ->
         "Open in Window",
         "--room",
         "gaming",
-        "RITUALIST_E2E",
-        "RITUALIST_E2E_ARTIFACT_DIR",
+        "SETPIECE_E2E",
+        "SETPIECE_E2E_ARTIFACT_DIR",
     ):
         assert expected in script
 
@@ -149,7 +149,7 @@ def test_ui_migration_baseline_missing_packaged_app_marks_not_captured(tmp_path:
         pytest.skip("PowerShell is not available")
 
     evidence_dir = tmp_path / "ui-baseline"
-    missing_exe = tmp_path / "missing" / "Ritualist.exe"
+    missing_exe = tmp_path / "missing" / "Setpiece.exe"
     result = subprocess.run(
         [
             shell,
@@ -174,7 +174,7 @@ def test_ui_migration_baseline_missing_packaged_app_marks_not_captured(tmp_path:
 
     assert result.returncode == 0, result.stderr
     summary = json.loads((evidence_dir / "baseline-summary.json").read_text(encoding="utf-8"))
-    assert summary["schema_version"] == "ritualist.ui_migration_baseline_summary.v1"
+    assert summary["schema_version"] == "setpiece.ui_migration_baseline_summary.v1"
     assert summary["packaged"]["executable_exists"] is False
     assert summary["safety"]["no_ux_pass_assigned"] is True
     assert summary["truth_model"]["human_usability_pass"] == "NOT_RUN"

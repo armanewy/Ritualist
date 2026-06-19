@@ -1,6 +1,6 @@
 # Helpdesk Privacy And Evidence Policy
 
-Ritualist helpdesk workflows are local-first support runbooks. They may help an
+Setpiece helpdesk workflows are local-first support runbooks. They may help an
 operator collect a narrow activity trail, but they must not turn templates into
 screen recorders, browser scrapers, secret collectors, or remote command
 channels.
@@ -39,7 +39,7 @@ or export these by default:
 
 This includes direct collection and indirect collection through recipe-supplied
 code, browser scraping, OCR, screen capture, clipboard reads, cookie export, or
-full page dumps. Ritualist does not support arbitrary recipe-supplied Python,
+full page dumps. Setpiece does not support arbitrary recipe-supplied Python,
 shell snippets, JavaScript, OCR, coordinate clicks, macro recording, cloud sync,
 remote execution, or network command channels.
 

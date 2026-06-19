@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from ritualist.perf import PerformanceReport, measure_operation
+from setpiece.perf import PerformanceReport, measure_operation
 
 
 def test_measure_operation_duration_is_non_negative():

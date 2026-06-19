@@ -1,12 +1,12 @@
-# Ritualist Canvas
+# Setpiece Canvas
 
-Canvas is the implementation layer that lets Ritualist present a ritual-aware
+Canvas is the implementation layer that lets Setpiece present a ritual-aware
 desktop command surface without becoming a Windows shell replacement, file
 manager, wallpaper renderer, or generic widget platform. Home remains a
 compatibility surface. Canvas Foundation v1 adds the data model, component
 registry, validation, storage, default templates, and performance smoke. Canvas
 Runtime Components v1 adds model/controller bindings from those typed
-components to existing Ritualist recipe, Doctor, target, runtime, and
+components to existing Setpiece recipe, Doctor, target, runtime, and
 run-history services. Canvas Use Mode MVP adds a bundled typed QML renderer for
 using a Canvas document as a runtime command surface. The Canvas Edit model and
 Room Builder UI MVP now exist for configuring typed native components.
@@ -31,7 +31,7 @@ rendering.
 A Canvas document is a local YAML file:
 
 ```yaml
-schema: ritualist.canvas.v1
+schema: setpiece.canvas.v1
 id: gaming_desktop
 name: Gaming Desktop
 mode: desktop_canvas
@@ -64,12 +64,12 @@ User canvases live under the platform user-data directory in `canvases/`.
 Bundled samples are local package templates and can be copied with:
 
 ```powershell
-python -m ritualist canvas init
+python -m setpiece canvas init
 ```
 
 ## Components
 
-Canvas components are typed native Ritualist components. They are not arbitrary
+Canvas components are typed native Setpiece components. They are not arbitrary
 QML, JavaScript, HTML, Python, or shell snippets.
 
 Canvas Foundation v1 registers:
@@ -183,9 +183,9 @@ Dispatch rules:
 Developer diagnostics:
 
 ```powershell
-python -m ritualist canvas runtime gaming_desktop --json
-python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run
-python -m ritualist perf canvas-runtime --mock-components 100 --json
+python -m setpiece canvas runtime gaming_desktop --json
+python -m setpiece canvas action gaming_desktop diablo_night doctor --dry-run
+python -m setpiece perf canvas-runtime --mock-components 100 --json
 ```
 
 ## Canvas Use Mode
@@ -197,8 +197,8 @@ not a visual polish pass.
 Launch it with:
 
 ```powershell
-python -m ritualist canvas use gaming_desktop
-python -m ritualist canvas use --mock --mock-components 100
+python -m setpiece canvas use gaming_desktop
+python -m setpiece canvas use --mock --mock-components 100
 ```
 
 Supported component rendering in the MVP:
@@ -316,12 +316,12 @@ review. It is not a rebuild of Edit Mode.
 ## Shell Boundary
 
 Canvas Mode is a reversible desktop canvas layer. It is not v1 shell
-replacement. Ritualist does not hide the taskbar, replace Explorer, use kiosk
+replacement. Setpiece does not hide the taskbar, replace Explorer, use kiosk
 mode, or claim ownership of the Windows session.
 
 The supported stage is Desktop Work-Area mode on top of the normal desktop,
 with wallpaper passthrough to whatever Windows or a wallpaper app already owns.
-Ritualist does not render, manage, pause, stop, or replace wallpaper.
+Setpiece does not render, manage, pause, stop, or replace wallpaper.
 
 Blank-area click-through is not implemented and remains frozen. Desktop-host
 expansion is frozen after Desktop Work-Area mode and wallpaper passthrough: no
@@ -331,12 +331,12 @@ integration belongs on the v0.2 release line.
 
 ## Pack Domains
 
-Ritualist keeps package types in separate local trust domains:
+Setpiece keeps package types in separate local trust domains:
 
-- `.ritualistpack`: behavior, recipes, intents.
-- `.ritualistcanvas`: visual layout, display-safe components, and local assets.
-- `.ritualisttheme`: colors and local visual assets only.
-- `.ritualistsuite`: future combined behavior + canvas + assets.
+- `.setpiecepack`: behavior, recipes, intents.
+- `.setpiececanvas`: visual layout, display-safe components, and local assets.
+- `.setpiecetheme`: colors and local visual assets only.
+- `.setpiecesuite`: future combined behavior + canvas + assets.
 
 Canvas and theme packs are local archives. Import stores them in quarantine,
 disabled by default, and does not run rituals or activate components. Canvas
@@ -363,12 +363,12 @@ Canvas model generation and validation must stay cheap:
 Use:
 
 ```powershell
-python -m ritualist perf canvas-model --mock-components 100 --json
-python -m ritualist perf canvas-model --mock-components 300 --json
-python -m ritualist perf canvas-runtime --mock-components 100 --json
-python -m ritualist perf canvas-runtime --mock-components 300 --json
-python -m ritualist perf canvas-use --mock-components 100 --json
-python -m ritualist perf canvas-use --mock-components 300 --json
+python -m setpiece perf canvas-model --mock-components 100 --json
+python -m setpiece perf canvas-model --mock-components 300 --json
+python -m setpiece perf canvas-runtime --mock-components 100 --json
+python -m setpiece perf canvas-runtime --mock-components 300 --json
+python -m setpiece perf canvas-use --mock-components 100 --json
+python -m setpiece perf canvas-use --mock-components 300 --json
 ```
 
 These commands report durations and advisory warnings without enforcing hard

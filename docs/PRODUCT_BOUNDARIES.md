@@ -1,10 +1,10 @@
-# Ritualist Product Boundaries
+# Setpiece Product Boundaries
 
-Ritualist turns Windows into activity-specific Rooms powered by safe local
+Setpiece turns Windows into activity-specific Rooms powered by safe local
 rituals that can be previewed, checked, run, paused, logged, recovered, and
 improved over time.
 
-Ritualist is a local ritual/runbook engine with a desktop-native body. Recipes
+Setpiece is a local ritual/runbook engine with a desktop-native body. Recipes
 and rituals are the center of gravity. Rooms and Canvas make those rituals
 visible and daily-usable, but they must not become an independent desktop
 customizer, widget platform, shell, or wallpaper product.
@@ -32,7 +32,7 @@ If a feature does not improve one of those, it does not ship.
 
 ## Core Product Nouns
 
-Ritualist has six product nouns:
+Setpiece has six product nouns:
 
 - **Room**: user-facing desktop for an activity.
 - **Ritual**: multi-step local procedure with Doctor, dry-run, confirmation,
@@ -47,7 +47,7 @@ these six.
 
 ## Containment Doctrine
 
-Ritualist is allowed to be excellent at:
+Setpiece is allowed to be excellent at:
 
 - preparing a PC for repeated activities
 - running attended local procedures
@@ -60,7 +60,7 @@ Ritualist is allowed to be excellent at:
 - suggesting safe drafts from local patterns
 - sharing and reusing safe templates after quarantine and review
 
-Ritualist is not allowed to become:
+Setpiece is not allowed to become:
 
 - a Windows shell replacement
 - a file manager
@@ -110,7 +110,7 @@ transparent component layer sized to the Windows work area, with the taskbar
 visible and Explorer still running as the Windows shell and file manager.
 
 The default Desktop Work-Area background is wallpaper or system-background
-passthrough. Windows and the user's wallpaper app own the wallpaper. Ritualist
+passthrough. Windows and the user's wallpaper app own the wallpaper. Setpiece
 does not render live, video, web, app, or executable wallpapers, and it does
 not manage, pause, stop, or replace Wallpaper Engine, Lively Wallpaper, or
 similar wallpaper tools.
@@ -128,7 +128,7 @@ positions.
 - Explorer remains the file manager and desktop shell.
 - Wallpaper Engine, Lively Wallpaper, Windows Personalization, or another user
   wallpaper app owns wallpaper rendering and playback.
-- Ritualist owns built-in Room/Canvas components, ritual cards, runtime status,
+- Setpiece owns built-in Room/Canvas components, ritual cards, runtime status,
   explicit confirmations, logs, pack validation, and local policy checks.
 
 ## Shortcuts And Rituals
@@ -143,15 +143,15 @@ support, confirmation gates, pause/resume/stop controls, logs, and recovery.
 
 The shortcut boundary is documented in
 [Shortcut Components](SHORTCUT_COMPONENTS.md). Folder shortcuts hand off to
-File Explorer on Windows; Ritualist must not replace Explorer, build a file
+File Explorer on Windows; Setpiece must not replace Explorer, build a file
 manager, recursively index folders, provide folder tree or context-menu UI, or
 turn single-step folder/app/URL/file access into recipe execution.
 
 ## Local Learning Direction
 
-Future Ritual Suggestions must be local, opt-in, and review-only. Ritualist may
+Future Ritual Suggestions must be local, opt-in, and review-only. Setpiece may
 suggest useful desktop components or rituals from consented local activity
-signals and Ritualist's own Activity Journal, but it must not create or run
+signals and Setpiece's own Activity Journal, but it must not create or run
 anything automatically. The user reviews every suggestion before it becomes a
 component or ritual.
 
@@ -161,7 +161,7 @@ coordinate logging.
 
 ## Non-Goals
 
-Ritualist does not provide:
+Setpiece does not provide:
 
 - Watch Me or recording mode.
 - Macro recording, teach-by-watching, global click/keyboard capture, keylogging,

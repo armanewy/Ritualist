@@ -13,9 +13,9 @@ import wave
 
 import pytest
 
-if os.environ.get("RITUALIST_RUNTIME_SMOKE") != "1":
+if os.environ.get("SETPIECE_RUNTIME_SMOKE") != "1":
     pytest.skip(
-        "set RITUALIST_RUNTIME_SMOKE=1 to run browser/window/UIA runtime smoke tests",
+        "set SETPIECE_RUNTIME_SMOKE=1 to run browser/window/UIA runtime smoke tests",
         allow_module_level=True,
     )
 
@@ -24,13 +24,13 @@ if sys.platform != "win32":
 
 
 def test_runtime_workflow_with_real_adapters() -> None:
-    from ritualist.adapters import create_default_adapters
-    from ritualist.executor import WorkflowExecutor
-    from ritualist.models import Recipe
+    from setpiece.adapters import create_default_adapters
+    from setpiece.executor import WorkflowExecutor
+    from setpiece.models import Recipe
 
     media_url = _local_media_url()
-    window_title = f"Ritualist E2E Native UIA {uuid.uuid4()}"
-    result_path = os.path.join(tempfile.gettempdir(), f"ritualist-e2e-{uuid.uuid4()}.txt")
+    window_title = f"Setpiece E2E Native UIA {uuid.uuid4()}"
+    result_path = os.path.join(tempfile.gettempdir(), f"setpiece-e2e-{uuid.uuid4()}.txt")
     child_code = _native_button_window_code()
     recipe = Recipe.model_validate(
         {
@@ -122,7 +122,7 @@ def _local_media_url() -> str:
 
     audio = base64.b64encode(buffer.getvalue()).decode("ascii")
     html = (
-        "<!doctype html><title>Ritualist E2E Runtime Media</title>"
+        "<!doctype html><title>Setpiece E2E Runtime Media</title>"
         f"<audio id='media' controls src='data:audio/wav;base64,{audio}'></audio>"
     )
     return "data:text/html," + urllib.parse.quote(html)
@@ -139,7 +139,7 @@ import win32gui
 result_path = sys.argv[1]
 window_title = sys.argv[2]
 button_id = 1001
-class_name = "RitualistE2ENativeTestWindow"
+class_name = "SetpieceE2ENativeTestWindow"
 
 def wndproc(hwnd, msg, wparam, lparam):
     if msg == win32con.WM_COMMAND and win32api.LOWORD(wparam) == button_id:

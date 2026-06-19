@@ -1,5 +1,5 @@
 {
-  "schema": "ritualist.golden_contract.v1",
+  "schema": "setpiece.golden_contract.v1",
   "output": "representative read-only primitive dry-run/execution reports",
   "required_result_fields": [
     "status",

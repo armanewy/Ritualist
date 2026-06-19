@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from ritualist.errors import RitualistError
-from ritualist.layouts import load_layout, save_layout_snapshot
-from ritualist.overlay import ScreenRect
+from setpiece.errors import SetpieceError
+from setpiece.layouts import load_layout, save_layout_snapshot
+from setpiece.overlay import ScreenRect
 
 
 class FakeWindowCaptureAdapter:
@@ -60,7 +60,7 @@ def test_save_and_load_layout_snapshot(tmp_path):
 def test_save_layout_snapshot_keeps_missing_windows_best_effort(tmp_path):
     adapter = FakeWindowCaptureAdapter(
         [
-            RitualistError("window not found"),
+            SetpieceError("window not found"),
             SimpleNamespace(
                 rect=ScreenRect(x=0, y=0, width=640, height=480),
                 window_title="Chat",

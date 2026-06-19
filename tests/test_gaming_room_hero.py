@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBackgroundType,
     CanvasRuntimeContext,
     CanvasRuntimeController,
@@ -11,9 +11,9 @@ from ritualist.canvas import (
     load_bundled_canvas,
     resolve_canvas_host_config,
 )
-from ritualist.recipe_loader import load_recipe
-from ritualist.run_logs import RunRecord
-from ritualist.target_resolution import (
+from setpiece.recipe_loader import load_recipe
+from setpiece.run_logs import RunRecord
+from setpiece.target_resolution import (
     TargetCandidate,
     TargetResolutionResult,
     TargetState,
@@ -22,7 +22,7 @@ from ritualist.target_resolution import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GAMING_MODE_PATH = REPO_ROOT / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+GAMING_MODE_PATH = REPO_ROOT / "setpiece" / "sample_recipes" / "gaming_mode.yaml"
 
 
 def test_gaming_room_hero_exposes_ritual_target_activity_and_recovery() -> None:
@@ -51,7 +51,7 @@ def test_gaming_room_hero_exposes_ritual_target_activity_and_recovery() -> None:
                 _run_record(
                     "20260618T010000Z_gaming_mode",
                     status="interrupted",
-                    message="Ritualist exited before finalizing this run.",
+                    message="Setpiece exited before finalizing this run.",
                     extra_metadata={"interrupted_at": "2026-06-18T01:00:00+00:00"},
                 ),
                 _run_record(

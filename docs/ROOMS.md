@@ -1,10 +1,10 @@
-# Ritualist Rooms
+# Setpiece Rooms
 
-Ritualist uses **Room** as the user-facing product term and **Canvas** as the
+Setpiece uses **Room** as the user-facing product term and **Canvas** as the
 implementation term. A Room is a personalized desktop for an activity. A Canvas
 is the data model and runtime surface that renders that Room.
 
-This is product language, not a runtime rewrite. The existing `ritualist.canvas`
+This is product language, not a runtime rewrite. The existing `setpiece.canvas`
 modules, CLI commands, sample canvases, and runtime behavior remain the
 technical foundation.
 
@@ -37,9 +37,9 @@ A Room is not:
 **Use Mode** is where a user lives in the Room. It shows Room identity, runnable
 rituals, target previews, status, controls, and recent activity.
 
-In Desktop Work-Area Use Mode, a Room layers Ritualist components over Windows
+In Desktop Work-Area Use Mode, a Room layers Setpiece components over Windows
 and the user's wallpaper app. The wallpaper remains owned by Windows or the
-wallpaper app; Ritualist does not render, manage, pause, stop, or replace it.
+wallpaper app; Setpiece does not render, manage, pause, stop, or replace it.
 Blank desktop-area click-through is unimplemented and frozen for the current
 release line. Do not treat it as supported, and do not reopen desktop-host
 research to add it.
@@ -74,8 +74,8 @@ narrowed around Gaming Room, Project Room, and Support Desk.
 The starter Room CLI is a product-facing alias over bundled Canvas templates:
 
 ```powershell
-python -m ritualist room list --json
-python -m ritualist room show support_desk --json
+python -m setpiece room list --json
+python -m setpiece room show support_desk --json
 ```
 
 `room show` reads the bundled starter template for evidence and onboarding
@@ -100,7 +100,7 @@ auto-create recipes or Rooms, or bypass policy and confirmation gates.
 
 ## Pack Separation
 
-Ritualist should keep pack types explicit:
+Setpiece should keep pack types explicit:
 
 - **Theme Pack**: visual tokens and local assets only. No behavior.
 - **Canvas/Room Pack**: layout, components, selected theme, local assets, and

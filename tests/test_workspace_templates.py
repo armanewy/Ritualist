@@ -4,11 +4,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.recipe_loader import load_recipe, read_recipe_document
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.recipe_loader import load_recipe, read_recipe_document
 
-SAMPLE_DIR = Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes"
+SAMPLE_DIR = Path(__file__).resolve().parents[1] / "setpiece" / "sample_recipes"
 WORKSPACE_TEMPLATE_IDS = {
     "coding_mode",
     "meeting_mode",

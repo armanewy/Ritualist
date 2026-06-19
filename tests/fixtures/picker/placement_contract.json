@@ -1,5 +1,5 @@
 {
-  "schema_version": "ritualist.picker.placement.v1",
+  "schema_version": "setpiece.picker.placement.v1",
   "picker": {
     "logical_width": 420,
     "logical_height": 520,

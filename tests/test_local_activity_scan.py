@@ -3,23 +3,23 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ritualist.activity_collectors import (
+from setpiece.activity_collectors import (
     ActivityCollectionContext,
     FakeActivityCollector,
     FakeOpenAppsCollector,
     FakeRecentReferencesCollector,
 )
-from ritualist.activity_journal import ActivityJournal
-from ritualist.activity_signals import (
+from setpiece.activity_journal import ActivityJournal
+from setpiece.activity_signals import (
     OPEN_WINDOWS_SOURCE_ID,
     RECENT_ITEMS_SOURCE_ID,
-    RITUALIST_JOURNAL_SOURCE_ID,
+    SETPIECE_JOURNAL_SOURCE_ID,
     process_name_signal,
     window_metadata_signal,
 )
-from ritualist.collectors.open_windows import OpenWindowsAppsCollector
-from ritualist.collectors.recent_items import RecentItemsCollector
-from ritualist.local_activity_scan import (
+from setpiece.collectors.open_windows import OpenWindowsAppsCollector
+from setpiece.collectors.recent_items import RecentItemsCollector
+from setpiece.local_activity_scan import (
     LocalActivityScanRequest,
     build_local_activity_collectors,
     scan_local_activity,
@@ -109,7 +109,7 @@ def test_open_windows_collector_redacts_window_titles_by_default(monkeypatch) ->
                 ),
             ).collect(context=context)
 
-    monkeypatch.setattr("ritualist.collectors.open_windows.OpenWindowsCollector", FakeDelegate)
+    monkeypatch.setattr("setpiece.collectors.open_windows.OpenWindowsCollector", FakeDelegate)
 
     result = OpenWindowsAppsCollector().collect()
 
@@ -140,7 +140,7 @@ def test_open_windows_collector_can_include_titles_when_explicitly_requested(mon
                 ),
             ).collect(context=context)
 
-    monkeypatch.setattr("ritualist.collectors.open_windows.OpenWindowsCollector", FakeDelegate)
+    monkeypatch.setattr("setpiece.collectors.open_windows.OpenWindowsCollector", FakeDelegate)
 
     result = OpenWindowsAppsCollector(include_window_titles=True).collect()
 
@@ -204,14 +204,14 @@ def test_activity_journal_scan_uses_sanitized_activity_journal_contract(tmp_path
 
     result = scan_local_activity(
         LocalActivityScanRequest(
-            source_ids=(RITUALIST_JOURNAL_SOURCE_ID,),
+            source_ids=(SETPIECE_JOURNAL_SOURCE_ID,),
             journal=journal,
         )
     )
 
     assert len(result.signals) == 1
     signal = result.signals[0]
-    assert signal.source_id == RITUALIST_JOURNAL_SOURCE_ID
+    assert signal.source_id == SETPIECE_JOURNAL_SOURCE_ID
     assert signal.label == "open_docs"
     assert signal.value == "shortcut_opened"
     assert signal.metadata == {

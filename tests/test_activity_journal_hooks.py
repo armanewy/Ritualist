@@ -5,25 +5,25 @@ from concurrent.futures import Future
 from types import SimpleNamespace
 from typing import Any
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasComponent,
     CanvasComponentActionResult,
     CanvasDocument,
     resolve_canvas_host_config,
 )
-from ritualist.canvas.app import (
+from setpiece.canvas.app import (
     _record_canvas_component_clicked,
     _record_canvas_room_opened,
     _record_canvas_shortcut_opened,
 )
-from ritualist.home.actions import (
+from setpiece.home.actions import (
     ActivityJournalHook,
     HomeActionDispatcher,
     HomeActionService,
     HomeCardAction,
     create_activity_journal_hook,
 )
-from ritualist.learning_config import LearningConsentRecord, LocalLearningConfig
+from setpiece.learning_config import LearningConsentRecord, LocalLearningConfig
 
 
 class _FakeJournal:
@@ -65,10 +65,10 @@ class _CapturingExecutor:
 def _enabled_learning() -> LocalLearningConfig:
     return LocalLearningConfig(
         enabled=True,
-        source_ids=("ritualist_journal",),
+        source_ids=("setpiece_journal",),
         consent=LearningConsentRecord(
             timestamp="2026-06-17T12:00:00+00:00",
-            source_ids=("ritualist_journal",),
+            source_ids=("setpiece_journal",),
         ),
     )
 
@@ -107,7 +107,7 @@ def test_production_activity_journal_hook_rechecks_learning_config(
     def fake_config() -> LocalLearningConfig:
         return _enabled_learning() if enabled else LocalLearningConfig()
 
-    monkeypatch.setattr("ritualist.home.actions._load_local_learning_config", fake_config)
+    monkeypatch.setattr("setpiece.home.actions._load_local_learning_config", fake_config)
     path = tmp_path / "activity.jsonl"
     hook = create_activity_journal_hook(journal_path=path)
 

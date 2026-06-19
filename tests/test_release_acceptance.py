@@ -12,7 +12,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SPEC_PATH = REPO_ROOT / "tests" / "acceptance" / "release_v0_2_alpha_1.yaml"
-SCRIPT_PATH = REPO_ROOT / "scripts" / "ritualist_release_acceptance.ps1"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "setpiece_release_acceptance.ps1"
 
 EXPECTED_CHECK_IDS = {
     "packaged_home_visible",
@@ -53,7 +53,7 @@ EXPECTED_CHECK_IDS = {
 def test_release_acceptance_spec_lists_current_manual_blockers() -> None:
     spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
 
-    assert spec["schema"] == "ritualist.release_acceptance.v1"
+    assert spec["schema"] == "setpiece.release_acceptance.v1"
     assert spec["release"] == "v0.2.0-alpha.1"
     assert set(spec["semantics"]) == {"PASS", "FAIL", "NEEDS_HUMAN_REVIEW"}
     assert spec["artifact_contract"]["summary_json"] == (
@@ -75,9 +75,9 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
     for expected in (
         "acceptance-summary.json",
         "acceptance-summary.md",
-        "RITUALIST_E2E",
-        "RITUALIST_E2E_ARTIFACT_DIR",
-        "RITUALIST_E2E_APP_DATA_DIR",
+        "SETPIECE_E2E",
+        "SETPIECE_E2E_ARTIFACT_DIR",
+        "SETPIECE_E2E_APP_DATA_DIR",
         "release_v0_2_alpha_1.yaml",
         "NEEDS_HUMAN_REVIEW",
         "no_recording_or_preview_capture",
@@ -176,7 +176,7 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "support-desk-desktop-work-area",
         "desktop_work_area_hero_passthrough",
         "desktop-work-area-windowed-fallback",
-        "RITUALIST_CANVAS_FORCE_WINDOWED",
+        "SETPIECE_CANVAS_FORCE_WINDOWED",
         "--host",
         "desktop-work-area",
         "bounds_match_work_area",
@@ -193,7 +193,7 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "no_coordinate_click_automation",
         "background_passthrough",
         "background_mode",
-        "Ritualist Wallpaper Fixture",
+        "Setpiece Wallpaper Fixture",
         "Start-FakeWallpaperFixture",
         "Stop-FakeWallpaperFixture",
         "Invoke-LocalLearningSuggestionsEvidence",
@@ -221,7 +221,7 @@ def test_release_acceptance_harness_declares_artifact_and_e2e_contracts() -> Non
         "fake_wallpaper_fixture",
         "wallpaper_app_processes",
         "observed_only",
-        "controlled_by_ritualist",
+        "controlled_by_setpiece",
         "dpi",
         "monitor",
         "Exit Desktop Canvas",

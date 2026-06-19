@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CANVAS_EDIT_PLAN_SCHEMA_VERSION,
     CanvasBindingKind,
     CanvasComponent,
@@ -19,9 +19,9 @@ from ritualist.canvas import (
     save_canvas,
     validate_canvas_structure,
 )
-from ritualist.canvas.storage import CanvasReference
-from ritualist.cli import app
-from ritualist.errors import RitualistError
+from setpiece.canvas.storage import CanvasReference
+from setpiece.cli import app
+from setpiece.errors import SetpieceError
 
 
 def _canvas() -> CanvasDocument:
@@ -69,7 +69,7 @@ def test_change_z_validates_component_model() -> None:
 
     try:
         session.change_z("title", z=1_000_000)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "z must be between" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid z should fail validation")
@@ -84,7 +84,7 @@ def test_edit_session_prop_validation() -> None:
 
     try:
         session.edit_props("title", {}, replace=True)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "missing required prop 'text'" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid props should fail validation")
@@ -96,7 +96,7 @@ def test_edit_session_prop_validation() -> None:
     ):
         try:
             session.edit_props("title", props)
-        except RitualistError as exc:
+        except SetpieceError as exc:
             assert expected in str(exc)
         else:  # pragma: no cover - assertion clarity
             raise AssertionError(f"invalid props should fail validation: {props!r}")
@@ -107,7 +107,7 @@ def test_resize_rejects_invalid_bounds() -> None:
 
     try:
         session.resize_component("title", width=0, height=64)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "greater than 0" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid resize should fail validation")
@@ -132,7 +132,7 @@ def test_edit_session_prop_type_validation() -> None:
 
     try:
         session.edit_props("title", {"align": "sideways"})
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "must be one of" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid enum prop should fail validation")
@@ -142,7 +142,7 @@ def test_edit_session_prop_type_validation() -> None:
 
     try:
         session.edit_props("activity", {"limit": "many"})
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "must be an integer" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid integer prop should fail validation")
@@ -159,7 +159,7 @@ def test_edit_session_binding_validation() -> None:
             "title",
             CanvasComponentBinding(kind=CanvasBindingKind.APP_LAUNCHER, id="launcher"),
         )
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "not editable" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("unsafe binding kind should be rejected")
@@ -173,7 +173,7 @@ def test_create_component_rejects_non_editable_binding() -> None:
             "ritual.card",
             binding=CanvasComponentBinding(kind=CanvasBindingKind.APP_LAUNCHER, id="launcher"),
         )
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "not editable" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("create_component should reject non-editable bindings")
@@ -215,7 +215,7 @@ def test_duplicate_component_validates_copied_component() -> None:
 
     try:
         session.duplicate_component("title")
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "z must be between" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid duplicate z should fail validation")
@@ -245,9 +245,9 @@ def test_bundled_template_saves_as_user_copy(tmp_path: Path, monkeypatch) -> Non
     source = tmp_path / "bundled" / "gaming_desktop.yaml"
     save_canvas(_canvas(), source)
     output = tmp_path / "user"
-    monkeypatch.setattr("ritualist.canvas.edit.canvases_dir", lambda: output)
+    monkeypatch.setattr("setpiece.canvas.edit.canvases_dir", lambda: output)
     monkeypatch.setattr(
-        "ritualist.canvas.edit.list_canvases",
+        "setpiece.canvas.edit.list_canvases",
         lambda include_bundled=True: [
             CanvasReference("gaming_desktop", "Gaming Desktop", source, "bundled")
         ],
@@ -285,19 +285,19 @@ def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypat
         other_source,
     )
     monkeypatch.setattr(
-        "ritualist.canvas.edit.list_canvases",
+        "setpiece.canvas.edit.list_canvases",
         lambda include_bundled=True: [
             CanvasReference("gaming_desktop", "Gaming Desktop", source, "bundled"),
             CanvasReference("media_desktop", "Media Desktop", other_source, "bundled"),
         ],
     )
-    monkeypatch.setattr("ritualist.canvas.edit._bundled_canvas_paths", lambda: [source, other_source])
+    monkeypatch.setattr("setpiece.canvas.edit._bundled_canvas_paths", lambda: [source, other_source])
     session = create_edit_session("gaming_desktop")
     session.edit_props("title", {"text": "Edited locally"})
 
     try:
         session.save(destination=source)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "bundled canvas templates" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("bundled source overwrite should be rejected")
@@ -306,7 +306,7 @@ def test_bundled_template_cannot_save_over_source_path(tmp_path: Path, monkeypat
 
     try:
         session.save(destination=other_source)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "bundled canvas templates" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("other bundled template overwrite should be rejected")
@@ -335,16 +335,16 @@ def test_bundled_overwrite_guard_survives_user_canvas_shadow(tmp_path: Path, mon
         user,
     )
     monkeypatch.setattr(
-        "ritualist.canvas.edit.list_canvases",
+        "setpiece.canvas.edit.list_canvases",
         lambda include_bundled=True: [CanvasReference("same", "User Same", user, "user")],
     )
-    monkeypatch.setattr("ritualist.canvas.edit._bundled_canvas_paths", lambda: [bundled])
+    monkeypatch.setattr("setpiece.canvas.edit._bundled_canvas_paths", lambda: [bundled])
     session = CanvasEditSession(document=_canvas(), source_path=bundled, source="bundled")
     session.edit_props("title", {"text": "Changed"})
 
     try:
         session.save(destination=bundled)
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "bundled canvas templates" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("shadowed bundled template overwrite should be rejected")
@@ -353,7 +353,7 @@ def test_bundled_overwrite_guard_survives_user_canvas_shadow(tmp_path: Path, mon
 
 
 def test_invalid_canvas_cannot_save(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.edit.canvases_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.edit.canvases_dir", lambda: tmp_path)
     invalid = CanvasDocument(
         id="invalid_edit",
         name="Invalid Edit",
@@ -363,7 +363,7 @@ def test_invalid_canvas_cannot_save(tmp_path: Path, monkeypatch) -> None:
 
     try:
         session.save()
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "validation errors" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("invalid canvas should not save")
@@ -373,7 +373,7 @@ def test_edit_model_operations_do_not_execute_runtime(monkeypatch) -> None:
     def fail_runtime(*_args, **_kwargs):
         raise AssertionError("edit model must not execute runtime")
 
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_runtime)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", fail_runtime)
     session = CanvasEditSession(document=_canvas())
 
     session.create_component("clock")
@@ -469,7 +469,7 @@ def test_edit_plan_rejects_unsafe_behavior_binding() -> None:
             binding_kind=CanvasBindingKind.APP_LAUNCHER.value,
             binding_reference="launcher",
         )
-    except RitualistError as exc:
+    except SetpieceError as exc:
         assert "not editable" in str(exc) or "does not support" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("unsafe binding edit should be rejected")
@@ -480,7 +480,7 @@ def test_canvas_edit_model_cli_json() -> None:
 
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data["schema_version"] == "ritualist.canvas.edit_model.v1"
+    assert data["schema_version"] == "setpiece.canvas.edit_model.v1"
     assert data["source"] in {"bundled", "user"}
     assert data["dirty"] is False
     assert data["snap_grid"]["unit"] == "px"

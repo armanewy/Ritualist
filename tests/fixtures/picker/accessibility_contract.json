@@ -1,7 +1,7 @@
 {
-  "schema_version": "ritualist.picker.accessibility.v1",
+  "schema_version": "setpiece.picker.accessibility.v1",
   "surface": {
-    "accessible_name": "Ritualist Picker",
+    "accessible_name": "Setpiece Picker",
     "role": "dialog",
     "modal": false,
     "initial_focus": "search_box",
@@ -20,7 +20,7 @@
     "live_adapter_calls": []
   },
   "hotkey": {
-    "name": "Open Ritualist Picker",
+    "name": "Open Setpiece Picker",
     "sequence": "Win+Ctrl+R",
     "toggle_behavior": ["open_picker", "dismiss_picker"],
     "captures_text": false
@@ -63,7 +63,7 @@
   "elements": [
     {
       "key": "picker_surface",
-      "accessible_name": "Ritualist Picker",
+      "accessible_name": "Setpiece Picker",
       "role": "dialog",
       "state": {"visible": true, "enabled": true, "focused": false}
     },

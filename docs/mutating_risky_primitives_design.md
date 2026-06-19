@@ -3,7 +3,7 @@
 Status: design only. This document does not introduce new recipe actions,
 primitive executors, adapters, policy bypasses, or runtime capabilities.
 
-Ritualist v0.1 is intentionally conservative: local-first recipes, structured
+Setpiece v0.1 is intentionally conservative: local-first recipes, structured
 actions, dry-run, run logs, and confirmation gates. Future mutating and risky
 primitives must preserve that posture while making reversible system changes
 and later high-risk operations inspectable, recoverable, and policy-governed.
@@ -179,7 +179,7 @@ settings, or execute host commands.
 
 ### Artifact Snapshot
 
-Before mutation, Ritualist must capture the smallest useful restore artifact:
+Before mutation, Setpiece must capture the smallest useful restore artifact:
 
 - firewall rule export
 - registry key export
@@ -227,7 +227,7 @@ machine is on battery or power state cannot be verified.
 ### BitLocker Checks
 
 Required for firmware, BIOS/vendor update, boot media, storage volume, and
-driver operations that could affect boot. Ritualist must never log recovery
+driver operations that could affect boot. Setpiece must never log recovery
 keys. If recovery-key availability cannot be confirmed safely, the operation
 must stop with recovery instructions.
 

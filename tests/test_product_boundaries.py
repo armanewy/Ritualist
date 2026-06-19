@@ -12,10 +12,10 @@ def test_product_boundaries_document_contains_containment_doctrine() -> None:
     assert "local ritual/runbook engine with a desktop-native body" in normalized
     assert "Recipes and rituals are the center of gravity" in normalized
     assert "If a feature does not improve one of those, it does not ship." in normalized
-    assert "Ritualist has six product nouns" in text
+    assert "Setpiece has six product nouns" in text
     for noun in ("Room", "Ritual", "Component", "Shortcut", "Suggestion", "Pack"):
         assert f"**{noun}**" in text
-    assert "Ritualist is not allowed to become" in text
+    assert "Setpiece is not allowed to become" in text
 
 
 def test_product_boundaries_document_contains_active_freeze_rules() -> None:

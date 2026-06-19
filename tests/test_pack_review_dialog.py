@@ -8,8 +8,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
-from ritualist.home.pack_review import PackImportReview, PackReviewAction, PackReviewDecision
-from ritualist.ui.pack_review_dialog import PackImportReviewDialog
+from setpiece.home.pack_review import PackImportReview, PackReviewAction, PackReviewDecision
+from setpiece.ui.pack_review_dialog import PackImportReviewDialog
 
 
 def test_pack_review_dialog_shows_review_data_and_blocks_enable() -> None:

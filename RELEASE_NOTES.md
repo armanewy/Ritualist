@@ -1,18 +1,18 @@
-# Ritualist v0.2.0-alpha.1 Release Candidate Notes
+# Setpiece v0.2.0-alpha.1 Release Candidate Notes
 
-Ritualist v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC runbooks. It keeps the existing CLI/classic GUI workflow and adds a typed Canvas command surface, deterministic planning, read-only diagnostics primitives, and local visual pack separation.
+Setpiece v0.2.0-alpha.1 is a Canvas-era alpha candidate for local, personal PC runbooks. It keeps the existing CLI/classic GUI workflow and adds a typed Canvas command surface, deterministic planning, read-only diagnostics primitives, and local visual pack separation.
 
 ## What Works
 
 - CLI recipe run, dry-run, Doctor, run history, notes, stale-run repair, and inspect-window diagnostics.
-- Packaged Windows one-folder app at `dist\Ritualist\Ritualist.exe`.
+- Packaged Windows one-folder app at `dist\Setpiece\Setpiece.exe`.
 - Packaged Home, packaged Canvas Use Mode, and classic GUI launch paths.
 - Bundled `gaming_mode` sample and `gaming_desktop` Canvas.
 - Canvas typed components, runtime model, Edit Mode model/UI MVP, theme tokens, performance modes, and perf smoke commands.
 - Deterministic intent plan preview and generic target resolution preview.
 - Primitive Kernel metadata, policy/governance, read-only primitive families, and Doctor visibility.
-- Structured browser runbook actions plus clean-start options for Ritualist-managed browser profiles.
-- Local `.ritualistcanvas` and `.ritualisttheme` export/import into quarantine.
+- Structured browser runbook actions plus clean-start options for Setpiece-managed browser profiles.
+- Local `.setpiececanvas` and `.setpiecetheme` export/import into quarantine.
 
 ## Build The Packaged App
 
@@ -27,14 +27,14 @@ python -m playwright install chromium
 The output is:
 
 ```text
-dist\Ritualist\Ritualist.exe
+dist\Setpiece\Setpiece.exe
 ```
 
 The packaged app launches Home by default. Use:
 
 ```powershell
-dist\Ritualist\Ritualist.exe --canvas gaming_desktop
-dist\Ritualist\Ritualist.exe --classic-gui
+dist\Setpiece\Setpiece.exe --canvas gaming_desktop
+dist\Setpiece\Setpiece.exe --classic-gui
 ```
 
 ## First Real Trace
@@ -42,9 +42,9 @@ dist\Ritualist\Ritualist.exe --classic-gui
 Use this sequence for a real packaged `gaming_mode` trace:
 
 ```text
-1. Launch dist\Ritualist\Ritualist.exe.
+1. Launch dist\Setpiece\Setpiece.exe.
 2. Confirm Home opens and installed recipes load.
-3. Launch dist\Ritualist\Ritualist.exe --canvas gaming_desktop.
+3. Launch dist\Setpiece\Setpiece.exe --canvas gaming_desktop.
 4. Confirm Canvas renders gaming_desktop components.
 5. Run Doctor for gaming_mode.
 6. Dry-run gaming_mode.

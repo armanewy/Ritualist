@@ -11,7 +11,7 @@ Add safe declarative theme tokens:
 - theme document model
 - typed token validation
 - token resolver
-- sample `ritualist.paper` theme
+- sample `setpiece.paper` theme
 - theme CLI list/show/validate
 - tests for invalid colors, references, recursion, remote assets, and code-like
   fields
@@ -128,7 +128,7 @@ desktop-host research for this stage.
 Each stage should run:
 
 - `python -m pytest -q`
-- `python -m compileall -q ritualist tests`
+- `python -m compileall -q setpiece tests`
 
 Stages that change runtime UI should also run packaged acceptance with a unique
 artifact directory.

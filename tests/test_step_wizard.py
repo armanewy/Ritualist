@@ -8,17 +8,17 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
-from ritualist.capture_helpers import (
+from setpiece.capture_helpers import (
     CapturedValue,
     CapturedWindowInspection,
     VisibleTextChoice,
     WindowTextInspection,
 )
-from ritualist.errors import RecipeValidationError
-from ritualist.models import Recipe
-from ritualist.recipe_step_builder import RecipeStepAppendController, RecipeStepBuilder
-from ritualist.recipe_loader import load_recipe
-from ritualist.ui.step_wizard import AddStepDialog
+from setpiece.errors import RecipeValidationError
+from setpiece.models import Recipe
+from setpiece.recipe_step_builder import RecipeStepAppendController, RecipeStepBuilder
+from setpiece.recipe_loader import load_recipe
+from setpiece.ui.step_wizard import AddStepDialog
 
 
 def test_step_builder_builds_basic_wait_step():
@@ -273,7 +273,7 @@ def test_add_step_dialog_inspect_text_marks_play_confirmation(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "ritualist.ui.step_wizard.QInputDialog.getItem",
+        "setpiece.ui.step_wizard.QInputDialog.getItem",
         lambda *_args, **_kwargs: ("Play", True),
     )
     dialog = AddStepDialog(capture_controller=FakeCaptureController())

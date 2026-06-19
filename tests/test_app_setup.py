@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import yaml
 
-from ritualist.app_setup import initialize_app
-from ritualist.recipe_loader import discover_recipes
+from setpiece.app_setup import initialize_app
+from setpiece.recipe_loader import discover_recipes
 
 
 def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
@@ -22,30 +22,30 @@ def test_initialize_app_creates_dirs_and_copies_sample(tmp_path, monkeypatch):
         "runs": app_data / "runs",
         "browser_profiles": app_data / "browser-profiles",
     }
-    monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
-    monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
-    monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.app_setup.app_data_path", lambda: created_dirs["app_data"])
+    monkeypatch.setattr("setpiece.app_setup.config_path", lambda: created_dirs["config"])
+    monkeypatch.setattr("setpiece.app_setup.recipes_path", lambda: recipe_dir)
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_packs_path",
+        "setpiece.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
     )
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_canvas_packs_path",
+        "setpiece.app_setup.imported_canvas_packs_path",
         lambda: created_dirs["imported_canvas_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr("setpiece.app_setup.themes_path", lambda: created_dirs["themes"])
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_theme_packs_path",
+        "setpiece.app_setup.imported_theme_packs_path",
         lambda: created_dirs["imported_theme_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
-    monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("setpiece.app_setup.logs_path", lambda: created_dirs["logs"])
+    monkeypatch.setattr("setpiece.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(
-        "ritualist.app_setup.browser_profiles_path",
+        "setpiece.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],
     )
-    monkeypatch.setattr("ritualist.app_setup.config_file_path", lambda: config_path)
-    monkeypatch.setattr("ritualist.recipe_loader.recipes_dir", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.app_setup.config_file_path", lambda: config_path)
+    monkeypatch.setattr("setpiece.recipe_loader.recipes_dir", lambda: recipe_dir)
 
     report = initialize_app()
     rows = discover_recipes()
@@ -119,30 +119,30 @@ steps:
         "browser_profiles": tmp_path / "browser-profiles",
     }
 
-    monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
-    monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
-    monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.app_setup.app_data_path", lambda: created_dirs["app_data"])
+    monkeypatch.setattr("setpiece.app_setup.config_path", lambda: created_dirs["config"])
+    monkeypatch.setattr("setpiece.app_setup.recipes_path", lambda: recipe_dir)
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_packs_path",
+        "setpiece.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
     )
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_canvas_packs_path",
+        "setpiece.app_setup.imported_canvas_packs_path",
         lambda: created_dirs["imported_canvas_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr("setpiece.app_setup.themes_path", lambda: created_dirs["themes"])
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_theme_packs_path",
+        "setpiece.app_setup.imported_theme_packs_path",
         lambda: created_dirs["imported_theme_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
-    monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("setpiece.app_setup.logs_path", lambda: created_dirs["logs"])
+    monkeypatch.setattr("setpiece.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(
-        "ritualist.app_setup.browser_profiles_path",
+        "setpiece.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],
     )
-    monkeypatch.setattr("ritualist.app_setup.config_file_path", lambda: config_path)
-    monkeypatch.setattr("ritualist.recipe_loader.recipes_dir", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.app_setup.config_file_path", lambda: config_path)
+    monkeypatch.setattr("setpiece.recipe_loader.recipes_dir", lambda: recipe_dir)
 
     report = initialize_app()
     rows = discover_recipes()
@@ -199,29 +199,29 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr("ritualist.app_setup.app_data_path", lambda: created_dirs["app_data"])
-    monkeypatch.setattr("ritualist.app_setup.config_path", lambda: created_dirs["config"])
-    monkeypatch.setattr("ritualist.app_setup.recipes_path", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.app_setup.app_data_path", lambda: created_dirs["app_data"])
+    monkeypatch.setattr("setpiece.app_setup.config_path", lambda: created_dirs["config"])
+    monkeypatch.setattr("setpiece.app_setup.recipes_path", lambda: recipe_dir)
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_packs_path",
+        "setpiece.app_setup.imported_packs_path",
         lambda: created_dirs["imported_packs"],
     )
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_canvas_packs_path",
+        "setpiece.app_setup.imported_canvas_packs_path",
         lambda: created_dirs["imported_canvas_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.themes_path", lambda: created_dirs["themes"])
+    monkeypatch.setattr("setpiece.app_setup.themes_path", lambda: created_dirs["themes"])
     monkeypatch.setattr(
-        "ritualist.app_setup.imported_theme_packs_path",
+        "setpiece.app_setup.imported_theme_packs_path",
         lambda: created_dirs["imported_theme_packs"],
     )
-    monkeypatch.setattr("ritualist.app_setup.logs_path", lambda: created_dirs["logs"])
-    monkeypatch.setattr("ritualist.app_setup.runs_path", lambda: created_dirs["runs"])
+    monkeypatch.setattr("setpiece.app_setup.logs_path", lambda: created_dirs["logs"])
+    monkeypatch.setattr("setpiece.app_setup.runs_path", lambda: created_dirs["runs"])
     monkeypatch.setattr(
-        "ritualist.app_setup.browser_profiles_path",
+        "setpiece.app_setup.browser_profiles_path",
         lambda: created_dirs["browser_profiles"],
     )
-    monkeypatch.setattr("ritualist.app_setup.config_file_path", lambda: config_path)
+    monkeypatch.setattr("setpiece.app_setup.config_file_path", lambda: config_path)
 
     report = initialize_app()
 

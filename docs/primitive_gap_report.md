@@ -1,6 +1,6 @@
 # Primitive Layer Gap Report
 
-This report inventories the current Ritualist primitive layer before adding more
+This report inventories the current Setpiece primitive layer before adding more
 primitive work. It is intentionally descriptive. It does not add execution
 capability, primitive adapters, or new recipe actions.
 
@@ -28,7 +28,7 @@ automation.
 
 ### Primitive Kernel Models
 
-The following kernel models exist in `ritualist/primitives.py` and are covered
+The following kernel models exist in `setpiece/primitives.py` and are covered
 by tests in `tests/test_primitives.py`:
 
 | Item | Status |
@@ -47,8 +47,8 @@ by tests in `tests/test_primitives.py`:
 | `PrimitiveArtifact` | Implemented |
 | Primitive registry | Implemented |
 | Fake/no-op primitive adapter | Implemented as `FakePrimitiveAdapter` |
-| CLI primitive inspection | Implemented as `ritualist primitives`, `ritualist primitive show`, and `ritualist primitive families` |
-| Doctor primitive reporting | Implemented in `ritualist/doctor.py` |
+| CLI primitive inspection | Implemented as `setpiece primitives`, `setpiece primitive show`, and `setpiece primitive families` |
+| Doctor primitive reporting | Implemented in `setpiece/doctor.py` |
 
 ### Primitive Risk Model
 
@@ -104,16 +104,16 @@ The repo currently has:
 
 | Item | Status |
 | --- | --- |
-| Primitive policy model | Implemented in `ritualist/policy.py` |
+| Primitive policy model | Implemented in `setpiece/policy.py` |
 | Policy categories | Implemented |
 | Policy decisions | Implemented |
 | Policy profiles | Implemented: `consumer_safe`, `power_user`, `lab_only`, `enterprise_managed` |
 | Imported-pack primitive policy checks | Implemented during pack enable and pack review |
 | Nested primitive/predicate/branch validation | Implemented for `preflight`, `steps`, `verify`, `flow.if`, `then`, `else`, `on_timeout`, and `when` conditions |
 | Never-importable categories | Implemented for embedded credentials, elevated unsigned executable hints, opaque binary assets, unsupported flash tools, raw firmware payloads, restore-point deletion, forced registry cleanup, destructive storage/system cleanup text, and related asset classes |
-| `ritualist policy show` | Implemented |
-| `ritualist policy check` | Implemented |
-| `ritualist policy explain` | Implemented |
+| `setpiece policy show` | Implemented |
+| `setpiece policy check` | Implemented |
+| `setpiece policy explain` | Implemented |
 | Policy JSON output | Implemented |
 | Pack validation against primitive risk | Implemented at pack enable and Home/classic review; archive validation also blocks never-importable content and arbitrary-code/coordinate-click action names |
 | Primitive-only capability declarations in packs | Implemented for `hardware_inventory`, `network_connectivity`, and `diagnostics_collect`; Windows-only capabilities must declare Windows support |
@@ -243,9 +243,9 @@ The inventory gate should be considered complete when these commands pass:
 $env:QT_QPA_PLATFORM = "offscreen"
 $env:PYTHONFAULTHANDLER = "1"
 python -m pytest -q
-python -m compileall -q ritualist tests
-python -m ritualist primitives --json
-python -m ritualist actions --json
-python -m ritualist dry-run gaming_mode
-python -m ritualist doctor gaming_mode --json --no-strict
+python -m compileall -q setpiece tests
+python -m setpiece primitives --json
+python -m setpiece actions --json
+python -m setpiece dry-run gaming_mode
+python -m setpiece doctor gaming_mode --json --no-strict
 ```

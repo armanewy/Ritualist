@@ -3,15 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.canvas import load_bundled_canvas, validate_canvas_document
-from ritualist.canvas.runtime import CanvasRuntimeContext, build_canvas_runtime_model
-from ritualist.executor import WorkflowExecutor
-from ritualist.recipe_loader import load_recipe, read_recipe_document
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.canvas import load_bundled_canvas, validate_canvas_document
+from setpiece.canvas.runtime import CanvasRuntimeContext, build_canvas_runtime_model
+from setpiece.executor import WorkflowExecutor
+from setpiece.recipe_loader import load_recipe, read_recipe_document
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_RECIPE_DIR = REPO_ROOT / "ritualist" / "sample_recipes"
+SAMPLE_RECIPE_DIR = REPO_ROOT / "setpiece" / "sample_recipes"
 SUPPORT_RECIPE_IDS = (
     "support_triage_workspace",
     "collect_basic_diagnostics",

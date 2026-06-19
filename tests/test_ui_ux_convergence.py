@@ -5,9 +5,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONVERGENCE_DOC = REPO_ROOT / "docs" / "UI_UX_CONVERGENCE.md"
-CANVAS_QML = REPO_ROOT / "ritualist" / "canvas" / "qml" / "CanvasUse.qml"
-CANVAS_QML_DIR = REPO_ROOT / "ritualist" / "canvas" / "qml"
-HOME_QML = REPO_ROOT / "ritualist" / "home" / "qml" / "Home.qml"
+CANVAS_QML = REPO_ROOT / "setpiece" / "canvas" / "qml" / "CanvasUse.qml"
+CANVAS_QML_DIR = REPO_ROOT / "setpiece" / "canvas" / "qml"
+HOME_QML = REPO_ROOT / "setpiece" / "home" / "qml" / "Home.qml"
 
 
 def test_ui_ux_convergence_has_phase_six_without_new_product_scope() -> None:

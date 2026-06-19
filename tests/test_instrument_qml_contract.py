@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-AGENT_QML = REPO_ROOT / "ritualist" / "agent" / "qml"
+AGENT_QML = REPO_ROOT / "setpiece" / "agent" / "qml"
 QUIET_INSTRUMENT_QML = AGENT_QML / "QuietInstrument.qml"
 STATE_QML = {
     "ready": AGENT_QML / "InstrumentReady.qml",

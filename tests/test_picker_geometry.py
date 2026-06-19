@@ -124,7 +124,7 @@ def test_picker_placement_contract_covers_required_geometry_cases() -> None:
     contract = _load_contract()
     scenarios = contract["scenarios"]
 
-    assert contract["schema_version"] == "ritualist.picker.placement.v1"
+    assert contract["schema_version"] == "setpiece.picker.placement.v1"
     assert {scenario["taskbar_edge"] for scenario in scenarios} >= {
         "bottom",
         "top",

@@ -5,18 +5,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ritualist.agent.confirmation_coordinator import (
+from setpiece.agent.confirmation_coordinator import (
     ConfirmationContext,
     ConfirmationCoordinator,
     ConfirmationDispatch,
 )
-from ritualist.agent.models import AgentRunState
-from ritualist.agent.notification_policy import NotificationAction
-from ritualist.agent.tray_model import TrayAttention
-from ritualist.approvals import ConfirmationDecision
-from ritualist.home.confirmation import confirmation_action_label
-from ritualist.overlay import ConfirmationRequest
-from ritualist.preferences import RememberedApprovalScope, approval_matches
+from setpiece.agent.models import AgentRunState
+from setpiece.agent.notification_policy import NotificationAction
+from setpiece.agent.tray_model import TrayAttention
+from setpiece.approvals import ConfirmationDecision
+from setpiece.home.confirmation import confirmation_action_label
+from setpiece.overlay import ConfirmationRequest
+from setpiece.preferences import RememberedApprovalScope, approval_matches
 
 
 class FakePresenter:
@@ -64,7 +64,7 @@ def test_visible_user_confirmation_opens_owned_top_level_without_notification() 
             step_index=2,
             ritual_name="Gaming Mode",
             immediately_after_visible_user_interaction=True,
-            ritualist_visible=True,
+            setpiece_visible=True,
         ),
         on_decision=decisions.append,
     )
@@ -97,7 +97,7 @@ def test_background_confirmation_sets_agent_state_tray_and_review_notification()
             sequence=7,
             step_index=3,
             ritual_name="Gaming Mode",
-            ritualist_visible=False,
+            setpiece_visible=False,
         ),
         on_decision=decisions.append,
     )
@@ -149,7 +149,7 @@ def test_closing_confirmation_chooses_safe_negative_path() -> None:
             run_id="run-1",
             ritual_name="Gaming Mode",
             immediately_after_visible_user_interaction=True,
-            ritualist_visible=True,
+            setpiece_visible=True,
         ),
         on_decision=decisions.append,
     )
@@ -194,7 +194,7 @@ def test_remembered_approval_uses_existing_store_and_exact_scope_copy(tmp_path: 
             run_id="run-1",
             ritual_name="Project Setup",
             immediately_after_visible_user_interaction=True,
-            ritualist_visible=True,
+            setpiece_visible=True,
             remember_scope=scope,
         ),
         on_decision=decisions.append,
@@ -254,7 +254,7 @@ def test_agent_confirmation_imports_without_gui_or_windows_dependencies() -> Non
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.confirmation_coordinator
+import setpiece.agent.confirmation_coordinator
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

@@ -50,11 +50,11 @@ jobs:
 
       - name: Smoke CLI help
         run: |
-          python -m ritualist --help
-          python -m ritualist doctor --help
-          python -m ritualist home --help
-          python -m ritualist inspect-window --help
-          python -m ritualist pack --help
+          python -m setpiece --help
+          python -m setpiece doctor --help
+          python -m setpiece home --help
+          python -m setpiece inspect-window --help
+          python -m setpiece pack --help
 
   optional-deps-gui-home:
     runs-on: ubuntu-latest
@@ -83,13 +83,13 @@ jobs:
         run: python -m pytest -q
 
       - name: Compile package and tests
-        run: python -m compileall -q ritualist tests
+        run: python -m compileall -q setpiece tests
 
       - name: Smoke CLI and Home commands
         run: |
-          python -m ritualist --help
-          python -m ritualist home --help
-          python -m ritualist pack --help
-          python -m ritualist perf home-model --mock-cards 100 --json
-          python -m ritualist perf home-model --mock-cards 300 --json
-          python -m ritualist perf fake-run ritualist/sample_recipes/gaming_mode.yaml --json
+          python -m setpiece --help
+          python -m setpiece home --help
+          python -m setpiece pack --help
+          python -m setpiece perf home-model --mock-cards 100 --json
+          python -m setpiece perf home-model --mock-cards 300 --json
+          python -m setpiece perf fake-run setpiece/sample_recipes/gaming_mode.yaml --json

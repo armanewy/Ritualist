@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.agent.picker_controller import PickerController, PickerIntent, PickerIntentKind
-from ritualist.agent.picker_model import (
+from setpiece.agent.picker_controller import PickerController, PickerIntent, PickerIntentKind
+from setpiece.agent.picker_model import (
     PICKER_MODEL_SCHEMA_VERSION,
     PickerAction,
     PickerActiveRitual,
@@ -95,8 +95,8 @@ def test_picker_controller_imports_without_gui_windows_or_executor_dependencies(
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.picker_controller
-blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "ritualist.executor"]
+import setpiece.agent.picker_controller
+blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "setpiece.executor"]
 loaded = [name for name in blocked if name in sys.modules]
 if loaded:
     raise SystemExit(f"picker controller loaded forbidden modules: {loaded}")

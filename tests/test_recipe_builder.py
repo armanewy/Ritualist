@@ -5,9 +5,9 @@ from textwrap import dedent
 import pytest
 import yaml
 
-from ritualist.errors import RecipeValidationError
-from ritualist.recipe_builder import RecipeBuilder
-from ritualist.recipe_loader import load_recipe
+from setpiece.errors import RecipeValidationError
+from setpiece.recipe_builder import RecipeBuilder
+from setpiece.recipe_loader import load_recipe
 
 
 def test_builder_creates_edits_and_saves_recipe(tmp_path):

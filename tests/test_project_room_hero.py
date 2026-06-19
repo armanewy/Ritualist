@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.canvas import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasRuntimeContext,
     CanvasRuntimeController,
@@ -12,17 +12,17 @@ from ritualist.canvas import (
     load_bundled_canvas,
     validate_canvas,
 )
-from ritualist.doctor import build_doctor_report
-from ritualist.executor import WorkflowExecutor
-from ritualist.recipe_loader import load_recipe, load_recipe_for_diagnostics, read_recipe_document
-from ritualist.run_logs import RunRecord
-from ritualist.runtime_control import RuntimeControl
-from ritualist.shortcuts import ShortcutResult
+from setpiece.doctor import build_doctor_report
+from setpiece.executor import WorkflowExecutor
+from setpiece.recipe_loader import load_recipe, load_recipe_for_diagnostics, read_recipe_document
+from setpiece.run_logs import RunRecord
+from setpiece.runtime_control import RuntimeControl
+from setpiece.shortcuts import ShortcutResult
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CANVAS_PATH = ROOT / "ritualist" / "sample_canvases" / "project_room.yaml"
-RECIPE_PATH = ROOT / "ritualist" / "sample_recipes" / "coding_mode.yaml"
+CANVAS_PATH = ROOT / "setpiece" / "sample_canvases" / "project_room.yaml"
+RECIPE_PATH = ROOT / "setpiece" / "sample_recipes" / "coding_mode.yaml"
 
 
 class _FailingActionService:

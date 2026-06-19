@@ -1,6 +1,6 @@
 # Helpdesk Template Notes
 
-The bundled helpdesk/runbook templates live in `ritualist\sample_recipes`:
+The bundled helpdesk/runbook templates live in `setpiece\sample_recipes`:
 
 - `support_triage_workspace.yaml`
 - `meeting_audio_troubleshooting.yaml`
@@ -9,7 +9,7 @@ The bundled helpdesk/runbook templates live in `ritualist\sample_recipes`:
 - `lab_classroom_setup.yaml`
 - `browser_admin_console_workspace.yaml`
 
-They are samples for local editing and review. `ritualist init` does not install them, and no imported or shared recipe runs automatically.
+They are samples for local editing and review. `setpiece init` does not install them, and no imported or shared recipe runs automatically.
 
 Safety contract:
 
@@ -22,7 +22,7 @@ Safety contract:
 Validate and dry-run from the repository root before copying or adapting a template:
 
 ```powershell
-python -m ritualist validate .\ritualist\sample_recipes\support_triage_workspace.yaml
-python -m ritualist dry-run .\ritualist\sample_recipes\support_triage_workspace.yaml
-python -m ritualist doctor .\ritualist\sample_recipes\support_triage_workspace.yaml --no-strict
+python -m setpiece validate .\setpiece\sample_recipes\support_triage_workspace.yaml
+python -m setpiece dry-run .\setpiece\sample_recipes\support_triage_workspace.yaml
+python -m setpiece doctor .\setpiece\sample_recipes\support_triage_workspace.yaml --no-strict
 ```

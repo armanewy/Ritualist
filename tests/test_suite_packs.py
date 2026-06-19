@@ -8,8 +8,8 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.canvas.models import CanvasComponent, CanvasDocument, CanvasTheme
-from ritualist.canvas_packs import (
+from setpiece.canvas.models import CanvasComponent, CanvasDocument, CanvasTheme
+from setpiece.canvas_packs import (
     CANVAS_NAME,
     CANVAS_PACK_SCHEMA,
     MANIFEST_NAME as VISUAL_MANIFEST_NAME,
@@ -18,10 +18,10 @@ from ritualist.canvas_packs import (
     export_canvas_pack,
     export_theme_pack,
 )
-from ritualist.cli import app
-from ritualist.packs import PACK_SCHEMA_V1, export_recipe_pack
-from ritualist.paths import imported_packs_path, recipes_path
-from ritualist.suite_packs import (
+from setpiece.cli import app
+from setpiece.packs import PACK_SCHEMA_V1, export_recipe_pack
+from setpiece.paths import imported_packs_path, recipes_path
+from setpiece.suite_packs import (
     MANIFEST_NAME,
     README_NAME,
     SUITE_PACK_SCHEMA,
@@ -34,8 +34,8 @@ from ritualist.suite_packs import (
 
 
 def _use_app_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("RITUALIST_E2E", "1")
-    monkeypatch.setenv("RITUALIST_E2E_APP_DATA_DIR", str(tmp_path / "app-data"))
+    monkeypatch.setenv("SETPIECE_E2E", "1")
+    monkeypatch.setenv("SETPIECE_E2E_APP_DATA_DIR", str(tmp_path / "app-data"))
 
 
 def _canvas_pack(tmp_path: Path) -> Path:
@@ -54,14 +54,14 @@ def _canvas_pack(tmp_path: Path) -> Path:
     )
     canvas_path = tmp_path / "project_suite_canvas.yaml"
     canvas_path.write_text(yaml.safe_dump(document.to_dict(), sort_keys=False), encoding="utf-8")
-    return export_canvas_pack(canvas_path, tmp_path / "project_suite_canvas.ritualistcanvas").output_path
+    return export_canvas_pack(canvas_path, tmp_path / "project_suite_canvas.setpiececanvas").output_path
 
 
 def _theme_pack(tmp_path: Path) -> Path:
     theme = CanvasTheme(id="project_suite_theme", name="Project Suite Theme")
     theme_path = tmp_path / "project_suite_theme.yaml"
     theme_path.write_text(yaml.safe_dump(theme.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
-    return export_theme_pack(theme_path, tmp_path / "project_suite_theme.ritualisttheme").output_path
+    return export_theme_pack(theme_path, tmp_path / "project_suite_theme.setpiecetheme").output_path
 
 
 def _ritual_pack(tmp_path: Path, *, recipe_id: str = "project_suite_wait") -> Path:
@@ -77,7 +77,7 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    return export_recipe_pack(recipe_path, tmp_path / f"{recipe_id}.ritualistpack").output_path
+    return export_recipe_pack(recipe_path, tmp_path / f"{recipe_id}.setpiecepack").output_path
 
 
 def _write_zip(path: Path, entries: dict[str, object]) -> Path:
@@ -94,7 +94,7 @@ def _write_zip(path: Path, entries: dict[str, object]) -> Path:
 
 def _suite_manifest(
     *,
-    canvas_entry: str = "packs/canvas/project_suite_canvas.ritualistcanvas",
+    canvas_entry: str = "packs/canvas/project_suite_canvas.setpiececanvas",
     theme_entry: str | None = None,
     ritual_entries: list[str] | None = None,
 ) -> dict[str, object]:
@@ -124,7 +124,7 @@ def _suite_manifest(
 
 
 def _bad_ritual_pack(tmp_path: Path) -> Path:
-    path = tmp_path / "bad_shell.ritualistpack"
+    path = tmp_path / "bad_shell.setpiecepack"
     return _write_zip(
         path,
         {
@@ -133,7 +133,7 @@ def _bad_ritual_pack(tmp_path: Path) -> Path:
                 "id": "bad_shell",
                 "name": "Bad Shell",
                 "version": "1.0.0",
-                "required_ritualist_version": ">=0",
+                "required_setpiece_version": ">=0",
                 "supported_os": ["windows", "linux", "macos"],
                 "required_capabilities": [],
                 "required_actions": ["shell.run"],
@@ -156,7 +156,7 @@ def _bad_ritual_pack(tmp_path: Path) -> Path:
 
 
 def _bad_canvas_pack(tmp_path: Path) -> Path:
-    path = tmp_path / "bad_canvas.ritualistcanvas"
+    path = tmp_path / "bad_canvas.setpiececanvas"
     document = CanvasDocument(
         id="project_suite_canvas",
         name="Project Suite Canvas",
@@ -188,7 +188,7 @@ def _bad_canvas_pack(tmp_path: Path) -> Path:
 
 
 def _bad_theme_pack(tmp_path: Path) -> Path:
-    path = tmp_path / "bad_theme.ritualisttheme"
+    path = tmp_path / "bad_theme.setpiecetheme"
     return _write_zip(
         path,
         {
@@ -225,7 +225,7 @@ def test_suite_pack_export_validate_and_import_quarantines_everything(
         canvas_pack=canvas,
         theme_pack=theme,
         ritual_packs=(ritual,),
-        out=tmp_path / "project_suite.ritualistsuite",
+        out=tmp_path / "project_suite.setpiecesuite",
         suite_id="project_suite",
         name="Project Suite",
         readme_path=readme,
@@ -237,13 +237,13 @@ def test_suite_pack_export_validate_and_import_quarantines_everything(
     assert set(exported.entries) == {
         MANIFEST_NAME,
         README_NAME,
-        "packs/canvas/project_suite_canvas.ritualistcanvas",
-        "packs/theme/project_suite_theme.ritualisttheme",
-        "packs/rituals/project_suite_wait.ritualistpack",
+        "packs/canvas/project_suite_canvas.setpiececanvas",
+        "packs/theme/project_suite_theme.setpiecetheme",
+        "packs/rituals/project_suite_wait.setpiecepack",
     }
     assert [item.pack_type for item in validated.nested_packs] == ["canvas", "theme", "ritual"]
     assert validated.manifest.behavior_bearing_contents == [
-        "packs/rituals/project_suite_wait.ritualistpack"
+        "packs/rituals/project_suite_wait.setpiecepack"
     ]
     assert imported.status == "quarantined"
     assert imported.canvas_import["status"] == "quarantined"
@@ -263,7 +263,7 @@ def test_suite_pack_visuals_only_import_skips_behavior_packs(
     suite = export_suite_pack(
         canvas_pack=_canvas_pack(tmp_path),
         ritual_packs=(_ritual_pack(tmp_path),),
-        out=tmp_path / "visuals_only.ritualistsuite",
+        out=tmp_path / "visuals_only.setpiecesuite",
         suite_id="visuals_only_suite",
         name="Visuals Only Suite",
     ).output_path
@@ -273,7 +273,7 @@ def test_suite_pack_visuals_only_import_skips_behavior_packs(
     assert imported.ritual_imports == ()
     assert imported.skipped_rituals == (
         {
-            "entry": "packs/rituals/project_suite_wait.ritualistpack",
+            "entry": "packs/rituals/project_suite_wait.setpiecepack",
             "reason": "visuals_only_import",
             "behavior_bearing": True,
         },
@@ -284,11 +284,11 @@ def test_suite_pack_visuals_only_import_skips_behavior_packs(
 def test_suite_pack_rejects_undisclosed_behavior_bearing_ritual(tmp_path: Path) -> None:
     canvas = _canvas_pack(tmp_path)
     ritual = _ritual_pack(tmp_path)
-    suite = tmp_path / "missing_disclosure.ritualistsuite"
+    suite = tmp_path / "missing_disclosure.setpiecesuite"
     manifest = _suite_manifest(ritual_entries=[])
     manifest["contents"]["rituals"] = [
         {
-            "path": "packs/rituals/project_suite_wait.ritualistpack",
+            "path": "packs/rituals/project_suite_wait.setpiecepack",
             "behavior_bearing": True,
             "disabled_on_import": True,
         }
@@ -298,8 +298,8 @@ def test_suite_pack_rejects_undisclosed_behavior_bearing_ritual(tmp_path: Path) 
         suite,
         {
             MANIFEST_NAME: manifest,
-            "packs/canvas/project_suite_canvas.ritualistcanvas": canvas.read_bytes(),
-            "packs/rituals/project_suite_wait.ritualistpack": ritual.read_bytes(),
+            "packs/canvas/project_suite_canvas.setpiececanvas": canvas.read_bytes(),
+            "packs/rituals/project_suite_wait.setpiecepack": ritual.read_bytes(),
         },
     )
 
@@ -310,40 +310,40 @@ def test_suite_pack_rejects_undisclosed_behavior_bearing_ritual(tmp_path: Path) 
 def test_suite_pack_rejects_unsafe_nested_ritual_canvas_and_theme(tmp_path: Path) -> None:
     canvas = _canvas_pack(tmp_path)
 
-    bad_ritual_suite = tmp_path / "bad_ritual.ritualistsuite"
+    bad_ritual_suite = tmp_path / "bad_ritual.setpiecesuite"
     _write_zip(
         bad_ritual_suite,
         {
             MANIFEST_NAME: _suite_manifest(
-                ritual_entries=["packs/rituals/bad_shell.ritualistpack"]
+                ritual_entries=["packs/rituals/bad_shell.setpiecepack"]
             ),
-            "packs/canvas/project_suite_canvas.ritualistcanvas": canvas.read_bytes(),
-            "packs/rituals/bad_shell.ritualistpack": _bad_ritual_pack(tmp_path).read_bytes(),
+            "packs/canvas/project_suite_canvas.setpiececanvas": canvas.read_bytes(),
+            "packs/rituals/bad_shell.setpiecepack": _bad_ritual_pack(tmp_path).read_bytes(),
         },
     )
     with pytest.raises(SuitePackError, match="arbitrary code actions"):
         validate_suite_pack(bad_ritual_suite)
 
-    bad_canvas_suite = tmp_path / "bad_canvas.ritualistsuite"
+    bad_canvas_suite = tmp_path / "bad_canvas.setpiecesuite"
     _write_zip(
         bad_canvas_suite,
         {
             MANIFEST_NAME: _suite_manifest(),
-            "packs/canvas/project_suite_canvas.ritualistcanvas": _bad_canvas_pack(tmp_path).read_bytes(),
+            "packs/canvas/project_suite_canvas.setpiececanvas": _bad_canvas_pack(tmp_path).read_bytes(),
         },
     )
     with pytest.raises(SuitePackError, match="blocked in imported canvases"):
         validate_suite_pack(bad_canvas_suite)
 
-    bad_theme_suite = tmp_path / "bad_theme.ritualistsuite"
+    bad_theme_suite = tmp_path / "bad_theme.setpiecesuite"
     _write_zip(
         bad_theme_suite,
         {
             MANIFEST_NAME: _suite_manifest(
-                theme_entry="packs/theme/bad_theme.ritualisttheme"
+                theme_entry="packs/theme/bad_theme.setpiecetheme"
             ),
-            "packs/canvas/project_suite_canvas.ritualistcanvas": canvas.read_bytes(),
-            "packs/theme/bad_theme.ritualisttheme": _bad_theme_pack(tmp_path).read_bytes(),
+            "packs/canvas/project_suite_canvas.setpiececanvas": canvas.read_bytes(),
+            "packs/theme/bad_theme.setpiecetheme": _bad_theme_pack(tmp_path).read_bytes(),
         },
     )
     with pytest.raises(SuitePackError, match="invalid nested theme pack"):
@@ -352,23 +352,23 @@ def test_suite_pack_rejects_unsafe_nested_ritual_canvas_and_theme(tmp_path: Path
 
 def test_suite_pack_rejects_unexpected_nested_assets_and_path_traversal(tmp_path: Path) -> None:
     canvas = _canvas_pack(tmp_path)
-    suite = tmp_path / "unexpected.ritualistsuite"
+    suite = tmp_path / "unexpected.setpiecesuite"
 
     _write_zip(
         suite,
         {
             MANIFEST_NAME: _suite_manifest(),
-            "packs/canvas/project_suite_canvas.ritualistcanvas": canvas.read_bytes(),
+            "packs/canvas/project_suite_canvas.setpiececanvas": canvas.read_bytes(),
             "assets/payload.exe": b"MZ",
         },
     )
     with pytest.raises(SuitePackError, match="unexpected suite pack entry"):
         validate_suite_pack(suite)
 
-    traversal = tmp_path / "traversal.ritualistsuite"
+    traversal = tmp_path / "traversal.setpiecesuite"
     with ZipFile(traversal, "w", ZIP_DEFLATED) as archive:
         archive.writestr(MANIFEST_NAME, yaml.safe_dump(_suite_manifest()))
-        archive.writestr("packs/canvas/../escape.ritualistcanvas", b"unsafe")
+        archive.writestr("packs/canvas/../escape.setpiececanvas", b"unsafe")
     with pytest.raises(SuitePackError, match="unsafe suite pack entry path"):
         validate_suite_pack(traversal)
 
@@ -380,7 +380,7 @@ def test_suite_pack_cli_validate_import_and_list_json(
     _use_app_data(monkeypatch, tmp_path)
     suite = export_suite_pack(
         canvas_pack=_canvas_pack(tmp_path),
-        out=tmp_path / "cli_suite.ritualistsuite",
+        out=tmp_path / "cli_suite.setpiecesuite",
         suite_id="cli_suite",
         name="CLI Suite",
     ).output_path

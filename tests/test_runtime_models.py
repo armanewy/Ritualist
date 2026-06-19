@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from ritualist.runtime_models import (
+from setpiece.runtime_models import (
     RUNTIME_EVENT_TYPES,
     ConfirmationRequested,
     ConfirmationResolved,
@@ -402,7 +402,7 @@ def test_runtime_models_import_without_gui_or_windows_dependencies():
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.runtime_models
+import setpiece.runtime_models
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

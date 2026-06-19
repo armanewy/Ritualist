@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from ritualist.adapters.windows_uia import WindowsUIAutomationAdapter
-from ritualist.errors import RitualistError
+from setpiece.adapters.windows_uia import WindowsUIAutomationAdapter
+from setpiece.errors import SetpieceError
 
 
 class FakeElement:
@@ -74,7 +74,7 @@ def test_click_text_uses_invoke_before_click(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsUIAutomationAdapter().click_text(
@@ -101,10 +101,10 @@ def test_click_text_failure_includes_candidate_labels(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Battle.net", [FakeElement("Diablo IV"), FakeElement("Settings")]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
-    with pytest.raises(RitualistError) as exc:
+    with pytest.raises(SetpieceError) as exc:
         WindowsUIAutomationAdapter().click_text(
             text="Play",
             window_title_contains="Battle.net",
@@ -124,7 +124,7 @@ def test_find_text_region_returns_element_bounds(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsUIAutomationAdapter().find_text_region(
@@ -149,7 +149,7 @@ def test_find_text_region_returns_none_when_text_is_absent(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Battle.net", [FakeElement("Settings")]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsUIAutomationAdapter().find_text_region(
@@ -172,7 +172,7 @@ def test_find_text_region_returns_none_when_text_is_disabled(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsUIAutomationAdapter().find_text_region(
@@ -191,7 +191,7 @@ def test_find_text_region_wrong_window_title_never_matches(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Other App", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsUIAutomationAdapter().find_text_region(
@@ -210,7 +210,7 @@ def test_invoke_resolved_text_region_invokes_same_target_without_coordinate_fall
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
     adapter = WindowsUIAutomationAdapter()
     target = adapter.find_text_region(
@@ -245,7 +245,7 @@ def test_invoke_resolved_text_region_does_not_fallback_to_click_input(monkeypatc
     desktop = FakeDesktop(FakeRoot("Battle.net", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
     adapter = WindowsUIAutomationAdapter()
     target = adapter.find_text_region(
@@ -256,7 +256,7 @@ def test_invoke_resolved_text_region_does_not_fallback_to_click_input(monkeypatc
         timeout_seconds=0.01,
     )
 
-    with pytest.raises(RitualistError, match="target does not support UI Automation invoke"):
+    with pytest.raises(SetpieceError, match="target does not support UI Automation invoke"):
         adapter.invoke_resolved_text_region(
             target=target,
             text="Play",
@@ -275,7 +275,7 @@ def test_text_visible_is_read_only(monkeypatch):
     desktop = FakeDesktop(FakeRoot("Vendor App", [button]))
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: desktop
-    monkeypatch.setattr("ritualist.adapters.windows_uia._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.windows_uia._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     visible = WindowsUIAutomationAdapter().text_visible(

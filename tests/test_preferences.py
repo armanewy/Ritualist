@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.preferences import (
+from setpiece.preferences import (
     CleanupPreferenceScope,
     RememberedApprovalScope,
     approval_matches,
@@ -13,7 +13,7 @@ from ritualist.preferences import (
     remember_cleanup_choice,
     revoke_remembered_approval,
 )
-from ritualist.run_logs import KEEP_SETUP_OPEN, STOPPED_USER_DECLINED_CONFIRMATION
+from setpiece.run_logs import KEEP_SETUP_OPEN, STOPPED_USER_DECLINED_CONFIRMATION
 
 
 def test_remembered_cleanup_stored_only_after_user_choice(tmp_path):

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.activity_signals import (
+from setpiece.activity_signals import (
     OPEN_WINDOWS_SOURCE_ID,
     RECENT_ITEMS_SOURCE_ID,
-    RITUALIST_JOURNAL_SOURCE_ID,
+    SETPIECE_JOURNAL_SOURCE_ID,
     ActivityCollectionResult,
     ActivitySignal,
     ActivityWarning,
@@ -22,14 +22,14 @@ from ritualist.activity_signals import (
 def test_activity_signal_normalizes_allowed_journal_event() -> None:
     signal = ActivitySignal(
         kind="Journal Event",
-        source_id="Ritualist Journal",
+        source_id="Setpiece Journal",
         label="  Coding Mode\n",
         value=" stopped ",
         metadata={"Recipe ID": "coding_mode", "run_id": "abc123"},
     )
 
     assert signal.kind == "journal_event"
-    assert signal.source_id == RITUALIST_JOURNAL_SOURCE_ID
+    assert signal.source_id == SETPIECE_JOURNAL_SOURCE_ID
     assert signal.label == "Coding Mode"
     assert signal.value == "stopped"
     assert signal.metadata == {"recipe_id": "coding_mode", "run_id": "abc123"}
@@ -39,7 +39,7 @@ def test_activity_signal_normalizes_allowed_journal_event() -> None:
 @pytest.mark.parametrize(
     ("kind", "source_id"),
     [
-        ("browser_history", RITUALIST_JOURNAL_SOURCE_ID),
+        ("browser_history", SETPIECE_JOURNAL_SOURCE_ID),
         ("journal_event", "watch_me"),
         ("window_metadata", RECENT_ITEMS_SOURCE_ID),
         ("recent_reference", OPEN_WINDOWS_SOURCE_ID),
@@ -116,7 +116,7 @@ def test_activity_signal_constructors_emit_allowed_shapes(tmp_path: Path) -> Non
         target=folder,
     )
 
-    assert journal.source_id == RITUALIST_JOURNAL_SOURCE_ID
+    assert journal.source_id == SETPIECE_JOURNAL_SOURCE_ID
     assert process.source_id == OPEN_WINDOWS_SOURCE_ID
     assert process.metadata == {"process_name": "Battle.net.exe"}
     assert window.metadata == {

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.actions.catalog import (
+from setpiece.actions.catalog import (
     CATALOG_CATEGORY_NAMES,
     SIDE_EFFECT_LABELS,
     ActionCatalogEntry,
     create_action_catalog,
 )
-from ritualist.actions.registry import ActionRegistry, create_default_registry
+from setpiece.actions.registry import ActionRegistry, create_default_registry
 
 
 def test_action_catalog_contains_all_registered_actions() -> None:

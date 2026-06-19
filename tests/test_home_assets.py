@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.home.assets import (
+from setpiece.home.assets import (
     FALLBACK_GRADIENT,
     MAX_THUMBNAIL_HEIGHT,
     MAX_THUMBNAIL_WIDTH,

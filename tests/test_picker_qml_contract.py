@@ -4,9 +4,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PICKER_QML = REPO_ROOT / "ritualist" / "agent" / "qml" / "Picker.qml"
-PICKER_ROW_QML = REPO_ROOT / "ritualist" / "agent" / "qml" / "PickerRow.qml"
-ACTIVE_SUMMARY_QML = REPO_ROOT / "ritualist" / "agent" / "qml" / "ActiveSummary.qml"
+PICKER_QML = REPO_ROOT / "setpiece" / "agent" / "qml" / "Picker.qml"
+PICKER_ROW_QML = REPO_ROOT / "setpiece" / "agent" / "qml" / "PickerRow.qml"
+ACTIVE_SUMMARY_QML = REPO_ROOT / "setpiece" / "agent" / "qml" / "ActiveSummary.qml"
 
 
 def _read(path: Path) -> str:

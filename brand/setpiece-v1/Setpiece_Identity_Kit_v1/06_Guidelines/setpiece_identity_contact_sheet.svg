@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180">
+<rect width="1600" height="1180" fill="#F7F4EE"/><text x="70" y="68" font-family="Inter" font-size="34" font-weight="650" fill="#22272B">Setpiece identity system · v1</text><text x="70" y="102" font-family="Inter" font-size="16" fill="#687278">Two arranged pieces form an abstract S around a stateful center cue.</text><rect x="70" y="135" width="940" height="240" rx="20" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(110 175) scale(7)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#3C6F82" transform="rotate(45 12 12)"/>
+</g><text x="340" y="285" font-family="Inter Display" font-size="108" font-weight="500" fill="#22272B">Setpıece</text><rect x="571.7421875" y="202" width="9" height="9" rx="1.5" fill="#3C6F82" transform="rotate(45 576.2421875 206.5)"/><text x="344" y="332" font-family="Inter" font-size="20" fill="#687278">Everything in place. Ready to run.</text><rect x="1050" y="135" width="480" height="240" rx="20" fill="#FFFFFF" stroke="#E2DDD4"/><rect x="1100" y="175" width="160" height="160" rx="40" fill="#243A43"/><g transform="translate(1124 199) scale(4.65)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#F7F4EE" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#F7F4EE" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#7DB5C6" transform="rotate(45 12 12)"/>
+</g><text x="1300" y="230" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Application icon</text><text x="1300" y="262" font-family="Inter" font-size="14" fill="#687278">Plated for Start, taskbar,</text><text x="1300" y="283" font-family="Inter" font-size="14" fill="#687278">installer, and Store.</text><text x="70" y="438" font-family="Inter" font-size="23" font-weight="650" fill="#22272B">Tray state family</text><rect x="70" y="470" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(102 500) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#3C6F82" transform="rotate(45 12 12)"/>
+</g><text x="195" y="526" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Ready</text><text x="195" y="552" font-family="Inter" font-size="13" fill="#687278">Available; no run active.</text><g transform="translate(199 564) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#3C6F82" transform="rotate(45 12 12)"/>
+</g><g transform="translate(237 561) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#3C6F82" transform="rotate(45 12 12)"/>
+</g><g transform="translate(281 558) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="10.25" y="10.25" width="3.5" height="3.5" rx="0.72" fill="#3C6F82" transform="rotate(45 12 12)"/>
+</g><rect x="445" y="470" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(477 500) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 10.45 9.05 L 15.25 12 L 10.45 14.95 Z" fill="#3C6F82"/>
+</g><text x="570" y="526" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Running</text><text x="570" y="552" font-family="Inter" font-size="13" fill="#687278">A sequence is executing.</text><g transform="translate(574 564) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 10.45 9.05 L 15.25 12 L 10.45 14.95 Z" fill="#3C6F82"/>
+</g><g transform="translate(612 561) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 10.45 9.05 L 15.25 12 L 10.45 14.95 Z" fill="#3C6F82"/>
+</g><g transform="translate(656 558) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 10.45 9.05 L 15.25 12 L 10.45 14.95 Z" fill="#3C6F82"/>
+</g><rect x="820" y="470" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(852 500) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="9.7" cy="12" r="0.86" fill="#A36B25"/><circle cx="12" cy="12" r="0.86" fill="#A36B25"/><circle cx="14.3" cy="12" r="0.86" fill="#A36B25"/>
+</g><text x="945" y="526" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Waiting</text><text x="945" y="552" font-family="Inter" font-size="13" fill="#687278">Blocked by a dependency.</text><g transform="translate(949 564) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="9.7" cy="12" r="0.86" fill="#A36B25"/><circle cx="12" cy="12" r="0.86" fill="#A36B25"/><circle cx="14.3" cy="12" r="0.86" fill="#A36B25"/>
+</g><g transform="translate(987 561) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="9.7" cy="12" r="0.86" fill="#A36B25"/><circle cx="12" cy="12" r="0.86" fill="#A36B25"/><circle cx="14.3" cy="12" r="0.86" fill="#A36B25"/>
+</g><g transform="translate(1031 558) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="9.7" cy="12" r="0.86" fill="#A36B25"/><circle cx="12" cy="12" r="0.86" fill="#A36B25"/><circle cx="14.3" cy="12" r="0.86" fill="#A36B25"/>
+</g><rect x="1195" y="470" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(1227 500) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="11.08" y="8.55" width="1.84" height="4.55" rx="0.92" fill="#6E5A8A"/><circle cx="12" cy="15.12" r="1.02" fill="#6E5A8A"/>
+</g><text x="1320" y="526" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Needs attention</text><text x="1320" y="552" font-family="Inter" font-size="13" fill="#687278">A decision is required.</text><g transform="translate(1324 564) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="11.08" y="8.55" width="1.84" height="4.55" rx="0.92" fill="#6E5A8A"/><circle cx="12" cy="15.12" r="1.02" fill="#6E5A8A"/>
+</g><g transform="translate(1362 561) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="11.08" y="8.55" width="1.84" height="4.55" rx="0.92" fill="#6E5A8A"/><circle cx="12" cy="15.12" r="1.02" fill="#6E5A8A"/>
+</g><g transform="translate(1406 558) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="11.08" y="8.55" width="1.84" height="4.55" rx="0.92" fill="#6E5A8A"/><circle cx="12" cy="15.12" r="1.02" fill="#6E5A8A"/>
+</g><rect x="70" y="635" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(102 665) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.45 9.45 L 14.55 14.55 M 14.55 9.45 L 9.45 14.55" stroke="#A84942" stroke-width="2.0" stroke-linecap="round"/>
+</g><text x="195" y="691" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Failed</text><text x="195" y="717" font-family="Inter" font-size="13" fill="#687278">Execution stopped unsuccessfully.</text><g transform="translate(199 729) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.45 9.45 L 14.55 14.55 M 14.55 9.45 L 9.45 14.55" stroke="#A84942" stroke-width="2.0" stroke-linecap="round"/>
+</g><g transform="translate(237 726) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.45 9.45 L 14.55 14.55 M 14.55 9.45 L 9.45 14.55" stroke="#A84942" stroke-width="2.0" stroke-linecap="round"/>
+</g><g transform="translate(281 723) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.45 9.45 L 14.55 14.55 M 14.55 9.45 L 9.45 14.55" stroke="#A84942" stroke-width="2.0" stroke-linecap="round"/>
+</g><rect x="445" y="635" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(477 665) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.05 10.2 C 10.55 8.55 13.1 8.35 14.85 9.85 C 16.55 11.35 16.7 14 15.1 15.65 C 13.55 17.15 11.1 17.35 9.35 16.05" fill="none" stroke="#45715F" stroke-width="1.62" stroke-linecap="round"/><path d="M 8.35 8.65 L 8.72 11.55 L 11.3 10.35 Z" fill="#45715F"/>
+</g><text x="570" y="691" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Recovering</text><text x="570" y="717" font-family="Inter" font-size="13" fill="#687278">Restoring a checkpoint.</text><g transform="translate(574 729) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.05 10.2 C 10.55 8.55 13.1 8.35 14.85 9.85 C 16.55 11.35 16.7 14 15.1 15.65 C 13.55 17.15 11.1 17.35 9.35 16.05" fill="none" stroke="#45715F" stroke-width="1.62" stroke-linecap="round"/><path d="M 8.35 8.65 L 8.72 11.55 L 11.3 10.35 Z" fill="#45715F"/>
+</g><g transform="translate(612 726) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.05 10.2 C 10.55 8.55 13.1 8.35 14.85 9.85 C 16.55 11.35 16.7 14 15.1 15.65 C 13.55 17.15 11.1 17.35 9.35 16.05" fill="none" stroke="#45715F" stroke-width="1.62" stroke-linecap="round"/><path d="M 8.35 8.65 L 8.72 11.55 L 11.3 10.35 Z" fill="#45715F"/>
+</g><g transform="translate(656 723) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 9.05 10.2 C 10.55 8.55 13.1 8.35 14.85 9.85 C 16.55 11.35 16.7 14 15.1 15.65 C 13.55 17.15 11.1 17.35 9.35 16.05" fill="none" stroke="#45715F" stroke-width="1.62" stroke-linecap="round"/><path d="M 8.35 8.65 L 8.72 11.55 L 11.3 10.35 Z" fill="#45715F"/>
+</g><rect x="820" y="635" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(852 665) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.58" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/><rect x="12.6" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/>
+</g><text x="945" y="691" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Paused</text><text x="945" y="717" font-family="Inter" font-size="13" fill="#687278">Stopped intentionally, resumable.</text><g transform="translate(949 729) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.58" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/><rect x="12.6" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/>
+</g><g transform="translate(987 726) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.58" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/><rect x="12.6" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/>
+</g><g transform="translate(1031 723) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.58" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/><rect x="12.6" y="9.0" width="1.82" height="6" rx="0.78" fill="#A36B25"/>
+</g><rect x="1195" y="635" width="345" height="135" rx="16" fill="#FFFFFF" stroke="#E2DDD4"/><g transform="translate(1227 665) scale(3.1)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.75" y="9.75" width="4.5" height="4.5" rx="0.7" fill="#70777C"/>
+</g><text x="1320" y="691" font-family="Inter" font-size="17" font-weight="650" fill="#22272B">Stopped*</text><text x="1320" y="717" font-family="Inter" font-size="13" fill="#687278">Supplemental; normally returns to Ready.</text><g transform="translate(1324 729) scale(0.67)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.75" y="9.75" width="4.5" height="4.5" rx="0.7" fill="#70777C"/>
+</g><g transform="translate(1362 726) scale(0.84)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.75" y="9.75" width="4.5" height="4.5" rx="0.7" fill="#70777C"/>
+</g><g transform="translate(1406 723) scale(1.0)">
+<path d="M 19 4.2 H 8.3 C 5.9 4.2 4.2 5.9 4.2 8.3 V 10.4 H 8.6"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 5 19.8 H 15.7 C 18.1 19.8 19.8 18.1 19.8 15.7 V 13.6 H 15.4"
+      fill="none" stroke="#22272B" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="9.75" y="9.75" width="4.5" height="4.5" rx="0.7" fill="#70777C"/>
+</g><text x="70" y="835" font-family="Inter" font-size="23" font-weight="650" fill="#22272B">Palette</text><rect x="70" y="865" width="170" height="86" rx="12" fill="#22272B" stroke="#D8D2C8"/><text x="84" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Ink</text><text x="84" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#22272B</text><rect x="275" y="865" width="170" height="86" rx="12" fill="#F7F4EE" stroke="#D8D2C8"/><text x="289" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#22272B">Paper</text><text x="289" y="945" font-family="Inter Mono" font-size="11" fill="#22272B">#F7F4EE</text><rect x="480" y="865" width="170" height="86" rx="12" fill="#3C6F82" stroke="#D8D2C8"/><text x="494" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Mineral</text><text x="494" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#3C6F82</text><rect x="685" y="865" width="170" height="86" rx="12" fill="#A36B25" stroke="#D8D2C8"/><text x="699" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Waiting</text><text x="699" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#A36B25</text><rect x="890" y="865" width="170" height="86" rx="12" fill="#6E5A8A" stroke="#D8D2C8"/><text x="904" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Attention</text><text x="904" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#6E5A8A</text><rect x="1095" y="865" width="170" height="86" rx="12" fill="#A84942" stroke="#D8D2C8"/><text x="1109" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Failure</text><text x="1109" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#A84942</text><rect x="1300" y="865" width="170" height="86" rx="12" fill="#45715F" stroke="#D8D2C8"/><text x="1314" y="926" font-family="Inter" font-size="13" font-weight="650" fill="#F7F4EE">Recovery</text><text x="1314" y="945" font-family="Inter Mono" font-size="11" fill="#F7F4EE">#45715F</text><text x="70" y="1012" font-family="Inter" font-size="18" font-weight="650" fill="#22272B">Identity rules</text><circle cx="82" cy="1040" r="3" fill="#3C6F82"/><text x="98" y="1045" font-family="Inter" font-size="14" fill="#687278">Keep the two outer pieces stable across states.</text><circle cx="82" cy="1068" r="3" fill="#3C6F82"/><text x="98" y="1073" font-family="Inter" font-size="14" fill="#687278">Change only the center cue for tray status.</text><circle cx="82" cy="1096" r="3" fill="#3C6F82"/><text x="98" y="1101" font-family="Inter" font-size="14" fill="#687278">Use the app icon for brand; use Fluent glyphs for ordinary commands.</text><circle cx="82" cy="1124" r="3" fill="#3C6F82"/><text x="98" y="1129" font-family="Inter" font-size="14" fill="#687278">No film frames, clapperboards, spotlights, neon, or perpetual animation.</text>
+</svg>

@@ -1,4 +1,4 @@
-# Ritualist Development Notes
+# Setpiece Development Notes
 
 - Keep workflow parsing and execution cross-platform.
 - Keep Windows UI Automation imports lazy and inside adapter methods.
@@ -8,7 +8,7 @@
 
 ## Release Validation Policy
 
-- Use `.codex/skills/ritualist-release-validation/SKILL.md` for Ritualist
+- Use `.codex/skills/setpiece-release-validation/SKILL.md` for Setpiece
   release validation, packaged dogfood, release checklist updates, acceptance
   harness work, tag readiness, and v0.2/v0.3 release gates.
 - Do not add arbitrary recipe-supplied Python or JavaScript, arbitrary QML/HTML

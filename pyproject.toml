@@ -3,13 +3,13 @@ requires = ["hatchling>=1.24", "editables>=0.5"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ritualist"
+name = "setpiece"
 version = "0.2.0-alpha.1"
-description = "Local-first Windows desktop workflow automation for inspectable personal rituals."
+description = "Local-first Windows desktop ritual/runbook app for activity-specific Rooms."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Ritualist" }]
+authors = [{ name = "Setpiece" }]
 dependencies = [
   "platformdirs>=4.2",
   "pydantic>=2.7",
@@ -35,10 +35,10 @@ all = [
 ]
 
 [project.scripts]
-ritualist = "ritualist.cli:app"
+setpiece = "setpiece.cli:app"
 
 [project.gui-scripts]
-ritualist-desktop = "ritualist.desktop_entry:main"
+setpiece-desktop = "setpiece.desktop_entry:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

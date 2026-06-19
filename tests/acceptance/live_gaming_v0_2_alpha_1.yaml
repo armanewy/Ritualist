@@ -1,8 +1,8 @@
-schema: ritualist.live_gaming_acceptance.v1
+schema: setpiece.live_gaming_acceptance.v1
 release: v0.2.0-alpha.1
 scope: live_integration_only
 semantics:
-  PASS: "Live desktop evidence satisfies the case without mutation outside the approved Ritualist action."
+  PASS: "Live desktop evidence satisfies the case without mutation outside the approved Setpiece action."
   FAIL: "Live desktop evidence contradicts the release requirement or a command failed."
   NEEDS_HUMAN_REVIEW: "The case was captured but still requires operator comparison or visual judgment."
   NOT_RUN: "The case was not selected or the required live state was not present."
@@ -70,7 +70,7 @@ cases:
       - selected_branch
       - confirmation_suppressed
       - human_notes
-    pass_when: "Play is visible but disabled and Ritualist blocks without requesting approval."
+    pass_when: "Play is visible but disabled and Setpiece blocks without requesting approval."
   - id: play_enabled
     label: "Play enabled"
     expected_evidence:
@@ -90,7 +90,7 @@ cases:
       - run_json
       - steps_jsonl
       - human_notes
-    pass_when: "Ritualist fails visibly when the approved target disappears or changes before invocation."
+    pass_when: "Setpiece fails visibly when the approved target disappears or changes before invocation."
   - id: diablo_already_running
     label: "Diablo already running"
     expected_evidence:
@@ -121,7 +121,7 @@ cases:
       - run_json
       - steps_jsonl
       - human_notes
-    pass_when: "Ritualist surfaces the failed verification immediately and records it in the run."
+    pass_when: "Setpiece surfaces the failed verification immediately and records it in the run."
   - id: native_browser_handoff
     label: "Native browser handoff"
     expected_evidence:
@@ -137,7 +137,7 @@ cases:
       - managed_profile_evidence
       - ritual_step_log
       - human_notes
-    pass_when: "Managed mode is explicit and uses Ritualist's managed browser profile."
+    pass_when: "Managed mode is explicit and uses Setpiece's managed browser profile."
   - id: managed_media_starts
     label: "Managed media starts"
     expected_evidence:

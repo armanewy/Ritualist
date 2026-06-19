@@ -6,14 +6,14 @@ from threading import Event
 from pathlib import Path
 from types import SimpleNamespace
 
-from ritualist.home import confirmation as confirmation_module
-from ritualist.home.confirmation import (
+from setpiece.home import confirmation as confirmation_module
+from setpiece.home.confirmation import (
     _proceed_label,
     _show_win32_confirmation,
     create_win32_confirmation_presenter,
     placement_for_dialog,
 )
-from ritualist.overlay import ConfirmationRequest, ScreenRect
+from setpiece.overlay import ConfirmationRequest, ScreenRect
 
 
 def test_confirmation_dialog_places_near_target_when_room_exists():
@@ -65,7 +65,7 @@ def test_home_confirmation_module_imports_without_pyside6():
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.home.confirmation
+import setpiece.home.confirmation
 
 loaded = [name for name in sys.modules if name == "PySide6" or name.startswith("PySide6.")]
 if loaded:
@@ -85,7 +85,7 @@ if loaded:
 
 def test_native_home_confirmation_presenter_uses_top_level_always_on_top_dialog():
     source = (
-        Path(__file__).resolve().parents[1] / "ritualist" / "home" / "confirmation.py"
+        Path(__file__).resolve().parents[1] / "setpiece" / "home" / "confirmation.py"
     ).read_text(encoding="utf-8")
 
     assert "dialog = QDialog()" in source
@@ -139,7 +139,7 @@ def test_win32_fallback_messagebox_is_topmost_and_foreground(monkeypatch):
     assert "Ask before clicking Play" in text
     assert "Window: Battle.net" in text
     assert "Target: Play" in text
-    assert title == "Ritualist Confirmation Required"
+    assert title == "Setpiece Confirmation Required"
     assert flags & 0x00040000
     assert flags & 0x00010000
     assert flags & 0x00000100

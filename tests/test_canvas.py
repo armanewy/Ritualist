@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CANVAS_SCHEMA_VERSION,
     CanvasBackground,
     CanvasBackgroundType,
@@ -32,10 +32,10 @@ from ritualist.canvas import (
     validate_canvas_document,
     validate_canvas_structure,
 )
-from ritualist.canvas.app import _recent_activity_items, build_canvas_use_payload
-from ritualist.cli import app
-from ritualist.home.models import HomeCardStatus
-from ritualist.run_logs import RunRecord
+from setpiece.canvas.app import _recent_activity_items, build_canvas_use_payload
+from setpiece.cli import app
+from setpiece.home.models import HomeCardStatus
+from setpiece.run_logs import RunRecord
 
 
 def _valid_canvas() -> CanvasDocument:
@@ -105,23 +105,23 @@ def test_canvas_background_rejects_live_remote_or_executable_modes(background: d
 def test_canvas_source_files_are_not_collapsed_into_one_line() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     key_canvas_files = {
-        "ritualist/canvas/models.py",
-        "ritualist/canvas/registry.py",
-        "ritualist/canvas/storage.py",
-        "ritualist/canvas/home_adapter.py",
-        "ritualist/canvas/runtime.py",
-        "ritualist/canvas/controller.py",
-        "ritualist/canvas/view_model.py",
+        "setpiece/canvas/models.py",
+        "setpiece/canvas/registry.py",
+        "setpiece/canvas/storage.py",
+        "setpiece/canvas/home_adapter.py",
+        "setpiece/canvas/runtime.py",
+        "setpiece/canvas/controller.py",
+        "setpiece/canvas/view_model.py",
         "tests/test_canvas.py",
         "tests/test_canvas_runtime.py",
     }
     source_files = [
-        *sorted((repo_root / "ritualist" / "canvas").glob("*.py")),
+        *sorted((repo_root / "setpiece" / "canvas").glob("*.py")),
         *sorted((repo_root / "tests").glob("test_canvas*.py")),
     ]
     readable_files = [
         *source_files,
-        *sorted((repo_root / "ritualist" / "sample_canvases").glob("*.yaml")),
+        *sorted((repo_root / "setpiece" / "sample_canvases").glob("*.yaml")),
         repo_root / "docs" / "canvas.md",
         repo_root / "docs" / "roadmap.md",
     ]
@@ -229,7 +229,7 @@ def test_unsupported_binding_rejected() -> None:
 
 
 def test_unresolved_recipe_and_target_bindings_are_warnings(monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", lambda: [])
+    monkeypatch.setattr("setpiece.canvas.registry.discover_recipes", lambda: [])
     canvas = CanvasDocument(
         id="warnings_canvas",
         name="Warnings",
@@ -261,7 +261,7 @@ def test_unresolved_recipe_and_target_bindings_are_warnings(monkeypatch) -> None
 
 
 def test_legacy_prop_binding_reports_unresolved_recipe(monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", lambda: [])
+    monkeypatch.setattr("setpiece.canvas.registry.discover_recipes", lambda: [])
     canvas = CanvasDocument(
         id="legacy_binding",
         name="Legacy Binding",
@@ -596,7 +596,7 @@ def test_canvas_use_payload_loads_recent_runs_only_when_requested(monkeypatch, t
         },
         steps=[],
     )
-    monkeypatch.setattr("ritualist.canvas.runtime.list_recent_runs", lambda *, limit: [record])
+    monkeypatch.setattr("setpiece.canvas.runtime.list_recent_runs", lambda *, limit: [record])
 
     default_payload = build_canvas_use_payload(canvas, recipe_ids=set(), target_ids=set())
     live_payload = build_canvas_use_payload(
@@ -611,8 +611,8 @@ def test_canvas_use_payload_loads_recent_runs_only_when_requested(monkeypatch, t
 
 
 def test_canvas_storage_default_creation_and_no_overwrite(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.storage.canvases_path", lambda: tmp_path)
-    monkeypatch.setattr("ritualist.canvas.storage.canvases_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.storage.canvases_path", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.storage.canvases_dir", lambda: tmp_path)
 
     first = create_default_canvases()
     second = create_default_canvases()
@@ -636,8 +636,8 @@ def test_canvas_load_save_roundtrip(tmp_path: Path) -> None:
 
 
 def test_canvas_cli_list_show_validate_and_init(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.storage.canvases_path", lambda: tmp_path)
-    monkeypatch.setattr("ritualist.canvas.storage.canvases_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.storage.canvases_path", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.storage.canvases_dir", lambda: tmp_path)
 
     runner = CliRunner()
     init_result = runner.invoke(app, ["canvas", "init"])
@@ -650,7 +650,7 @@ def test_canvas_cli_list_show_validate_and_init(tmp_path: Path, monkeypatch) -> 
     assert show_result.exit_code == 0
     assert validate_result.exit_code == 0
     data = json.loads(show_result.output)
-    assert data["schema_version"] == "ritualist.canvas.show.v1"
+    assert data["schema_version"] == "setpiece.canvas.show.v1"
     assert data["canvas"]["id"] == "gaming_desktop"
 
 
@@ -682,8 +682,8 @@ def test_canvas_validation_does_not_execute_runtime(monkeypatch) -> None:
     def fail_runtime(*_args, **_kwargs):
         raise AssertionError("canvas validation must not execute runtime")
 
-    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", fail_discover_recipes)
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_runtime)
+    monkeypatch.setattr("setpiece.canvas.registry.discover_recipes", fail_discover_recipes)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", fail_runtime)
 
     result = validate_canvas_document(_valid_canvas())
 
@@ -697,8 +697,8 @@ def test_canvas_structure_validation_does_not_discover_recipes_or_targets(monkey
     def fail_target_catalog():
         raise AssertionError("structural validation must not read target catalog")
 
-    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", fail_discover_recipes)
-    monkeypatch.setattr("ritualist.canvas.registry.builtin_target_catalog", fail_target_catalog)
+    monkeypatch.setattr("setpiece.canvas.registry.discover_recipes", fail_discover_recipes)
+    monkeypatch.setattr("setpiece.canvas.registry.builtin_target_catalog", fail_target_catalog)
 
     result = validate_canvas_structure(_valid_canvas())
 
@@ -706,9 +706,9 @@ def test_canvas_structure_validation_does_not_discover_recipes_or_targets(monkey
 
 
 def test_canvas_live_binding_validation_reports_unresolved_bindings(monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.registry.discover_recipes", lambda: [])
+    monkeypatch.setattr("setpiece.canvas.registry.discover_recipes", lambda: [])
     monkeypatch.setattr(
-        "ritualist.canvas.registry.builtin_target_catalog",
+        "setpiece.canvas.registry.builtin_target_catalog",
         lambda: type("Catalog", (), {"targets": ()})(),
     )
     canvas = CanvasDocument(

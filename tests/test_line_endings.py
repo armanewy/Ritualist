@@ -11,7 +11,7 @@ import pytest
 
 def _load_checker_module():
     script = Path(__file__).resolve().parents[1] / "scripts" / "check_line_endings.py"
-    spec = importlib.util.spec_from_file_location("ritualist_line_endings", script)
+    spec = importlib.util.spec_from_file_location("setpiece_line_endings", script)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -67,9 +67,9 @@ def test_watched_canvas_git_head_blobs_have_github_readable_line_endings():
     checker = _load_checker_module()
     root = checker.repo_root(Path(__file__))
     watched = [
-        root / "ritualist" / "canvas" / "runtime.py",
-        root / "ritualist" / "canvas" / "controller.py",
-        root / "ritualist" / "canvas" / "view_model.py",
+        root / "setpiece" / "canvas" / "runtime.py",
+        root / "setpiece" / "canvas" / "controller.py",
+        root / "setpiece" / "canvas" / "view_model.py",
         root / "tests" / "test_canvas_runtime.py",
     ]
     missing = [path for path in watched if checker.git_blob_stats(root, path, ref="HEAD", source="git_head") is None]
@@ -94,9 +94,9 @@ def test_line_ending_checker_catches_cr_only_git_head_blob(tmp_path):
         [
             "git",
             "-c",
-            "user.email=ritualist@example.test",
+            "user.email=setpiece@example.test",
             "-c",
-            "user.name=Ritualist Test",
+            "user.name=Setpiece Test",
             "commit",
             "-m",
             "bad blob",
@@ -128,9 +128,9 @@ def test_line_ending_checker_catches_cr_only_git_index_blob(tmp_path):
         [
             "git",
             "-c",
-            "user.email=ritualist@example.test",
+            "user.email=setpiece@example.test",
             "-c",
-            "user.name=Ritualist Test",
+            "user.name=Setpiece Test",
             "commit",
             "-m",
             "good blob",

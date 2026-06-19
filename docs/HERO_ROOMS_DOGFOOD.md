@@ -5,7 +5,7 @@ This document describes the v0.2.0-alpha.1 packaged acceptance harness for the c
 Run from the repository root:
 
 ```powershell
-.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen
+.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen
 ```
 
 The harness writes:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.home import (
+from setpiece.home import (
     HOME_CATEGORIES,
     HomeCard,
     HomeActivityLog,
@@ -24,7 +24,7 @@ from ritualist.home import (
     generate_mock_home_cards,
     load_installed_home_cards,
 )
-from ritualist.models import Recipe
+from setpiece.models import Recipe
 
 
 def _card_field_names() -> tuple[str, ...]:
@@ -163,7 +163,7 @@ steps:
 """.strip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr("ritualist.recipe_loader.recipes_dir", lambda: recipe_dir)
+    monkeypatch.setattr("setpiece.recipe_loader.recipes_dir", lambda: recipe_dir)
 
     model = create_installed_home_model(
         run_history_cache=HomeRunHistoryCache(base_dir=tmp_path / "runs")
@@ -436,7 +436,7 @@ def test_home_card_relative_image_resolves_next_to_recipe(tmp_path, monkeypatch)
             seen.append(Path(source))
             return SimpleNamespace(thumbnail_url="file:///thumb.png")
 
-    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+    monkeypatch.setattr("setpiece.home.assets.HomeThumbnailCache", FakeThumbnailCache)
 
     cards = load_installed_home_cards(
         recipe_rows=[(recipe_path, recipe, None)],
@@ -467,7 +467,7 @@ def test_home_card_absolute_image_path_still_resolves(tmp_path, monkeypatch):
             seen.append(Path(source))
             return SimpleNamespace(thumbnail_url="file:///absolute-thumb.png")
 
-    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+    monkeypatch.setattr("setpiece.home.assets.HomeThumbnailCache", FakeThumbnailCache)
 
     cards = load_installed_home_cards(
         recipe_rows=[(recipe_path, recipe, None)],
@@ -519,7 +519,7 @@ def test_home_card_imported_pack_asset_path_resolves_safely(tmp_path, monkeypatc
             seen.append(Path(source))
             return SimpleNamespace(thumbnail_url="file:///pack-thumb.png")
 
-    monkeypatch.setattr("ritualist.home.assets.HomeThumbnailCache", FakeThumbnailCache)
+    monkeypatch.setattr("setpiece.home.assets.HomeThumbnailCache", FakeThumbnailCache)
 
     cards = load_installed_home_cards(
         recipe_rows=[(recipe_path, recipe, None)],
@@ -734,7 +734,7 @@ def test_home_model_imports_without_gui_or_windows_dependencies():
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.home
+import setpiece.home
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

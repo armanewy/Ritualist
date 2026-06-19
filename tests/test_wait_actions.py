@@ -5,13 +5,13 @@ import time
 import json
 from pathlib import Path
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
-from ritualist.overlay import ConfirmationRequest
-from ritualist.recipe_loader import load_recipe
-from ritualist.run_logs import RunLogWriter
-from ritualist.runtime_control import RuntimeControl
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
+from setpiece.overlay import ConfirmationRequest
+from setpiece.recipe_loader import load_recipe
+from setpiece.run_logs import RunLogWriter
+from setpiece.runtime_control import RuntimeControl
 
 
 def test_wait_seconds_success() -> None:
@@ -120,19 +120,19 @@ def test_wait_for_file_succeeds_when_file_appears(tmp_path) -> None:
 def test_wait_for_file_logs_recipe_path_without_expanded_env_secret(tmp_path, monkeypatch) -> None:
     secret_path = tmp_path / "secret-token-value.txt"
     secret_path.write_text("ready", encoding="utf-8")
-    monkeypatch.setenv("RITUALIST_SECRET_WAIT_PATH", str(secret_path))
+    monkeypatch.setenv("SETPIECE_SECRET_WAIT_PATH", str(secret_path))
     writer = RunLogWriter(base_dir=tmp_path / "runs")
 
     summary = WorkflowExecutor(
         adapters=FakeAdapters().bundle(),
         run_logger=writer,
-    ).run(_recipe({"action": "wait.for_file", "path": "%RITUALIST_SECRET_WAIT_PATH%"}))
+    ).run(_recipe({"action": "wait.for_file", "path": "%SETPIECE_SECRET_WAIT_PATH%"}))
 
     assert summary.success
     assert summary.run_dir is not None
     steps_text = (summary.run_dir / "steps.jsonl").read_text(encoding="utf-8")
     assert "secret-token-value" not in steps_text
-    assert "%RITUALIST_SECRET_WAIT_PATH%" in steps_text
+    assert "%SETPIECE_SECRET_WAIT_PATH%" in steps_text
 
 
 def test_wait_for_file_times_out(tmp_path) -> None:

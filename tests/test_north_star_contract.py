@@ -20,7 +20,7 @@ def _normalized_text() -> str:
 def test_north_star_states_ritual_first_product_contract() -> None:
     normalized = _normalized_text()
 
-    assert "Ritualist is a local ritual/runbook engine with a desktop-native body." in normalized
+    assert "Setpiece is a local ritual/runbook engine with a desktop-native body." in normalized
     assert "Recipes and rituals are the center of gravity." in normalized
     assert "Rooms, Canvas, shortcuts, Suggestions, packs, logs, and recovery surfaces" in normalized
     assert "shell replacement" in normalized
@@ -35,7 +35,7 @@ def test_north_star_locks_exactly_three_promoted_hero_rooms() -> None:
     promoted_bullets = re.findall(r"^- ([^\n]+)$", hero_section, flags=re.MULTILINE)
 
     assert tuple(promoted_bullets) == HERO_ROOMS
-    assert "Ritualist has exactly three promoted hero Rooms:" in normalized
+    assert "Setpiece has exactly three promoted hero Rooms:" in normalized
     assert "Do not promote a fourth Room." in normalized
     assert "`minimal_desktop` Canvas must not be deleted" in text
     assert "not a promoted Room" in normalized

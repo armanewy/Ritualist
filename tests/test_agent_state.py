@@ -6,9 +6,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ritualist.agent.models import AgentNotificationRoute, AgentRunState, AgentState
-from ritualist.agent.state import apply_ritual_state, apply_runtime_event, initial_agent_state
-from ritualist.runtime_models import (
+from setpiece.agent.models import AgentNotificationRoute, AgentRunState, AgentState
+from setpiece.agent.state import apply_ritual_state, apply_runtime_event, initial_agent_state
+from setpiece.runtime_models import (
     ConfirmationRequested,
     Heartbeat,
     RunFinished,
@@ -47,7 +47,7 @@ def test_initial_agent_state_is_ipc_serializable() -> None:
     payload = state.to_ipc_payload()
     restored = AgentState.model_validate_json(state.model_dump_json())
 
-    assert payload["schema_version"] == "ritualist.agent.state.v1"
+    assert payload["schema_version"] == "setpiece.agent.state.v1"
     assert payload["state"] == "idle"
     assert payload["room"]["name"] == "Gaming Room"
     assert restored == state
@@ -117,7 +117,7 @@ def test_runtime_events_project_to_resident_agent_state() -> None:
     assert state.pending_confirmation.target == "Play"
     assert state.current_step is not None
     assert state.current_step.state == "paused"
-    assert state.tray_tooltip == "Ritualist - Paused: Gaming Mode"
+    assert state.tray_tooltip == "Setpiece - Paused: Gaming Mode"
 
 
 def test_failure_and_interrupted_events_capture_review_and_recovery_state() -> None:
@@ -158,7 +158,7 @@ def test_failure_and_interrupted_events_capture_review_and_recovery_state() -> N
             sequence=2,
             state=RunState.INTERRUPTED,
             success=False,
-            message="Ritualist exited before finalizing this run.",
+            message="Setpiece exited before finalizing this run.",
         ),
     )
 
@@ -255,9 +255,9 @@ def test_agent_modules_import_without_gui_or_windows_dependencies() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.models
-import ritualist.agent.state
-import ritualist.agent.run_coordinator
+import setpiece.agent.models
+import setpiece.agent.state
+import setpiece.agent.run_coordinator
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

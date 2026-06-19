@@ -5,12 +5,12 @@ from types import ModuleType
 
 import pytest
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.adapters.windows_uia import WindowInspection
-from ritualist.adapters.window_manager import WindowsWindowManager
-from ritualist.capture_helpers import CaptureHelperController
-from ritualist.errors import RitualistError
-from ritualist.models import Recipe
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.adapters.windows_uia import WindowInspection
+from setpiece.adapters.window_manager import WindowsWindowManager
+from setpiece.capture_helpers import CaptureHelperController
+from setpiece.errors import SetpieceError
+from setpiece.models import Recipe
 
 
 class FakePathPicker:
@@ -138,7 +138,7 @@ def test_visible_text_choice_requires_explicit_label_selection() -> None:
         window_title_contains="Vendor",
     )
 
-    with pytest.raises(RitualistError, match="exactly one"):
+    with pytest.raises(SetpieceError, match="exactly one"):
         CaptureHelperController(fakes.bundle()).choose_visible_text(inspection)
 
     choice = CaptureHelperController(fakes.bundle()).choose_visible_text(
@@ -158,7 +158,7 @@ def test_windows_foreground_window_title_uses_lazy_win32gui_import(monkeypatch) 
     win32gui = ModuleType("win32gui")
     win32gui.GetForegroundWindow = lambda: 123
     win32gui.GetWindowText = lambda handle: "Active Title" if handle == 123 else ""
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "win32gui", win32gui)
 
     assert WindowsWindowManager().foreground_window_title() == "Active Title"

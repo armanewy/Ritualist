@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.config import AppConfig, UIConfig
-from ritualist.home.actions import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.config import AppConfig, UIConfig
+from setpiece.home.actions import (
     HomeActionDispatcher,
     HomeActionService,
     HomeCardAction,
     home_event_from_runtime,
     home_event_from_step_status,
 )
-from ritualist.home.models import HomeCardStatus, HomeLastRunStatus
-from ritualist.overlay import ActionPreview
+from setpiece.home.models import HomeCardStatus, HomeLastRunStatus
+from setpiece.overlay import ActionPreview
 
 
 class RecordingOverlay:
@@ -80,10 +80,10 @@ steps:
     )
     fakes = FakeAdapters()
     overlay = RecordingOverlay()
-    monkeypatch.setattr("ritualist.adapters.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.run_logs.RunLogWriter", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.run_logs.RunLogWriter", lambda: None)
     monkeypatch.setattr(
-        "ritualist.config.load_app_config",
+        "setpiece.config.load_app_config",
         lambda: AppConfig(ui=UIConfig(show_action_overlay=True)),
     )
 
@@ -112,8 +112,8 @@ steps:
         encoding="utf-8",
     )
     fakes = FakeAdapters()
-    monkeypatch.setattr("ritualist.adapters.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.run_logs.RunLogWriter", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.run_logs.RunLogWriter", lambda: None)
 
     service = HomeActionService()
     summary = service.run_recipe(recipe_path, dry_run=False)

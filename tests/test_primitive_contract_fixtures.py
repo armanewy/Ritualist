@@ -5,10 +5,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.policy import build_policy_report_for_plan
-from ritualist.primitive_runtime import FORBIDDEN_DIAGNOSTIC_CLASSES, run_read_only_primitive
-from ritualist.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
+from setpiece.cli import app
+from setpiece.policy import build_policy_report_for_plan
+from setpiece.primitive_runtime import FORBIDDEN_DIAGNOSTIC_CLASSES, run_read_only_primitive
+from setpiece.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "primitive_contracts"
@@ -91,8 +91,8 @@ def test_actions_json_matches_semantic_contract() -> None:
 def test_gaming_mode_doctor_json_matches_semantic_contract(monkeypatch, tmp_path: Path) -> None:
     contract = _load_contract("doctor_gaming_mode_json_contract.json")
 
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
-    monkeypatch.setattr("ritualist.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
 
     payload = _cli_json(["doctor", str(_gaming_mode_sample_path()), "--json", "--no-strict"])
 
@@ -209,4 +209,4 @@ def _load_contract(name: str) -> dict[str, object]:
 
 
 def _gaming_mode_sample_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+    return Path(__file__).resolve().parents[1] / "setpiece" / "sample_recipes" / "gaming_mode.yaml"

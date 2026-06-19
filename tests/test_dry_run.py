@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
 
 
 def test_dry_run_does_not_call_adapters_or_confirmation():

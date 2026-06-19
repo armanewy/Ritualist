@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ritualist.canvas import CanvasComponent, load_bundled_canvas
+from setpiece.canvas import CanvasComponent, load_bundled_canvas
 
 
 FIRST_VIEWPORT_WIDTH = 1000

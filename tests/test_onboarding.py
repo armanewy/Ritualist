@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ritualist.onboarding import (
+from setpiece.onboarding import (
     LOCAL_LEARNING_DISABLED,
     LOCAL_LEARNING_ENABLED,
     LOCAL_LEARNING_UNDECIDED,
@@ -38,7 +38,7 @@ def test_completed_onboarding_persists_version_and_disabled_learning_decision(tm
     path = tmp_path / "onboarding.json"
     state = complete_onboarding(
         local_learning_decision=LOCAL_LEARNING_DISABLED,
-        selected_recommended_source_ids=["ritualist_journal"],
+        selected_recommended_source_ids=["setpiece_journal"],
         version="first-run-v2",
     )
     save_onboarding_state(state, path=path)
@@ -59,7 +59,7 @@ def test_completed_onboarding_keeps_customized_allowed_sources_only(tmp_path) ->
     state = complete_onboarding(
         local_learning_decision=LOCAL_LEARNING_ENABLED,
         selected_recommended_source_ids=[
-            "ritualist-journal",
+            "setpiece-journal",
             "open windows",
             "watch_me",
             "browser_history",
@@ -76,13 +76,13 @@ def test_completed_onboarding_keeps_customized_allowed_sources_only(tmp_path) ->
     assert loaded.local_learning_decision == LOCAL_LEARNING_ENABLED
     assert loaded.local_learning_enabled is True
     assert loaded.selected_recommended_source_ids == (
-        "ritualist_journal",
+        "setpiece_journal",
         "open_windows",
         "recent_items",
     )
     assert loaded.has_selected_learning_sources is True
     assert loaded.to_dict()["selected_recommended_sources"] == [
-        "ritualist_journal",
+        "setpiece_journal",
         "open_windows",
         "recent_items",
     ]
@@ -126,10 +126,10 @@ def test_invalid_and_obsolete_onboarding_data_falls_back_to_safe_defaults(tmp_pa
     obsolete_path.write_text(
         json.dumps(
             {
-                "schema_version": "ritualist.onboarding.v0",
+                "schema_version": "setpiece.onboarding.v0",
                 "completed": True,
                 "local_learning_decision": "enabled",
-                "selected_recommended_sources": ["ritualist_journal"],
+                "selected_recommended_sources": ["setpiece_journal"],
                 "installer_consent": True,
             }
         ),
@@ -152,10 +152,10 @@ def test_no_installer_level_hidden_consent_or_forbidden_sources_are_loaded(tmp_p
                 "installer_learning_enabled": True,
                 "consent": {
                     "timestamp": "2026-06-18T12:00:00Z",
-                    "sources": ["ritualist_journal"],
+                    "sources": ["setpiece_journal"],
                 },
                 "local_learning_decision": True,
-                "selected_recommended_sources": {"ritualist_journal": True},
+                "selected_recommended_sources": {"setpiece_journal": True},
             }
         ),
         encoding="utf-8",
@@ -175,7 +175,7 @@ def test_no_installer_level_hidden_consent_or_forbidden_sources_are_loaded(tmp_p
 
 def test_recommended_sources_are_exactly_the_allowed_local_learning_sources() -> None:
     assert recommended_learning_source_ids() == (
-        "ritualist_journal",
+        "setpiece_journal",
         "open_windows",
         "recent_items",
     )

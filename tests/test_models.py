@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from ritualist.models import InputHotkeyStep
+from setpiece.models import InputHotkeyStep
 
 
 def test_input_hotkey_rejects_empty_keys_after_normalization() -> None:

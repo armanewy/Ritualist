@@ -1,24 +1,24 @@
-# Ritualist North Star Contract
+# Setpiece North Star Contract
 
-This file is the canonical product contract for Ritualist. Tests may assert the
+This file is the canonical product contract for Setpiece. Tests may assert the
 rules here, so edits should be factual, intentional, and coordinated with the
 product boundary documents.
 
 ## Product Statement
 
-Ritualist is a local ritual/runbook engine with a desktop-native body.
+Setpiece is a local ritual/runbook engine with a desktop-native body.
 Recipes and rituals are the center of gravity. Rooms, Canvas, shortcuts,
 Suggestions, packs, logs, and recovery surfaces exist to make rituals more
 visible, useful, reviewable, and trustworthy.
 
-Ritualist is not a shell replacement, generic RPA suite, macro recorder,
+Setpiece is not a shell replacement, generic RPA suite, macro recorder,
 Recall-like capture tool, marketplace, cloud automation service, remote
 execution service, password automation tool, gameplay automation tool, kiosk
 mode, or taskbar-hiding desktop replacement.
 
 ## Hero Rooms
 
-Ritualist has exactly three promoted hero Rooms:
+Setpiece has exactly three promoted hero Rooms:
 
 - Gaming Room
 - Project Room
@@ -87,7 +87,7 @@ arbitrary QML, or arbitrary HTML.
 
 ## Entry Contract
 
-Ritualist opens into a taskbar-preserving Room picker and is never fullscreen by
+Setpiece opens into a taskbar-preserving Room picker and is never fullscreen by
 default. The entry surface promotes exactly three Rooms: Gaming Room, Project
 Room, and Support Desk. The recipe library is secondary: it remains available
 for review, Doctor, dry-run, run, logs, and editing, but it must not displace the

@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.activity_journal import ActivityJournal
-from ritualist.home import app as home_app
-from ritualist.onboarding import (
+from setpiece.activity_journal import ActivityJournal
+from setpiece.home import app as home_app
+from setpiece.onboarding import (
     LOCAL_LEARNING_ENABLED,
     LOCAL_LEARNING_UNDECIDED,
     load_onboarding_state,
 )
-from ritualist.paths import learning_journal_path, learning_suggestions_path
+from setpiece.paths import learning_journal_path, learning_suggestions_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HOME_QML = REPO_ROOT / "ritualist" / "home" / "qml" / "Home.qml"
+HOME_QML = REPO_ROOT / "setpiece" / "home" / "qml" / "Home.qml"
 
 
 def _use_app_data(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("RITUALIST_E2E", "1")
-    monkeypatch.setenv("RITUALIST_E2E_APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SETPIECE_E2E", "1")
+    monkeypatch.setenv("SETPIECE_E2E_APP_DATA_DIR", str(tmp_path))
 
 
 def test_home_qml_surfaces_learning_privacy_without_forbidden_options() -> None:
@@ -74,29 +74,29 @@ def test_home_learning_bridge_uses_existing_config_sources_and_disable_path(
     assert default_status["enabled"] is False
     assert default_status["effective_enabled"] is False
 
-    enabled = home_app._enable_home_learning(["ritualist_journal", "recent-items"])
+    enabled = home_app._enable_home_learning(["setpiece_journal", "recent-items"])
     assert enabled["enabled"] is True
-    assert enabled["enabled_sources"] == ["ritualist_journal", "recent_items"]
+    assert enabled["enabled_sources"] == ["setpiece_journal", "recent_items"]
     assert enabled["local_only"] is True
     assert enabled["background_collection"] is False
 
     sources = home_app._home_learning_sources_payload()["sources"]
     assert [source["id"] for source in sources] == [
-        "ritualist_journal",
+        "setpiece_journal",
         "open_windows",
         "recent_items",
     ]
     assert "browser_history" not in {source["id"] for source in sources}
     assert {source["id"] for source in sources if source["enabled"] is True} == {
-        "ritualist_journal",
+        "setpiece_journal",
         "recent_items",
     }
 
     disabled = home_app._disable_home_learning()
     assert disabled["enabled"] is False
     assert disabled["effective_enabled"] is False
-    assert disabled["selected_sources"] == ["ritualist_journal", "recent_items"]
-    assert disabled["consented_sources"] == ["ritualist_journal", "recent_items"]
+    assert disabled["selected_sources"] == ["setpiece_journal", "recent_items"]
+    assert disabled["consented_sources"] == ["setpiece_journal", "recent_items"]
 
 
 def test_home_learning_onboarding_helpers_persist_explicit_choices(
@@ -108,14 +108,14 @@ def test_home_learning_onboarding_helpers_persist_explicit_choices(
     assert initial["should_show_first_run"] is True
     assert initial["local_learning_decision"] == LOCAL_LEARNING_UNDECIDED
 
-    enabled = home_app._complete_home_learning_onboarding("enabled", ("ritualist_journal",))
+    enabled = home_app._complete_home_learning_onboarding("enabled", ("setpiece_journal",))
     loaded = load_onboarding_state()
 
     assert enabled["should_show_first_run"] is False
     assert loaded.completed is True
     assert loaded.local_learning_decision == LOCAL_LEARNING_ENABLED
     assert loaded.local_learning_enabled is True
-    assert loaded.selected_recommended_source_ids == ("ritualist_journal",)
+    assert loaded.selected_recommended_source_ids == ("setpiece_journal",)
 
     skipped = home_app._skip_home_learning_onboarding()
     loaded_skipped = load_onboarding_state()

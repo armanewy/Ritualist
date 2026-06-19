@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ritualist.activity_journal import (
+from setpiece.activity_journal import (
     ActivityJournal,
     ALLOWED_EVENT_TYPES,
     JournalEvent,
@@ -24,7 +24,7 @@ def test_journal_does_not_write_when_local_learning_is_disabled(tmp_path) -> Non
     assert not path.exists()
 
 
-def test_journal_writes_allowed_ritualist_owned_events_when_enabled(tmp_path) -> None:
+def test_journal_writes_allowed_setpiece_owned_events_when_enabled(tmp_path) -> None:
     path = tmp_path / "activity.jsonl"
     journal = ActivityJournal(path=path, enabled=True)
 
@@ -33,10 +33,10 @@ def test_journal_writes_allowed_ritualist_owned_events_when_enabled(tmp_path) ->
 
     entries = _jsonl(path)
     assert [entry["event_type"] for entry in entries] == sorted(ALLOWED_EVENT_TYPES)
-    assert all(entry["schema_version"] == "ritualist.activity_journal.v1" for entry in entries)
+    assert all(entry["schema_version"] == "setpiece.activity_journal.v1" for entry in entries)
 
 
-def test_journal_rejects_unknown_or_non_ritualist_events(tmp_path) -> None:
+def test_journal_rejects_unknown_or_non_setpiece_events(tmp_path) -> None:
     path = tmp_path / "activity.jsonl"
     journal = ActivityJournal(path=path, enabled=True)
 

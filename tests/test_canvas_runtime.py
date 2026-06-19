@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CANVAS_FORCE_WINDOWED_ENV,
     CanvasBindingKind,
     CanvasComponent,
@@ -24,15 +24,15 @@ from ritualist.canvas import (
     default_canvas_for_host,
     resolve_canvas_host_config,
 )
-from ritualist.canvas.app import _apply_canvas_host
-from ritualist.cli import app
-from ritualist.canvas.controller import dispatch_canvas_action
-from ritualist.canvas.runtime import CanvasComponentActionResult
-from ritualist.errors import RitualistError
-from ritualist.home.actions import HomeActionService
-from ritualist.run_logs import RunRecord
-from ritualist.runtime_control import RuntimeControl
-from ritualist.target_resolution import resolve_target
+from setpiece.canvas.app import _apply_canvas_host
+from setpiece.cli import app
+from setpiece.canvas.controller import dispatch_canvas_action
+from setpiece.canvas.runtime import CanvasComponentActionResult
+from setpiece.errors import SetpieceError
+from setpiece.home.actions import HomeActionService
+from setpiece.run_logs import RunRecord
+from setpiece.runtime_control import RuntimeControl
+from setpiece.target_resolution import resolve_target
 
 
 def _canvas() -> CanvasDocument:
@@ -204,7 +204,7 @@ def test_canvas_use_view_model_includes_layout_and_runtime_state() -> None:
     payload = model.to_dict()
     components = {component["id"]: component for component in payload["components"]}
 
-    assert payload["schema_version"] == "ritualist.canvas.view_model.v1"
+    assert payload["schema_version"] == "setpiece.canvas.view_model.v1"
     assert payload["canvas"]["id"] == "runtime_canvas"
     assert components["card"]["width"] == 320
     assert components["status"]["state"] == "running"
@@ -395,7 +395,7 @@ def test_recent_activity_exposes_cleanup_state() -> None:
                         "cleanup_offer": {
                             "options": [
                                 {
-                                    "id": "clean_up_ritualist_opened",
+                                    "id": "clean_up_setpiece_opened",
                                     "available": True,
                                 }
                             ]
@@ -483,7 +483,7 @@ def test_unresolved_recipe_prevents_run_dispatch() -> None:
         context=CanvasRuntimeContext(recipe_ids={"other_recipe"}),
     )
 
-    with pytest.raises(RitualistError, match="unresolved"):
+    with pytest.raises(SetpieceError, match="unresolved"):
         controller.dispatch(_canvas(), "card", "run")
 
 
@@ -533,11 +533,11 @@ def test_target_card_action_preview_is_plan_only() -> None:
 def test_unknown_and_unsupported_canvas_actions_are_rejected() -> None:
     controller = CanvasRuntimeController(action_service=_FakeService())
 
-    with pytest.raises(RitualistError, match="not found"):
+    with pytest.raises(SetpieceError, match="not found"):
         controller.dispatch(_canvas(), "missing", "run")
-    with pytest.raises(RitualistError, match="unsupported"):
+    with pytest.raises(SetpieceError, match="unsupported"):
         controller.dispatch(_canvas(), "label", "run")
-    with pytest.raises(RitualistError, match="unsupported"):
+    with pytest.raises(SetpieceError, match="unsupported"):
         controller.dispatch(_canvas(), "card", "shell")
 
 
@@ -558,13 +558,13 @@ def test_missing_binding_rejected_for_action() -> None:
 
     controller = CanvasRuntimeController(action_service=_FakeService())
 
-    with pytest.raises(RitualistError, match="recipe binding"):
+    with pytest.raises(SetpieceError, match="recipe binding"):
         controller.dispatch(canvas, "card", "run")
 
 
 def test_dispatch_canvas_action_module_function_loads_canvas(tmp_path: Path, monkeypatch) -> None:
     canvas_path = tmp_path / "canvas.yaml"
-    from ritualist.canvas.storage import save_canvas
+    from setpiece.canvas.storage import save_canvas
 
     save_canvas(_canvas(), canvas_path)
     service = _FakeService()
@@ -584,7 +584,7 @@ def test_canvas_runtime_build_does_not_call_low_level_adapters(monkeypatch) -> N
     def fail_adapters() -> None:
         raise AssertionError("Canvas runtime build must not create adapters")
 
-    monkeypatch.setattr("ritualist.adapters.create_default_adapters", fail_adapters)
+    monkeypatch.setattr("setpiece.adapters.create_default_adapters", fail_adapters)
 
     model = build_canvas_runtime_model(
         _canvas(),
@@ -598,7 +598,7 @@ def test_canvas_use_view_model_does_not_call_low_level_adapters(monkeypatch) -> 
     def fail_adapters() -> None:
         raise AssertionError("Canvas Use model build must not create adapters")
 
-    monkeypatch.setattr("ritualist.adapters.create_default_adapters", fail_adapters)
+    monkeypatch.setattr("setpiece.adapters.create_default_adapters", fail_adapters)
 
     model = build_canvas_view_model(
         _canvas(),
@@ -615,7 +615,7 @@ def test_canvas_use_view_model_does_not_call_low_level_adapters(monkeypatch) -> 
 
 def test_canvas_runtime_and_action_cli_json(tmp_path: Path) -> None:
     canvas_path = tmp_path / "canvas.yaml"
-    from ritualist.canvas.storage import save_canvas
+    from setpiece.canvas.storage import save_canvas
 
     save_canvas(_canvas(), canvas_path)
     runner = CliRunner()
@@ -628,7 +628,7 @@ def test_canvas_runtime_and_action_cli_json(tmp_path: Path) -> None:
 
     assert runtime_result.exit_code == 0
     assert action_result.exit_code == 0
-    assert "ritualist.canvas.runtime.v1" in runtime_result.output
+    assert "setpiece.canvas.runtime.v1" in runtime_result.output
     assert "would dispatch canvas action doctor" in action_result.output
 
 
@@ -649,7 +649,7 @@ def _expected_host_payload(
 ) -> dict[str, object]:
     input_policy = "capture_all" if mode == "desktop_work_area" else "normal_window"
     return {
-        "schema_version": "ritualist.canvas.host.v1",
+        "schema_version": "setpiece.canvas.host.v1",
         "mode": mode,
         "requested_mode": requested_mode or mode,
         "taskbar_policy": "respect",
@@ -658,7 +658,7 @@ def _expected_host_payload(
         "forced_windowed": forced_windowed,
         "force_windowed_env": CANVAS_FORCE_WINDOWED_ENV,
         "background_passthrough": mode == "desktop_work_area",
-        "background_mode": "system_wallpaper" if mode == "desktop_work_area" else "ritualist_background",
+        "background_mode": "system_wallpaper" if mode == "desktop_work_area" else "setpiece_background",
         "input_policy": input_policy,
         "blank_area_input": (
             "captured_by_canvas_window"
@@ -708,7 +708,7 @@ def test_canvas_host_config_rejects_future_modes_until_implemented() -> None:
     assert config.mode is CanvasHostMode.WINDOWED
     assert config.to_dict()["implemented"] is True
 
-    with pytest.raises(RitualistError, match="not implemented yet"):
+    with pytest.raises(SetpieceError, match="not implemented yet"):
         resolve_canvas_host_config("desktop-full-monitor-later")
 
 
@@ -723,12 +723,12 @@ def test_canvas_host_default_canvas_uses_minimal_room_for_desktop_work_area() ->
 
 @pytest.mark.parametrize("policy", ["hide", "auto-hide", "replace", "kiosk"])
 def test_canvas_taskbar_policy_rejects_shell_like_values(policy: str) -> None:
-    with pytest.raises(RitualistError, match="only supports 'respect'"):
+    with pytest.raises(SetpieceError, match="only supports 'respect'"):
         resolve_canvas_host_config("windowed", taskbar_policy=policy)
 
 
 def test_canvas_host_rejects_retired_overlay_name() -> None:
-    with pytest.raises(RitualistError, match="desktop_overlay.*retired"):
+    with pytest.raises(SetpieceError, match="desktop_overlay.*retired"):
         resolve_canvas_host_config("desktop-overlay", require_implemented=False)
 
 
@@ -861,7 +861,7 @@ def test_canvas_use_cli_launch_path_uses_canvas_app(monkeypatch) -> None:
         calls.append((canvas, mock, mock_components, host_config.to_dict()))
         return 0
 
-    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+    monkeypatch.setattr("setpiece.canvas.app.run_canvas_use", fake_run_canvas_use)
 
     result = CliRunner().invoke(
         app,
@@ -892,7 +892,7 @@ def test_canvas_use_cli_mock_launch_path_uses_mock_components(monkeypatch) -> No
         calls.append((canvas, mock, mock_components, host_config.to_dict()))
         return 0
 
-    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+    monkeypatch.setattr("setpiece.canvas.app.run_canvas_use", fake_run_canvas_use)
 
     result = CliRunner().invoke(
         app,
@@ -923,7 +923,7 @@ def test_canvas_use_cli_launches_desktop_work_area_with_minimal_default(monkeypa
         calls.append((canvas, mock, mock_components, host_config.to_dict()))
         return 0
 
-    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fake_run_canvas_use)
+    monkeypatch.setattr("setpiece.canvas.app.run_canvas_use", fake_run_canvas_use)
 
     result = CliRunner().invoke(app, ["canvas", "use", "--host", "desktop-work-area"])
 
@@ -942,7 +942,7 @@ def test_canvas_use_cli_rejects_future_desktop_host_before_launch(monkeypatch) -
     def fail_launch(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("future hosts must fail before launching Canvas")
 
-    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fail_launch)
+    monkeypatch.setattr("setpiece.canvas.app.run_canvas_use", fail_launch)
 
     result = CliRunner().invoke(
         app,
@@ -957,7 +957,7 @@ def test_canvas_use_cli_rejects_taskbar_hiding_before_launch(monkeypatch) -> Non
     def fail_launch(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("unsupported taskbar policy must fail before launching Canvas")
 
-    monkeypatch.setattr("ritualist.canvas.app.run_canvas_use", fail_launch)
+    monkeypatch.setattr("setpiece.canvas.app.run_canvas_use", fail_launch)
 
     result = CliRunner().invoke(app, ["canvas", "use", "gaming_desktop", "--taskbar-policy", "hide"])
 

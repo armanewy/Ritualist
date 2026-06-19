@@ -5,15 +5,15 @@ import logging
 
 import pytest
 
-from ritualist.actions.base import ActionContext
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.config import AppConfig
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Condition, Recipe
-from ritualist.overlay import NullOverlayController
-from ritualist.predicates import evaluate_condition
-from ritualist.run_logs import RunLogWriter
-from ritualist.runtime_control import RuntimeControl
+from setpiece.actions.base import ActionContext
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.config import AppConfig
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Condition, Recipe
+from setpiece.overlay import NullOverlayController
+from setpiece.predicates import evaluate_condition
+from setpiece.run_logs import RunLogWriter
+from setpiece.runtime_control import RuntimeControl
 
 
 def test_predicate_true_false_and_composition(tmp_path):

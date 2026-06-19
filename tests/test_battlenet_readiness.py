@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ritualist.canvas.models import (
+from setpiece.canvas.models import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
     CanvasDocument,
 )
-from ritualist.canvas.runtime import CanvasRuntimeContext, build_canvas_runtime_model
-from ritualist.integrations.battlenet_readiness import (
+from setpiece.canvas.runtime import CanvasRuntimeContext, build_canvas_runtime_model
+from setpiece.integrations.battlenet_readiness import (
     BattleNetReadinessProvider,
     BattleNetReadinessState,
     ReadOnlyControlSnapshot,
     ReadOnlyWindowSnapshot,
 )
-from ritualist.target_resolution import (
+from setpiece.target_resolution import (
     TargetDiscoveryContext,
     TargetState,
     build_target_plan_summary,
@@ -72,7 +72,7 @@ def _readiness_state(result) -> str:
 
 
 def test_battlenet_readiness_is_non_windows_safe_without_injected_inspector(monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.integrations.battlenet_readiness.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.integrations.battlenet_readiness.sys.platform", "linux")
 
     discovery = BattleNetReadinessProvider().discover(_target(), TargetDiscoveryContext())
 

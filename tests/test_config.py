@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ritualist.config import DEFAULT_HOME_CATEGORIES, load_app_config
-from ritualist.canvas import CanvasPerformanceMode
+from setpiece.config import DEFAULT_HOME_CATEGORIES, load_app_config
+from setpiece.canvas import CanvasPerformanceMode
 
 
 def test_load_app_config_reads_visual_trust_options(tmp_path):

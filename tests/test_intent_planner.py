@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.intent_planner import (
+from setpiece.cli import app
+from setpiece.intent_planner import (
     IntentPlanCompiler,
     IntentSpec,
     build_home_plan_summary,
@@ -15,8 +15,8 @@ from ritualist.intent_planner import (
     compile_plan_reference,
     compile_recipe_to_plan,
 )
-from ritualist.models import Recipe
-from ritualist.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
+from setpiece.models import Recipe
+from setpiece.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
 
 
 def test_intent_spec_serialization_redacts_sensitive_values() -> None:
@@ -258,7 +258,7 @@ def test_plan_preview_recipe_lookup_does_not_create_user_recipe_dir(
     monkeypatch,
 ) -> None:
     recipe_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.intent_planner.recipes_path", lambda: recipe_root)
+    monkeypatch.setattr("setpiece.intent_planner.recipes_path", lambda: recipe_root)
 
     plan = compile_plan_reference("diagnostics.collect")
 
@@ -273,8 +273,8 @@ def test_plan_preview_does_not_call_runtime_or_adapters(monkeypatch) -> None:
     def fail_executor(*_args, **_kwargs):
         raise AssertionError("plan preview must not create workflow executor")
 
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", fail_adapter_creation)
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_executor)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", fail_adapter_creation)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", fail_executor)
 
     result = CliRunner().invoke(app, ["plan", "preview", "diagnostics.collect:minimal", "--json"])
 

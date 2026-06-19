@@ -1,0 +1,74 @@
+{
+  "name": "Setpiece",
+  "brand_definition": "A carefully arranged, repeatable sequence of coordinated actions.",
+  "tagline": "Everything in place. Ready to run.",
+  "mark_concept": "Two opposing pieces form an abstract S around a replaceable center cue.",
+  "colors": {
+    "ink": "#22272B",
+    "paper": "#F7F4EE",
+    "mineral": "#3C6F82",
+    "deep_mineral": "#243A43",
+    "mist": "#DDE7E8",
+    "muted": "#687278",
+    "waiting": "#A36B25",
+    "attention": "#6E5A8A",
+    "failure": "#A84942",
+    "recovery": "#45715F",
+    "neutral": "#70777C",
+    "white": "#FFFFFF",
+    "black": "#000000"
+  },
+  "tray_state_colors_light": {
+    "ready": "#3C6F82",
+    "running": "#3C6F82",
+    "waiting": "#A36B25",
+    "confirmation": "#6E5A8A",
+    "failure": "#A84942",
+    "recovery": "#45715F",
+    "paused": "#A36B25",
+    "stopped": "#70777C"
+  },
+  "tray_state_colors_dark": {
+    "ready": "#76AFC1",
+    "running": "#76AFC1",
+    "waiting": "#D5A253",
+    "confirmation": "#AB94CC",
+    "failure": "#E17C73",
+    "recovery": "#83B29D",
+    "paused": "#D5A253",
+    "stopped": "#B8BEC2"
+  },
+  "tray_states": {
+    "ready": "diamond cue",
+    "running": "play cue",
+    "waiting": "ellipsis cue",
+    "confirmation": "exclamation cue",
+    "failure": "x cue",
+    "recovery": "return arrow cue",
+    "paused": "pause cue",
+    "stopped": "square cue; supplemental only"
+  },
+  "font_recommendations": {
+    "brand_wordmark": "Inter Display Medium (converted to outlines in supplied SVGs)",
+    "product_ui": "Segoe UI Variable",
+    "diagnostics": "Cascadia Mono"
+  },
+  "required_windows_icon_sizes": {
+    "minimum_app_icon": [
+      16,
+      24,
+      32,
+      48,
+      256
+    ],
+    "tray_scale_set": [
+      16,
+      20,
+      24,
+      32,
+      40,
+      48,
+      64
+    ]
+  }
+}

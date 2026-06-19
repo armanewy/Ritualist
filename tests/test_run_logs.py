@@ -4,12 +4,12 @@ import json
 import os
 from pathlib import Path
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
-from ritualist.overlay import ScreenRect, TargetRegion
-from ritualist.run_logs import (
-    CLEAN_UP_RITUALIST_OPENED,
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
+from setpiece.overlay import ScreenRect, TargetRegion
+from setpiece.run_logs import (
+    CLEAN_UP_SETPIECE_OPENED,
     KEEP_SETUP_OPEN,
     STOPPED_USER_DECLINED_CONFIRMATION,
     RunLogWriter,
@@ -453,7 +453,7 @@ def test_declined_confirmation_run_records_owned_resources_and_safe_cleanup_offe
     cleanup = next(
         option
         for option in run_json["cleanup_offer"]["options"]
-        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+        if option["id"] == CLEAN_UP_SETPIECE_OPENED
     )
     assert cleanup["available"] is True
     assert [item["cleanup_action"] for item in cleanup["items"]] == [
@@ -496,7 +496,7 @@ def test_app_launch_ownership_does_not_claim_irreversible_cleanup(tmp_path):
     cleanup = next(
         option
         for option in run_json["cleanup_offer"]["options"]
-        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+        if option["id"] == CLEAN_UP_SETPIECE_OPENED
     )
     assert cleanup["available"] is False
 
@@ -540,8 +540,8 @@ def test_app_launch_ownership_label_strips_args_urls_and_sensitive_fragments(tmp
     descriptions = [item["description"] for item in run_json["ownership_ledger"]]
 
     assert descriptions == [
-        "App launched by Ritualist: Launcher.exe",
-        "App launched by Ritualist: app URL",
+        "App launched by Setpiece: Launcher.exe",
+        "App launched by Setpiece: app URL",
     ]
     assert "secret-value" not in run_json_text
     assert "token=secret" not in run_json_text
@@ -620,7 +620,7 @@ def test_non_keep_open_browser_ownership_does_not_offer_cleanup(tmp_path):
     cleanup = next(
         option
         for option in run_json["cleanup_offer"]["options"]
-        if option["id"] == CLEAN_UP_RITUALIST_OPENED
+        if option["id"] == CLEAN_UP_SETPIECE_OPENED
     )
     assert cleanup["available"] is False
 
@@ -793,7 +793,7 @@ def test_reconcile_running_run_with_dead_pid_marks_interrupted_and_keeps_steps(t
     assert updated["run_state_history"][-1]["event"] == "run.interrupted"
     assert updated["event_summaries"][-1]["event"] == "run.interrupted"
     assert updated["final_message"] == (
-        "Ritualist exited before finalizing this run. "
+        "Setpiece exited before finalizing this run. "
         "Last recorded step: Ask before clicking Play."
     )
     assert (run_dir / "steps.jsonl").read_text(encoding="utf-8") == steps_text
@@ -877,5 +877,5 @@ def test_reconcile_legacy_running_run_without_pid_marks_interrupted(tmp_path):
     assert updated["status"] == "interrupted"
     assert updated["final_state"] == "interrupted"
     assert updated["final_message"] == (
-        "Ritualist exited before finalizing this run. Last recorded step: Select Diablo IV."
+        "Setpiece exited before finalizing this run. Last recorded step: Select Diablo IV."
     )

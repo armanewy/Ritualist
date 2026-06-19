@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from ritualist.agent.models import AgentRoom, AgentRunState
-from ritualist.agent.run_coordinator import (
+from setpiece.agent.models import AgentRoom, AgentRunState
+from setpiece.agent.run_coordinator import (
     AgentRunCoordinator,
     AgentStartDecision,
     AgentStartKind,
 )
-from ritualist.runtime_models import RunFinished, RunStarted, RunState
+from setpiece.runtime_models import RunFinished, RunStarted, RunState
 
 
 def test_attended_start_claims_single_run_slot() -> None:
@@ -24,7 +24,7 @@ def test_attended_start_claims_single_run_slot() -> None:
     assert coordinator.state.state == AgentRunState.READY
     assert coordinator.state.active_ritual_id == "gaming_mode"
     assert coordinator.state.instrument_visible is True
-    assert coordinator.state.tray_tooltip == "Ritualist - Ready: Gaming Mode"
+    assert coordinator.state.tray_tooltip == "Setpiece - Ready: Gaming Mode"
 
 
 def test_starting_same_attended_ritual_returns_to_active() -> None:

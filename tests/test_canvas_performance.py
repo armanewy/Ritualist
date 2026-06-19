@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -18,8 +18,8 @@ from ritualist.canvas import (
     canvas_performance_diagnostics,
     performance_settings_for_mode,
 )
-from ritualist.canvas.app import build_canvas_use_payload
-from ritualist.cli import app
+from setpiece.canvas.app import build_canvas_use_payload
+from setpiece.cli import app
 
 
 def test_canvas_performance_modes_are_stable() -> None:
@@ -44,10 +44,10 @@ def test_perf_canvas_use_command_still_works() -> None:
     assert payload["operation"] == "perf.canvas-use"
     assert payload["counts"]["components"] == 12
     assert payload["view_summary"]["component_count"] == 12
-    assert payload["view_summary"]["theme_id"] == "ritualist_default"
+    assert payload["view_summary"]["theme_id"] == "setpiece_default"
     assert payload["view_summary"]["theme_validation"]["valid"] is True
     budget = payload["view_summary"]["performance_budget"]
-    assert budget["schema_version"] == "ritualist.canvas.performance_diagnostics.v1"
+    assert budget["schema_version"] == "setpiece.canvas.performance_diagnostics.v1"
     assert budget["component_count"] == 12
     assert budget["estimated_cost"] in {"low", "medium", "high"}
     assert budget["component_profiles"]["by_type"]
@@ -116,8 +116,8 @@ def test_canvas_use_payload_does_not_discover_recipes_or_targets(monkeypatch) ->
     def fail_discovery(*_args, **_kwargs):
         raise AssertionError("Canvas Use payload must use precomputed binding ids")
 
-    monkeypatch.setattr("ritualist.canvas.runtime.discover_recipes", fail_discovery)
-    monkeypatch.setattr("ritualist.canvas.runtime.builtin_target_catalog", fail_discovery)
+    monkeypatch.setattr("setpiece.canvas.runtime.discover_recipes", fail_discovery)
+    monkeypatch.setattr("setpiece.canvas.runtime.builtin_target_catalog", fail_discovery)
     canvas = CanvasDocument(
         id="use_payload",
         name="Use Payload",
@@ -157,8 +157,8 @@ def test_canvas_use_payload_keeps_missing_bindings_disabled_without_discovery(mo
     def fail_discovery(*_args, **_kwargs):
         raise AssertionError("Canvas Use payload must not discover from the payload getter")
 
-    monkeypatch.setattr("ritualist.canvas.runtime.discover_recipes", fail_discovery)
-    monkeypatch.setattr("ritualist.canvas.runtime.builtin_target_catalog", fail_discovery)
+    monkeypatch.setattr("setpiece.canvas.runtime.discover_recipes", fail_discovery)
+    monkeypatch.setattr("setpiece.canvas.runtime.builtin_target_catalog", fail_discovery)
     canvas = CanvasDocument(
         id="missing_payload",
         name="Missing Payload",
@@ -185,7 +185,7 @@ def test_canvas_use_payload_keeps_missing_bindings_disabled_without_discovery(mo
 
 
 def test_canvas_use_qml_wires_performance_and_typed_delegates() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
 
     for snippet in (
         "payloadDrainTimer",
@@ -216,10 +216,10 @@ def test_canvas_use_qml_wires_performance_and_typed_delegates() -> None:
 
 
 def test_canvas_use_qml_wires_desktop_work_area_exit_affordance() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
 
     for snippet in (
-        "ritualistCanvasHost",
+        "setpieceCanvasHost",
         'hostSettings.mode === "desktop_work_area"',
         "property bool backgroundPassthrough",
         "hostSettings.background_passthrough === true",
@@ -233,8 +233,8 @@ def test_canvas_use_qml_wires_desktop_work_area_exit_affordance() -> None:
 
 
 def test_canvas_use_qml_uses_paper_tokens_and_visible_state_roles() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
-    button_qml = Path("ritualist/canvas/qml/CanvasPaperButton.qml").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    button_qml = Path("setpiece/canvas/qml/CanvasPaperButton.qml").read_text(encoding="utf-8")
 
     for snippet in (
         "QtQuick.Controls.Basic",

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.adapters.shell import ShellAdapter, resolve_local_command_path
-from ritualist.errors import RitualistError
+from setpiece.adapters.shell import ShellAdapter, resolve_local_command_path
+from setpiece.errors import SetpieceError
 
 
 def test_launch_missing_local_path_raises_friendly_error(tmp_path):
     missing = tmp_path / "missing.exe"
 
-    with pytest.raises(RitualistError) as exc:
+    with pytest.raises(SetpieceError) as exc:
         ShellAdapter().launch(command=str(missing))
 
     assert "app.launch command path does not exist" in str(exc.value)

@@ -7,34 +7,34 @@ from time import perf_counter
 from typing import Any
 import warnings
 
-from ritualist.activity_collectors import (
+from setpiece.activity_collectors import (
     ActivityCollectionContext,
     FakeActivityCollector,
     collect_activity_signals,
 )
-from ritualist.activity_journal import ActivityJournal
-from ritualist.activity_signals import (
+from setpiece.activity_journal import ActivityJournal
+from setpiece.activity_signals import (
     ActivityCollectionResult,
     ActivitySignal,
     journal_event_signal,
     process_name_signal,
     recent_reference_signal,
 )
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasRuntimeContext,
     build_canvas_runtime_model,
     load_bundled_canvas,
     validate_canvas_structure,
 )
-from ritualist.canvas.edit_ui import CanvasSuggestionsReviewBridge
-from ritualist.learning_service import enable_learning
-from ritualist.rooms import list_rooms
-from ritualist.suggestions.miner import mine_suggestions
-from ritualist.suggestions.models import Suggestion
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.canvas.edit_ui import CanvasSuggestionsReviewBridge
+from setpiece.learning_service import enable_learning
+from setpiece.rooms import list_rooms
+from setpiece.suggestions.miner import mine_suggestions
+from setpiece.suggestions.models import Suggestion
+from setpiece.suggestions.storage import SuggestionStore
 
 
-PERFORMANCE_EVIDENCE_SCHEMA = "ritualist.north_star.performance_evidence.v1"
+PERFORMANCE_EVIDENCE_SCHEMA = "setpiece.north_star.performance_evidence.v1"
 SIGNAL_COUNTS = (100, 1_000, 10_000)
 HERO_ROOM_IDS = ("gaming", "project", "support_desk")
 HERO_CANVAS_IDS = ("gaming_desktop", "project_room", "helpdesk_desktop")
@@ -279,7 +279,7 @@ def test_suggestion_ui_worker_path_records_advisory_evidence(
 ) -> None:
     config_path = tmp_path / "config.yaml"
     store = SuggestionStore(path=tmp_path / "suggestions.jsonl")
-    enable_learning(("ritualist_journal",), config_path=config_path)
+    enable_learning(("setpiece_journal",), config_path=config_path)
     bridge = CanvasSuggestionsReviewBridge(store=store, config_path=config_path)
 
     def fake_scan_suggestions_payload(**kwargs: Any) -> dict[str, object]:
@@ -287,18 +287,18 @@ def test_suggestion_ui_worker_path_records_advisory_evidence(
         suggestions = tuple(_shortcut_suggestion(index) for index in range(20))
         target_store.save_many(suggestions)
         return {
-            "schema_version": "ritualist.suggestions.scan.v1",
+            "schema_version": "setpiece.suggestions.scan.v1",
             "suggestion_count": len(suggestions),
             "persisted_count": len(suggestions),
             "suggestions": [suggestion.to_dict() for suggestion in suggestions],
         }
 
-    monkeypatch.setattr("ritualist.canvas.edit_ui.scan_suggestions_payload", fake_scan_suggestions_payload)
+    monkeypatch.setattr("setpiece.canvas.edit_ui.scan_suggestions_payload", fake_scan_suggestions_payload)
 
     started = perf_counter()
     model = bridge.find_suggestions()
     duration_ms = _elapsed_ms(started)
-    source = Path("ritualist/canvas/app.py").read_text(encoding="utf-8")
+    source = Path("setpiece/canvas/app.py").read_text(encoding="utf-8")
     worker_markers = (
         "future = self._ensure_executor().submit(self._suggestions_bridge.find_suggestions)",
         "future.add_done_callback(self._complete_suggestions_future)",
@@ -313,7 +313,7 @@ def test_suggestion_ui_worker_path_records_advisory_evidence(
         extra={
             "suggestion_count": model["count"],
             "worker_markers_present": all(marker in source for marker in worker_markers),
-            "thread_name_prefix_present": 'thread_name_prefix="ritualist-canvas-use"' in source,
+            "thread_name_prefix_present": 'thread_name_prefix="setpiece-canvas-use"' in source,
             "review_required": model["review_required"],
             "auto_create": model["auto_create"],
             "auto_run": model["auto_run"],
@@ -417,7 +417,7 @@ def _shortcut_suggestion(index: int) -> Suggestion:
         confidence=0.82,
         evidence_summary="Repeated local shortcut use",
         evidence_count=4,
-        sources=("ritualist_journal",),
+        sources=("setpiece_journal",),
         proposed_actions=(
             {
                 "action": "review_shortcut_component",

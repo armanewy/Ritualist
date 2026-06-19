@@ -8,8 +8,8 @@ from zipfile import ZipFile
 
 import yaml
 
-from ritualist.home.pack_review import build_pack_import_review
-from ritualist.packs import PACK_SCHEMA_V1, validate_pack
+from setpiece.home.pack_review import build_pack_import_review
+from setpiece.packs import PACK_SCHEMA_V1, validate_pack
 
 
 SAFETY = {
@@ -66,7 +66,7 @@ def test_pack_import_review_allows_safe_valid_summary() -> None:
         {
             "pack_name": "Wait Pack",
             "pack_version": "0.1.0",
-            "author": "Ritualist",
+            "author": "Setpiece",
             "actions": [
                 {"action": "wait.seconds"},
                 {"action": "assert.file_exists"},
@@ -83,13 +83,13 @@ def test_pack_import_review_allows_safe_valid_summary() -> None:
 
 
 def test_pack_import_review_blocks_policy_from_validated_pack(tmp_path: Path) -> None:
-    path = tmp_path / "launch.ritualistpack"
+    path = tmp_path / "launch.setpiecepack"
     manifest = {
         "schema": PACK_SCHEMA_V1,
         "id": "launch_pack",
         "name": "Launch Pack",
         "version": "1.0.0",
-        "required_ritualist_version": ">=0.1.0-alpha.1",
+        "required_setpiece_version": ">=0.1.0-alpha.1",
         "supported_os": ["windows", "macos", "linux"],
         "required_capabilities": ["app_launch"],
         "required_actions": ["app.launch"],
@@ -149,7 +149,7 @@ def test_pack_review_model_imports_without_gui_or_windows_dependencies() -> None
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.home.pack_review
+import setpiece.home.pack_review
 
 blocked = [
     name for name in sys.modules

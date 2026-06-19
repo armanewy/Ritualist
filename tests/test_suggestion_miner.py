@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from ritualist.activity_signals import (
+from setpiece.activity_signals import (
     ActivityCollectionResult,
     journal_event_signal,
     process_name_signal,
     recent_reference_signal,
 )
-from ritualist.suggestions.miner import mine_suggestions
-from ritualist.suggestions.models import SuggestionKind, SuggestionPrivacyLevel
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.suggestions.miner import mine_suggestions
+from setpiece.suggestions.models import SuggestionKind, SuggestionPrivacyLevel
+from setpiece.suggestions.storage import SuggestionStore
 
 
 def test_miner_promotes_repeated_single_folder_app_and_domain_to_shortcuts() -> None:
@@ -72,7 +72,7 @@ def test_miner_detects_multistep_app_folder_and_app_domain_clusters_without_raw_
         ),
         {
             "event_type": "shortcut_opened",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {
                 "context_id": "support-1",
                 "app_label": "Browser",
@@ -82,7 +82,7 @@ def test_miner_detects_multistep_app_folder_and_app_domain_clusters_without_raw_
         },
         {
             "event_type": "shortcut_opened",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {
                 "context_id": "support-2",
                 "app_label": "Browser",
@@ -114,7 +114,7 @@ def test_miner_detects_ritual_shortcut_and_room_usage_clusters() -> None:
     events = [
         {
             "event_type": "recipe_run_finished",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {
                 "run_id": "support-run-1",
                 "room_id": "support_desk",
@@ -125,7 +125,7 @@ def test_miner_detects_ritual_shortcut_and_room_usage_clusters() -> None:
         },
         {
             "event_type": "recipe_run_finished",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {
                 "run_id": "support-run-2",
                 "room_id": "support_desk",
@@ -136,12 +136,12 @@ def test_miner_detects_ritual_shortcut_and_room_usage_clusters() -> None:
         },
         {
             "event_type": "room_opened",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {"room_id": "minimal_desktop", "app_label": "Internal Fixture"},
         },
         {
             "event_type": "room_opened",
-            "source_id": "ritualist_journal",
+            "source_id": "setpiece_journal",
             "payload": {"room_id": "minimal_desktop", "app_label": "Internal Fixture"},
         },
     ]
@@ -184,7 +184,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "Safe Project",
                     "coordinates": "10,20",
@@ -192,7 +192,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "Safe Project",
                     "keylogger": "enabled",
@@ -200,7 +200,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "Safe Project",
                     "key logger": "enabled",
@@ -208,7 +208,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "Safe Project",
                     "watch_me": "enabled",
@@ -216,7 +216,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "Safe Project",
                     "teach_by_watching": "enabled",
@@ -224,7 +224,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "C:/Users/alice/PrivateVault",
                     "domain": "secret.example.com",
@@ -232,7 +232,7 @@ def test_miner_suppresses_forbidden_sources_capture_metadata_and_sensitive_label
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {
                     "folder_label": "C:/Users/alice/PrivateVault",
                     "domain": "secret.example.com",
@@ -284,32 +284,32 @@ def test_miner_rejects_nested_label_metadata_before_stringifying() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": {"url": "www.example.dev/customer-a"}},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": {"url": "www.example.dev/customer-a"}},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": {"path": "C:/Users/alice/Secret/customer-a"}},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": {"path": "C:/Users/alice/Secret/customer-a"}},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": ["www.example.dev/customer-a"]},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": ["www.example.dev/customer-a"]},
             },
         ]
@@ -323,22 +323,22 @@ def test_miner_rejects_bytes_label_metadata_before_stringifying() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": b"www.example.dev/customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": b"www.example.dev/customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": bytearray(b"C:/Users/alice/Secret/customer-a")},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": bytearray(b"C:/Users/alice/Secret/customer-a")},
             },
         ]
@@ -352,22 +352,22 @@ def test_miner_rejects_schemeless_url_text_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "www.example.dev/customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "www.example.dev/customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test/raw"},
             },
         ]
@@ -381,22 +381,22 @@ def test_miner_rejects_bare_dotted_hosts_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "project.example.test"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "project.example.test"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test"},
             },
         ]
@@ -410,22 +410,22 @@ def test_miner_rejects_ipv4_locators_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "127.0.0.1"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "127.0.0.1"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "192.168.1.5:8080"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "192.168.1.5:8080"},
             },
         ]
@@ -439,22 +439,22 @@ def test_miner_rejects_unbracketed_ipv6_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "::1"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "::1"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "2001:db8::1/admin"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "2001:db8::1/admin"},
             },
         ]
@@ -468,32 +468,32 @@ def test_miner_rejects_scoped_ipv6_for_app_folder_and_domain_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[fe80::1%25eth0]:443"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[fe80::1%25eth0]:443"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "fe80::1%eth0"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "fe80::1%eth0"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain": "[fe80::1%25eth0]:443"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain": "[fe80::1%25eth0]:443"},
             },
         ]
@@ -507,32 +507,32 @@ def test_miner_rejects_single_label_and_encoded_domain_hosts() -> None:
         [
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://2130706433/admin"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://2130706433/admin"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://0x7f000001/admin"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://0x7f000001/admin"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://printer/admin"},
             },
             {
                 "event_type": "shortcut_opened",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"domain_label": "http://printer/admin"},
             },
         ]
@@ -546,22 +546,22 @@ def test_miner_rejects_backslash_schemeless_url_text_for_app_and_folder_labels()
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": r"www.example.dev\customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": r"www.example.dev\customer-a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": r"project.example.test\raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": r"project.example.test\raw"},
             },
         ]
@@ -575,22 +575,22 @@ def test_miner_rejects_query_schemeless_url_text_for_app_and_folder_labels() -> 
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "www.example.dev?customer=a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "www.example.dev?customer=a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test?raw=1"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "project.example.test?raw=1"},
             },
         ]
@@ -604,32 +604,32 @@ def test_miner_rejects_localhost_url_text_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "localhost/admin"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "localhost/admin"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "localhost?token=a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "localhost?token=a"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "localhost:3000"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "localhost:3000"},
             },
         ]
@@ -643,42 +643,42 @@ def test_miner_rejects_bracketed_ipv6_url_text_for_app_and_folder_labels() -> No
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[::1]/admin"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[::1]/admin"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "[fe80::1]/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "[fe80::1]/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[::1]:8000"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "[::1]:8000"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "[fe80::1]:9000"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "[fe80::1]:9000"},
             },
         ]
@@ -692,42 +692,42 @@ def test_miner_rejects_non_http_uri_text_for_app_and_folder_labels() -> None:
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "ftp://project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "ftp://project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "file://server/share/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "file://server/share/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "x://server/share/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "x://server/share/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "x:server/share/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "x:server/share/raw"},
             },
         ]
@@ -835,22 +835,22 @@ def test_miner_rejects_protocol_relative_url_text_for_app_and_folder_labels() ->
         [
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "//project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"app_name": "//project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "//project.example.test/raw"},
             },
             {
                 "event_type": "component_clicked",
-                "source_id": "ritualist_journal",
+                "source_id": "setpiece_journal",
                 "payload": {"folder_label": "//project.example.test/raw"},
             },
         ]

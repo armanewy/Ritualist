@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ritualist Release Validation"
-  short_description: "Gate Ritualist releases with evidence"
-  default_prompt: "Use $ritualist-release-validation to run the Ritualist release gate and report tag readiness."

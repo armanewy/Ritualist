@@ -52,7 +52,7 @@ The packaged acceptance harness covers this north-star path:
 The latest local packaged run in this branch used:
 
 ```powershell
-.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance
+.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance
 ```
 
 It produced `31 PASS`, `0 FAIL`, and `0 NEEDS_HUMAN_REVIEW` in

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.config import AppConfig, UIConfig
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
-from ritualist.overlay import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.config import AppConfig, UIConfig
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
+from setpiece.overlay import (
     ActionPreview,
     BestEffortOverlayController,
     ConfirmationRequest,
@@ -79,7 +79,7 @@ def test_desktop_click_preview_and_confirmation_include_target_details():
 
     assert summary.results[0].status == "cancelled"
     assert [call[0] for call in fakes.desktop.calls] == ["find_text_region"]
-    assert overlay.previews[0].label == "Ritualist: clicking Play"
+    assert overlay.previews[0].label == "Setpiece: clicking Play"
     request = requests[0]
     assert isinstance(request, ConfirmationRequest)
     assert request.action == "desktop.click_text"
@@ -147,7 +147,7 @@ def test_window_layout_actions_show_overlay_preview():
     assert summary.success
     assert [call[0] for call in fakes.window.calls] == ["find_window_region", "snap_left"]
     assert overlay.previews[0].action == "window.snap_left"
-    assert overlay.previews[0].label == "Ritualist: snapping window left"
+    assert overlay.previews[0].label == "Setpiece: snapping window left"
     assert overlay.previews[0].region is not None
     assert overlay.previews[0].region.window_title == "Battle.net"
 
@@ -258,14 +258,14 @@ def test_null_overlay_does_not_trigger_hidden_preview_probe():
 
 
 def test_best_effort_overlay_swallows_and_logs_rendering_failures(caplog):
-    caplog.set_level("WARNING", logger="ritualist.overlay")
+    caplog.set_level("WARNING", logger="setpiece.overlay")
     controller = BestEffortOverlayController(FailingOverlay())
 
     controller.show_preview(
         ActionPreview(
             action="window.focus",
             step_name="Focus",
-            label="Ritualist: focusing window",
+            label="Setpiece: focusing window",
             region=TargetRegion(),
         ),
         duration_ms=700,

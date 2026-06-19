@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.adapters.browser_native import NativeBrowserAdapter
+from setpiece.adapters.browser_native import NativeBrowserAdapter
 
 
 def test_native_browser_adapter_uses_injected_os_handoff():

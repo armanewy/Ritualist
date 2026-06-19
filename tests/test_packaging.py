@@ -11,56 +11,56 @@ def test_windows_build_script_targets_home_onedir_bundle():
 
     assert "--onedir" in script
     assert "--windowed" in script
-    assert '"Ritualist"' in script
-    assert "ritualist\\desktop_entry.py" in script
+    assert '"Setpiece"' in script
+    assert "setpiece\\desktop_entry.py" in script
     assert "--collect-submodules" in script
-    assert "ritualist.actions" in script
-    assert "ritualist.adapters" in script
-    assert "ritualist.agent" in script
-    assert "ritualist.canvas" in script
-    assert "ritualist.home" in script
-    assert "ritualist.ui" in script
+    assert "setpiece.actions" in script
+    assert "setpiece.adapters" in script
+    assert "setpiece.agent" in script
+    assert "setpiece.canvas" in script
+    assert "setpiece.home" in script
+    assert "setpiece.ui" in script
     assert "--hidden-import" in script
-    assert "ritualist.home.confirmation" in script
+    assert "setpiece.home.confirmation" in script
     assert "--collect-data" in script
-    assert "ritualist.agent.qml" in script
-    assert "ritualist.canvas.qml" in script
-    assert "ritualist.sample_canvases" in script
-    assert "ritualist.home.qml" in script
-    assert "ritualist.sample_recipes" in script
+    assert "setpiece.agent.qml" in script
+    assert "setpiece.canvas.qml" in script
+    assert "setpiece.sample_canvases" in script
+    assert "setpiece.home.qml" in script
+    assert "setpiece.sample_recipes" in script
     assert "--add-data" in script
     assert "themes;themes" in script
     assert "--copy-metadata" not in script
     assert "copy_metadata" not in script
     assert "$LASTEXITCODE" in script
     assert "PyInstaller failed" in script
-    assert "dist\\Ritualist\\Ritualist.exe" in script
+    assert "dist\\Setpiece\\Setpiece.exe" in script
 
 
 def test_package_data_includes_home_canvas_qml_and_sample_templates():
     agent_qml_names = {
         child.name
-        for child in files("ritualist.agent.qml").iterdir()
+        for child in files("setpiece.agent.qml").iterdir()
         if child.name.endswith(".qml")
     }
-    qml = files("ritualist.home.qml").joinpath("Home.qml")
-    canvas_qml = files("ritualist.canvas.qml").joinpath("CanvasUse.qml")
+    qml = files("setpiece.home.qml").joinpath("Home.qml")
+    canvas_qml = files("setpiece.canvas.qml").joinpath("CanvasUse.qml")
     canvas_qml_names = {
         child.name
-        for child in files("ritualist.canvas.qml").iterdir()
+        for child in files("setpiece.canvas.qml").iterdir()
         if child.name.endswith(".qml")
     }
     sample_names = {
         child.name
-        for child in files("ritualist.sample_recipes").iterdir()
+        for child in files("setpiece.sample_recipes").iterdir()
         if child.name.endswith(".yaml")
     }
     canvas_names = {
         child.name
-        for child in files("ritualist.sample_canvases").iterdir()
+        for child in files("setpiece.sample_canvases").iterdir()
         if child.name.endswith(".yaml")
     }
-    paper_theme = Path("themes/ritualist-paper/theme.yaml")
+    paper_theme = Path("themes/setpiece-paper/theme.yaml")
 
     assert {
         "ActiveSummary.qml",
@@ -76,12 +76,12 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
         "QuietDivider.qml",
         "QuietStatusIcon.qml",
         "QuietTextField.qml",
-        "RitualistTokens.qml",
+        "SetpieceTokens.qml",
     }.issubset(agent_qml_names)
     assert qml.is_file()
-    assert "ritualistHomeController" in qml.read_text(encoding="utf-8")
+    assert "setpieceHomeController" in qml.read_text(encoding="utf-8")
     assert canvas_qml.is_file()
-    assert "ritualistCanvasUseController" in canvas_qml.read_text(encoding="utf-8")
+    assert "setpieceCanvasUseController" in canvas_qml.read_text(encoding="utf-8")
     assert {
         "CanvasPaperButton.qml",
         "CanvasPaperComboBox.qml",
@@ -109,7 +109,7 @@ def test_package_data_includes_home_canvas_qml_and_sample_templates():
     assert "media_desktop.yaml" not in canvas_names
     assert "coding_desktop.yaml" not in canvas_names
     assert paper_theme.is_file()
-    assert "ritualist.paper" in paper_theme.read_text(encoding="utf-8")
+    assert "setpiece.paper" in paper_theme.read_text(encoding="utf-8")
 
 
 def test_ci_optional_deps_cover_home_and_perf_smokes():
@@ -123,17 +123,17 @@ def test_ci_optional_deps_cover_home_and_perf_smokes():
     optional_steps = "\n".join(str(step.get("run", "")) for step in optional_job["steps"])
     assert 'python -m pip install -e ".[all,dev]"' in optional_steps
     assert "python -m pytest -q" in optional_steps
-    assert "python -m compileall -q ritualist tests" in optional_steps
-    assert "python -m ritualist home --help" in optional_steps
-    assert "python -m ritualist pack --help" in optional_steps
-    assert "python -m ritualist perf home-model --mock-cards 100 --json" in optional_steps
-    assert "python -m ritualist perf home-model --mock-cards 300 --json" in optional_steps
+    assert "python -m compileall -q setpiece tests" in optional_steps
+    assert "python -m setpiece home --help" in optional_steps
+    assert "python -m setpiece pack --help" in optional_steps
+    assert "python -m setpiece perf home-model --mock-cards 100 --json" in optional_steps
+    assert "python -m setpiece perf home-model --mock-cards 300 --json" in optional_steps
 
     windows_steps = "\n".join(
         str(step.get("run", "")) for step in jobs["windows-optional-deps-smoke"]["steps"]
     )
-    assert "python -m ritualist home --help" in windows_steps
-    assert "python -m ritualist pack --help" in windows_steps
+    assert "python -m setpiece home --help" in windows_steps
+    assert "python -m setpiece pack --help" in windows_steps
 
 
 def test_release_checklist_documents_home_dogfood_commands():
@@ -141,10 +141,10 @@ def test_release_checklist_documents_home_dogfood_commands():
 
     assert 'python -m pip install -e ".[all,dev]"' in checklist
     assert "python -m playwright install chromium" in checklist
-    assert "python -m ritualist doctor gaming_mode --json --no-strict" in checklist
-    assert "python -m ritualist dry-run gaming_mode" in checklist
-    assert "python -m ritualist home --help" in checklist
-    assert "python -m ritualist perf home-model --mock-cards 100 --json" in checklist
-    assert "python -m ritualist perf home-model --mock-cards 300 --json" in checklist
-    assert "python -m ritualist pack export gaming_mode --out $packPath" in checklist
-    assert "python -m ritualist pack import $packPath" in checklist
+    assert "python -m setpiece doctor gaming_mode --json --no-strict" in checklist
+    assert "python -m setpiece dry-run gaming_mode" in checklist
+    assert "python -m setpiece home --help" in checklist
+    assert "python -m setpiece perf home-model --mock-cards 100 --json" in checklist
+    assert "python -m setpiece perf home-model --mock-cards 300 --json" in checklist
+    assert "python -m setpiece pack export gaming_mode --out $packPath" in checklist
+    assert "python -m setpiece pack import $packPath" in checklist

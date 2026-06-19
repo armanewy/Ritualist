@@ -1,0 +1,105 @@
+schema: setpiece.canvas.v1
+id: gaming_desktop
+name: Gaming Room
+description: Gaming-focused Room with explicit ritual controls and target preview.
+mode: desktop_canvas
+resolution_policy: responsive
+theme:
+  id: setpiece_default
+  name: Setpiece Default
+background:
+  type: system_wallpaper
+  value: ""
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: category_dock
+    type: category.dock
+    x: 72
+    y: 560
+    width: 220
+    height: 160
+    z: 1
+    props:
+      categories:
+        - Gaming
+        - Media
+        - Settings
+  - id: diablo_night
+    type: ritual.card
+    x: 72
+    y: 144
+    width: 540
+    height: 240
+    z: 10
+    props:
+      title: Diablo Night
+      subtitle: YouTube ambience + local target prep
+      recipe_id: gaming_mode
+      primary_action: run
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: run_status
+    type: ritual.status
+    x: 72
+    y: 408
+    width: 540
+    height: 128
+    z: 11
+    props:
+      recipe_id: gaming_mode
+    binding:
+      kind: recipe
+      recipe_id: gaming_mode
+  - id: run_controller
+    type: ritual.controller
+    x: 640
+    y: 344
+    width: 320
+    height: 128
+    z: 12
+    props:
+      recipe_id: gaming_mode
+      controls:
+        - pause
+        - resume
+        - stop
+    binding:
+      kind: runtime_state
+      id: gaming_mode
+  - id: recent_activity
+    type: recent.activity
+    x: 640
+    y: 496
+    width: 320
+    height: 128
+    z: 12
+    props:
+      title: Recent Activity
+      limit: 5
+  - id: diablo_target
+    type: target.card
+    x: 640
+    y: 144
+    width: 320
+    height: 176
+    z: 10
+    props:
+      title: Diablo IV
+      subtitle: Resolve local launch options
+      target: diablo_iv
+      primary_action: preview_plan
+    binding:
+      kind: target.start
+      target: diablo_iv
+  - id: local_clock
+    type: clock
+    x: 840
+    y: 48
+    width: 140
+    height: 72
+    z: 3
+    props:
+      format: short

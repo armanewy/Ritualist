@@ -10,7 +10,7 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "ritualist_live_gaming_acceptance.ps1"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "setpiece_live_gaming_acceptance.ps1"
 SPEC_PATH = REPO_ROOT / "tests" / "acceptance" / "live_gaming_v0_2_alpha_1.yaml"
 DOC_PATH = REPO_ROOT / "docs" / "LIVE_GAMING_ACCEPTANCE.md"
 
@@ -39,7 +39,7 @@ EXPECTED_CASE_IDS = {
 def test_live_gaming_acceptance_spec_declares_live_cases_and_safety() -> None:
     spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
 
-    assert spec["schema"] == "ritualist.live_gaming_acceptance.v1"
+    assert spec["schema"] == "setpiece.live_gaming_acceptance.v1"
     assert spec["release"] == "v0.2.0-alpha.1"
     assert spec["scope"] == "live_integration_only"
     assert set(spec["semantics"]) == {"PASS", "FAIL", "NEEDS_HUMAN_REVIEW", "NOT_RUN"}
@@ -91,7 +91,7 @@ def test_live_gaming_acceptance_script_declares_evidence_contract() -> None:
     for expected in (
         "live-gaming-summary.json",
         "live-gaming-summary.md",
-        "ritualist.live_gaming_acceptance_summary.v1",
+        "setpiece.live_gaming_acceptance_summary.v1",
         "live_integration_only",
         "live_integration_pass",
         "Fixture acceptance is not live integration",
@@ -141,5 +141,5 @@ def test_live_gaming_acceptance_docs_state_fixture_is_not_live() -> None:
 
     assert "Fixture acceptance is not live integration" in docs
     assert "v0.2.0-alpha.1` is not taggable from fixture acceptance alone" in docs
-    assert ".\\scripts\\ritualist_live_gaming_acceptance.ps1" in docs
+    assert ".\\scripts\\setpiece_live_gaming_acceptance.ps1" in docs
     assert "-Live -IUnderstandThisIsLive" in docs

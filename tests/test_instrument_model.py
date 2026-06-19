@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ritualist.agent.instrument_model import InstrumentState, build_instrument_model
-from ritualist.agent.models import AgentConfirmation, AgentRunState, AgentState, AgentStep
-from ritualist.runtime_models import RunStarted, StepStarted, StepWaiting
+from setpiece.agent.instrument_model import InstrumentState, build_instrument_model
+from setpiece.agent.models import AgentConfirmation, AgentRunState, AgentState, AgentStep
+from setpiece.runtime_models import RunStarted, StepStarted, StepWaiting
 
 
 FIXED_TIME = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
@@ -320,7 +320,7 @@ def test_recovery_model_and_historical_interruption_stay_compact_until_opened() 
             "recipe_id": "gaming_mode",
             "last_run": {
                 "state": "interrupted",
-                "final_message": "Ritualist exited before finalizing this run.",
+                "final_message": "Setpiece exited before finalizing this run.",
                 "run_log_path": "C:/runs/run-2",
                 "step_summaries": (
                     {"index": 1, "name": "Open launcher", "state": "success"},
@@ -341,7 +341,7 @@ def test_recovery_model_and_historical_interruption_stay_compact_until_opened() 
             "recipe_id": "gaming_mode",
             "last_run": {
                 "state": "interrupted",
-                "final_message": "Ritualist exited before finalizing this run.",
+                "final_message": "Setpiece exited before finalizing this run.",
                 "run_log_path": "C:/runs/run-2",
                 "step_summaries": (
                     {"index": 1, "name": "Open launcher", "state": "success"},

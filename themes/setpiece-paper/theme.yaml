@@ -1,0 +1,49 @@
+schema: setpiece.theme.v1
+id: setpiece.paper
+name: Setpiece Paper
+version: 0.1.0
+tokens:
+  color.background: "#F7F4EE"
+  color.surface: "#ffffff"
+  color.surface_alt: "#DDE7E8"
+  color.success_panel: "#DDE7E8"
+  color.warning_panel: "#F7F4EE"
+  color.danger_panel: "#F7F4EE"
+  color.focus_panel: "#DDE7E8"
+  color.text: "#22272B"
+  color.text_muted: "#687278"
+  color.border: "#DDE7E8"
+  color.focus_ring: "#3C6F82"
+  color.accent: "#3C6F82"
+  color.on_accent: "#ffffff"
+  color.success: "#45715F"
+  color.on_success: "#ffffff"
+  color.warning: "#A36B25"
+  color.on_warning: "#ffffff"
+  color.danger: "#A84942"
+  color.on_danger: "#ffffff"
+  font.family: "Segoe UI"
+  font.size_body: 13
+  font.size_title: 28
+  radius.sm: 5
+  radius.md: 10
+  radius.lg: 16
+  spacing.sm: 6
+  spacing.md: 12
+  spacing.lg: 20
+  shadow.card: "soft"
+  motion.fast_ms: 90
+  motion.normal_ms: 160
+  opacity.disabled: 0.52
+  material.surface: "paper"
+assets: {}
+component_variants:
+  ritual.card:
+    standard:
+      surface: "{color.surface}"
+      border: "{color.border}"
+      accent: "{color.accent}"
+    hero:
+      surface: "{color.surface}"
+      border: "{color.accent}"
+      accent: "{color.accent}"

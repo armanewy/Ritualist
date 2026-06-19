@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.themes import ThemeDocument, load_theme, resolve_theme_tokens, validate_theme
+from setpiece.cli import app
+from setpiece.themes import ThemeDocument, load_theme, resolve_theme_tokens, validate_theme
 
 
 def _theme_path(tmp_path: Path, text: str) -> Path:
@@ -17,11 +17,11 @@ def _theme_path(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_bundled_ritualist_paper_theme_validates() -> None:
-    result = validate_theme("ritualist.paper")
+def test_bundled_setpiece_paper_theme_validates() -> None:
+    result = validate_theme("setpiece.paper")
 
     assert result.valid is True
-    assert result.theme_id == "ritualist.paper"
+    assert result.theme_id == "setpiece.paper"
     assert result.errors == ()
     assert not [warning for warning in result.warnings if warning.startswith("accessibility:")]
     assert result.accessibility["warning_count"] == 0
@@ -34,7 +34,7 @@ def test_invalid_theme_color_fails(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.color
 name: Bad Color
 tokens:
@@ -52,7 +52,7 @@ def test_invalid_token_reference_fails(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.reference
 name: Bad Reference
 tokens:
@@ -70,7 +70,7 @@ def test_recursive_token_reference_fails(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.recursive
 name: Bad Recursive
 tokens:
@@ -89,7 +89,7 @@ def test_token_reference_must_match_receiving_token_type(tmp_path: Path) -> None
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.cross_type
 name: Bad Cross Type
 tokens:
@@ -108,7 +108,7 @@ def test_remote_asset_url_rejected(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.remote
 name: Bad Remote
 assets:
@@ -126,7 +126,7 @@ def test_arbitrary_code_fields_rejected(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.code
 name: Bad Code
 component_variants:
@@ -146,7 +146,7 @@ def test_missing_asset_is_warning_not_crash(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: missing.asset
 name: Missing Asset
 assets:
@@ -164,7 +164,7 @@ def test_low_contrast_theme_emits_accessibility_warning(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: low.contrast
 name: Low Contrast
 tokens:
@@ -188,7 +188,7 @@ def test_focus_ring_low_contrast_emits_accessibility_warning(tmp_path: Path) -> 
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: low.focus
 name: Low Focus
 tokens:
@@ -209,7 +209,7 @@ def test_missing_accessibility_colors_fall_back_before_contrast_check(tmp_path: 
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: fallback.contrast
 name: Fallback Contrast
 tokens: {}
@@ -227,7 +227,7 @@ def test_theme_pack_cannot_bind_behavior(tmp_path: Path) -> None:
     path = _theme_path(
         tmp_path,
         """
-schema: ritualist.theme.v1
+schema: setpiece.theme.v1
 id: bad.behavior
 name: Bad Behavior
 component_variants:
@@ -248,7 +248,7 @@ component_variants:
 def test_theme_resolver_merges_overrides() -> None:
     theme = ThemeDocument.model_validate(
         {
-            "schema": "ritualist.theme.v1",
+            "schema": "setpiece.theme.v1",
             "id": "merge.test",
             "name": "Merge Test",
             "tokens": {"color.background": "#ffffff"},
@@ -271,21 +271,21 @@ def test_theme_resolver_merges_overrides() -> None:
 def test_theme_cli_show_and_validate_json() -> None:
     runner = CliRunner()
 
-    show = runner.invoke(app, ["theme", "show", "ritualist.paper", "--json"])
-    validate = runner.invoke(app, ["theme", "validate", "ritualist.paper", "--json"])
+    show = runner.invoke(app, ["theme", "show", "setpiece.paper", "--json"])
+    validate = runner.invoke(app, ["theme", "validate", "setpiece.paper", "--json"])
     list_result = runner.invoke(app, ["theme", "list", "--json"])
 
     assert show.exit_code == 0
     assert validate.exit_code == 0
     assert list_result.exit_code == 0
-    assert json.loads(show.output)["theme"]["id"] == "ritualist.paper"
+    assert json.loads(show.output)["theme"]["id"] == "setpiece.paper"
     validation = json.loads(validate.output)
     assert validation["valid"] is True
     assert validation["accessibility"]["warning_count"] == 0
-    assert any(row["id"] == "ritualist.paper" for row in json.loads(list_result.output))
+    assert any(row["id"] == "setpiece.paper" for row in json.loads(list_result.output))
 
 
 def test_load_theme_accepts_prompt_requested_path() -> None:
-    theme = load_theme(Path("themes/ritualist-paper/theme.yaml"))
+    theme = load_theme(Path("themes/setpiece-paper/theme.yaml"))
 
-    assert theme.id == "ritualist.paper"
+    assert theme.id == "setpiece.paper"

@@ -4,20 +4,20 @@ import json
 
 from typer.testing import CliRunner
 
-from ritualist.activity_journal import ActivityJournal
-from ritualist.cli import app
-from ritualist.paths import learning_suggestions_path
+from setpiece.activity_journal import ActivityJournal
+from setpiece.cli import app
+from setpiece.paths import learning_suggestions_path
 
 
 def _use_app_data(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("RITUALIST_E2E", "1")
-    monkeypatch.setenv("RITUALIST_E2E_APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SETPIECE_E2E", "1")
+    monkeypatch.setenv("SETPIECE_E2E_APP_DATA_DIR", str(tmp_path))
 
 
 def _enable_journal_learning() -> None:
     result = CliRunner().invoke(
         app,
-        ["learning", "enable", "--source", "ritualist_journal", "--json"],
+        ["learning", "enable", "--source", "setpiece_journal", "--json"],
     )
     assert result.exit_code == 0
 
@@ -55,7 +55,7 @@ def test_suggestions_scan_dry_run_mines_without_persisting(monkeypatch, tmp_path
 
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data["schema_version"] == "ritualist.suggestions.scan.v1"
+    assert data["schema_version"] == "setpiece.suggestions.scan.v1"
     assert data["on_demand"] is True
     assert data["background_collection"] is False
     assert data["dry_run"] is True
@@ -141,17 +141,17 @@ def test_suggestions_scan_excludes_sensitive_suggestions_by_default(
 
     def fake_scan_payload(**_kwargs):
         return {
-            "enabled_sources": ["ritualist_journal"],
+            "enabled_sources": ["setpiece_journal"],
             "collection": {
                 "signals": [
                     {
                         "event_type": "shortcut_opened",
-                        "source_id": "ritualist_journal",
+                        "source_id": "setpiece_journal",
                         "payload": {"domain": "docs.example.com"},
                     },
                     {
                         "event_type": "shortcut_opened",
-                        "source_id": "ritualist_journal",
+                        "source_id": "setpiece_journal",
                         "payload": {"domain": "docs.example.com"},
                     },
                 ],
@@ -159,7 +159,7 @@ def test_suggestions_scan_excludes_sensitive_suggestions_by_default(
             },
         }
 
-    monkeypatch.setattr("ritualist.suggestions.service.learning_scan_payload", fake_scan_payload)
+    monkeypatch.setattr("setpiece.suggestions.service.learning_scan_payload", fake_scan_payload)
 
     hidden = CliRunner().invoke(app, ["suggestions", "scan", "--dry-run", "--json"])
     assert hidden.exit_code == 0

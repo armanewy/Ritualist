@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.suggestions.drafts_shortcut import (
+from setpiece.suggestions.drafts_shortcut import (
     SHORTCUT_DRAFT_SCHEMA_VERSION,
     ShortcutDraftUnsupportedError,
     ShortcutDraftValidationError,
     build_shortcut_draft,
 )
-from ritualist.suggestions.models import Suggestion, SuggestionStatus
-from ritualist.suggestions.review import (
+from setpiece.suggestions.models import Suggestion, SuggestionStatus
+from setpiece.suggestions.review import (
     SuggestionReviewRequiredError,
     build_approval_record,
 )
@@ -28,7 +28,7 @@ def _shortcut_suggestion(component_type: str, *, title: str = "Project shortcut"
         confidence=0.8,
         evidence_summary="Repeated shortcut target use",
         evidence_count=3,
-        sources=("ritualist_journal",),
+        sources=("setpiece_journal",),
         proposed_actions=(
             {
                 "action": "review_shortcut_component",

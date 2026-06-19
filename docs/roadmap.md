@@ -1,12 +1,12 @@
-# Ritualist Roadmap
+# Setpiece Roadmap
 
-This roadmap is intentionally conservative. Ritualist should be narrower than
+This roadmap is intentionally conservative. Setpiece should be narrower than
 its architecture: a local ritual/runbook engine with a desktop-native Room
 surface. Recipes and rituals remain the center of gravity; Canvas, Rooms,
 shortcuts, Suggestions, and packs must serve ritual quality, Room usefulness,
 trust and safety, the Suggestion-to-draft loop, or pack/template reuse.
 
-Ritualist should not expand horizontally while release acceptance is open.
+Setpiece should not expand horizontally while release acceptance is open.
 
 ## Current Focus
 
@@ -17,7 +17,7 @@ Ritualist should not expand horizontally while release acceptance is open.
 - Use Canvas as the Room implementation layer. Canvas Edit model and the Room
   Builder UI MVP exist; do not restart that work while v0.2 acceptance remains
   open.
-- Keep Desktop Work-Area mode and wallpaper passthrough bounded: Ritualist can
+- Keep Desktop Work-Area mode and wallpaper passthrough bounded: Setpiece can
   layer Room components over the normal desktop, but it does not replace
   Explorer, hide the taskbar, render wallpapers, or add arbitrary widget code.
 - Keep recipes local-first, structured, Doctor-checkable, dry-runnable,
@@ -75,7 +75,7 @@ platform work. Do not add:
 - Keep target discovery generic, read-only, and primitive-backed; see
   [Target Resolution Engine](target_resolution.md).
 - Keep Canvas documents typed, local, and side-effect free; see
-  [Ritualist Canvas](canvas.md).
+  [Setpiece Canvas](canvas.md).
 
 ## Future Mutating And Risky Primitives
 

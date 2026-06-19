@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist import activity_collectors
-from ritualist.activity_collectors import (
+from setpiece import activity_collectors
+from setpiece.activity_collectors import (
     ActivityCollectionContext,
     FakeActivityCollector,
     FakeOpenAppsCollector,
     FakeRecentReferencesCollector,
-    FakeRitualistJournalCollector,
+    FakeSetpieceJournalCollector,
     OpenWindowsCollector,
-    RitualistJournalCollector,
+    SetpieceJournalCollector,
     collect_activity_signals,
 )
-from ritualist.activity_signals import (
+from setpiece.activity_signals import (
     OPEN_WINDOWS_SOURCE_ID,
     RECENT_ITEMS_SOURCE_ID,
-    RITUALIST_JOURNAL_SOURCE_ID,
+    SETPIECE_JOURNAL_SOURCE_ID,
     ActivityWarning,
     process_name_signal,
 )
-from ritualist.run_logs import RunRecord
+from setpiece.run_logs import RunRecord
 
 
 def test_collect_activity_signals_is_on_demand_and_merges_fake_collectors() -> None:
@@ -82,7 +82,7 @@ def test_collect_activity_signals_reports_collector_failures() -> None:
 
 
 def test_fake_journal_collector_emits_sanitized_journal_events() -> None:
-    collector = FakeRitualistJournalCollector(
+    collector = FakeSetpieceJournalCollector(
         events=(
             {
                 "run_id": "run-1",
@@ -96,7 +96,7 @@ def test_fake_journal_collector_emits_sanitized_journal_events() -> None:
 
     result = collector.collect()
 
-    assert result.collector_id == RITUALIST_JOURNAL_SOURCE_ID
+    assert result.collector_id == SETPIECE_JOURNAL_SOURCE_ID
     assert result.signals[0].label == "Gaming Mode"
     assert result.signals[0].value == "stopped"
     assert result.signals[0].metadata == {
@@ -106,7 +106,7 @@ def test_fake_journal_collector_emits_sanitized_journal_events() -> None:
     }
 
 
-def test_ritualist_journal_collector_uses_run_summaries_without_steps_or_notes(
+def test_setpiece_journal_collector_uses_run_summaries_without_steps_or_notes(
     monkeypatch, tmp_path: Path
 ) -> None:
     record = RunRecord(
@@ -123,9 +123,9 @@ def test_ritualist_journal_collector_uses_run_summaries_without_steps_or_notes(
         notes=[{"body": "private note"}],
     )
 
-    monkeypatch.setattr("ritualist.run_logs.list_recent_runs", lambda **_kwargs: [record])
+    monkeypatch.setattr("setpiece.run_logs.list_recent_runs", lambda **_kwargs: [record])
 
-    result = RitualistJournalCollector(base_dir=tmp_path).collect()
+    result = SetpieceJournalCollector(base_dir=tmp_path).collect()
 
     assert result.supported is True
     assert result.signals[0].metadata == {

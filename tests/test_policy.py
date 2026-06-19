@@ -8,10 +8,10 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.models import Recipe
-from ritualist.packs import PACK_SCHEMA_V1, PackValidationError, export_recipe_pack, validate_pack
-from ritualist.policy import (
+from setpiece.cli import app
+from setpiece.models import Recipe
+from setpiece.packs import PACK_SCHEMA_V1, PackValidationError, export_recipe_pack, validate_pack
+from setpiece.policy import (
     PolicyProfile,
     PrimitivePolicyEngine,
     build_policy_report_for_plan,
@@ -20,7 +20,7 @@ from ritualist.policy import (
     detect_never_importable_raw,
     explain_primitive_policy,
 )
-from ritualist.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
+from setpiece.primitives import PrimitivePlan, PrimitivePlanStep, PrimitiveRisk
 
 
 SAFETY = {
@@ -210,7 +210,7 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    out_path = tmp_path / "policy.ritualistpack"
+    out_path = tmp_path / "policy.setpiecepack"
 
     export_recipe_pack(recipe_path, out_path)
 
@@ -328,8 +328,8 @@ def test_plan_policy_blocks_unknown_required_primitive() -> None:
 
 
 def _fake_requirement(primitive_id: str, risk: str):
-    from ritualist.policy import PrimitiveRequirement
-    from ritualist.primitives import (
+    from setpiece.policy import PrimitiveRequirement
+    from setpiece.primitives import (
         PrimitiveAdapterBinding,
         PrimitiveFamily,
         PrimitiveRisk,
@@ -359,7 +359,7 @@ def _manifest(*, required_actions: list[str], required_capabilities: list[str]) 
         "id": "demo_pack",
         "name": "Demo Pack",
         "version": "1.0.0",
-        "required_ritualist_version": ">=0.1.0-alpha.1",
+        "required_setpiece_version": ">=0.1.0-alpha.1",
         "supported_os": ["windows", "macos", "linux"],
         "required_capabilities": required_capabilities,
         "required_actions": required_actions,
@@ -375,7 +375,7 @@ def _write_pack(
     recipe: dict[str, object],
     assets: dict[str, bytes] | None = None,
 ) -> Path:
-    path = tmp_path / "demo.ritualistpack"
+    path = tmp_path / "demo.setpiecepack"
     with ZipFile(path, "w") as archive:
         archive.writestr("manifest.yaml", yaml.safe_dump(manifest, sort_keys=False))
         archive.writestr("recipe.yaml", yaml.safe_dump(recipe, sort_keys=False))

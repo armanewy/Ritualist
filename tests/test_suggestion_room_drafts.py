@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBackground,
     CanvasBackgroundType,
     CanvasBindingKind,
     CanvasDocument,
     validate_canvas_structure,
 )
-from ritualist.shortcuts import ShortcutService
-from ritualist.suggestions.drafts_room import (
+from setpiece.shortcuts import ShortcutService
+from setpiece.suggestions.drafts_room import (
     PROMOTED_HERO_ROOM_IDS,
     SAFE_ROOM_DRAFT_COMPONENT_TYPES,
     RoomDraftError,
@@ -18,8 +18,8 @@ from ritualist.suggestions.drafts_room import (
     build_room_draft_result,
     promoted_hero_room_snapshot,
 )
-from ritualist.suggestions.models import Suggestion, SuggestionStatus
-from ritualist.suggestions.review import (
+from setpiece.suggestions.models import Suggestion, SuggestionStatus
+from setpiece.suggestions.review import (
     SuggestionReviewRequiredError,
     build_approval_record,
 )
@@ -45,7 +45,7 @@ def _room_suggestion(
         confidence=0.72,
         evidence_summary="Repeated Room usage with local activity",
         evidence_count=3,
-        sources=("ritualist_journal", "recent_items"),
+        sources=("setpiece_journal", "recent_items"),
         proposed_actions=proposed_actions,
         missing_inputs=("room_review",),
     )

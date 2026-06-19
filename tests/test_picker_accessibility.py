@@ -24,7 +24,7 @@ def test_picker_accessibility_contract_covers_dismissal_focus_and_keyboard_paths
     contract = _load_contract()
     flow_by_id = {flow["id"]: flow for flow in contract["keyboard_flows"]}
 
-    assert contract["schema_version"] == "ritualist.picker.accessibility.v1"
+    assert contract["schema_version"] == "setpiece.picker.accessibility.v1"
     assert contract["surface"]["dismissal_inputs"] == [
         "escape",
         "hotkey_toggle",

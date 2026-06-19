@@ -1,0 +1,942 @@
+from __future__ import annotations
+
+import sys
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
+from collections.abc import Sequence
+from importlib.resources import as_file, files
+from pathlib import Path
+from threading import Event
+from typing import Any
+
+from setpiece.brand_assets import apply_qt_application_icon
+from setpiece.config import load_app_config
+from setpiece.e2e import record_event
+from setpiece.errors import DependencyMissingError, SetpieceError
+from setpiece.home.actions import (
+    HomeActionDispatcher,
+    HomeActionService,
+    HomeCardAction,
+    home_event_from_runtime,
+    home_event_from_step_status,
+)
+from setpiece.home.fake_events import FakeHomeStatusEmitter
+from setpiece.home.models import (
+    HomeActivityLog,
+    HomeCardStatus,
+    HomeEventBridge,
+    HomeModel,
+    HomeRuntimeEvent,
+    create_installed_home_model,
+    create_mock_home_model,
+)
+
+
+def run_home(*, mock: bool = False) -> int:
+    """Launch the QML Home surface.
+
+    PySide imports stay inside this launcher so the rest of Setpiece remains
+    usable without GUI dependencies installed.
+    """
+    try:
+        from PySide6.QtCore import Property, QObject, QProcess, QTimer, QUrl, Signal, Slot
+        from PySide6.QtGui import QDesktopServices, QIcon
+        from PySide6.QtQml import QQmlApplicationEngine
+        from PySide6.QtWidgets import QApplication
+    except ImportError as exc:
+        raise DependencyMissingError("Home UI requires PySide6; install setpiece[gui]") from exc
+
+    class HomeController(QObject):
+        payloadChanged = Signal()
+        metricsChanged = Signal()
+        recentActivityChanged = Signal()
+        learningChanged = Signal()
+        installedModelLoaded = Signal(object)
+        installedModelLoadFailed = Signal(str)
+        actionStateChanged = Signal()
+        confirmationChanged = Signal()
+        actionCompleted = Signal(str, object)
+        actionFailed = Signal(str, str)
+        runtimeEventReceived = Signal(str, object)
+        statusEventReceived = Signal(str, object)
+        confirmationRequested = Signal(str, object)
+        confirmationDecision = Signal(bool)
+
+        def __init__(
+            self,
+            model: HomeModel,
+            bridge: HomeEventBridge,
+            *,
+            mock: bool,
+            overlay_controller: Any | None,
+            confirmation_presenter: Any | None,
+            process_starter: Any,
+        ) -> None:
+            super().__init__()
+            self._model = model
+            self._bridge = bridge
+            self._mock = mock
+            self._last_event_label = "No mock events yet" if mock else "Loading recipes"
+            self._loader_executor: ThreadPoolExecutor | None = None
+            self._loader_future: Future[HomeModel] | None = None
+            self._action_future: Future[object] | None = None
+            self._dispatcher = HomeActionDispatcher(
+                HomeActionService(overlay_controller=overlay_controller)
+            )
+            self._activity = HomeActivityLog(max_entries=8)
+            self._min_status_dwell_ms = config.home.min_status_dwell_ms
+            self._inline_confirmation_visible = _should_show_inline_confirmation(confirmation_presenter)
+            self._confirmation_presenter = confirmation_presenter or _InlineHomeConfirmationPresenter()
+            self._action_busy = False
+            self._confirmation_pending = False
+            self._confirmation_prompt = ""
+            self._confirmation_card_id = ""
+            self._confirmation_event = Event()
+            self._confirmation_result = False
+            self._runtime_control: Any | None = None
+            self._runtime_paused = False
+            self._process_starter = process_starter
+            self._learning_status = _home_learning_status_payload()
+            self._learning_sources = _home_learning_sources_payload()
+            self._onboarding_state = _home_onboarding_state_payload()
+            self._learning_delete_pending = False
+            self.installedModelLoaded.connect(self._replace_model)
+            self.installedModelLoadFailed.connect(self._mark_load_failed)
+            self.actionCompleted.connect(self._complete_action)
+            self.actionFailed.connect(self._mark_action_failed)
+            self.runtimeEventReceived.connect(self._apply_runtime_event)
+            self.statusEventReceived.connect(self._apply_status_event)
+            self.confirmationRequested.connect(self._request_confirmation)
+            self.confirmationDecision.connect(self.answerConfirmation)
+
+        @Property("QVariantMap", notify=payloadChanged)
+        def payload(self) -> dict[str, object]:
+            return self._model.to_qml()
+
+        @Property(int, notify=metricsChanged)
+        def updatesApplied(self) -> int:
+            return self._bridge.applied_count
+
+        @Property(str, notify=metricsChanged)
+        def lastEventLabel(self) -> str:
+            return self._last_event_label
+
+        @Property(bool, notify=actionStateChanged)
+        def actionBusy(self) -> bool:
+            return self._action_busy
+
+        @Property(bool, notify=actionStateChanged)
+        def runtimeActive(self) -> bool:
+            return self._runtime_control is not None
+
+        @Property(bool, notify=actionStateChanged)
+        def runtimePaused(self) -> bool:
+            return self._runtime_paused
+
+        @Property(bool, notify=confirmationChanged)
+        def confirmationPending(self) -> bool:
+            return self._confirmation_pending
+
+        @Property(str, notify=confirmationChanged)
+        def confirmationPrompt(self) -> str:
+            return self._confirmation_prompt
+
+        @Property(bool, notify=confirmationChanged)
+        def inlineConfirmationVisible(self) -> bool:
+            return self._inline_confirmation_visible
+
+        @Property("QVariantList", notify=recentActivityChanged)
+        def recentActivity(self) -> list[dict[str, object]]:
+            return self._activity.to_qml()
+
+        @Property(int, notify=recentActivityChanged)
+        def minStatusDwellMs(self) -> int:
+            return self._min_status_dwell_ms
+
+        @Property("QVariantMap", notify=learningChanged)
+        def learningStatus(self) -> dict[str, object]:
+            return self._learning_status
+
+        @Property("QVariantMap", notify=learningChanged)
+        def learningSources(self) -> dict[str, object]:
+            return self._learning_sources
+
+        @Property("QVariantMap", notify=learningChanged)
+        def onboardingState(self) -> dict[str, object]:
+            return self._onboarding_state
+
+        @Property(bool, notify=learningChanged)
+        def learningDeletePending(self) -> bool:
+            return self._learning_delete_pending
+
+        @Slot()
+        def drainMockEvents(self) -> None:
+            self._apply_events(self._bridge.apply_due())
+
+        @Slot()
+        def flushMockEvents(self) -> None:
+            self._apply_events(self._bridge.flush())
+
+        @Slot()
+        def loadInstalledRecipes(self) -> None:
+            if self._loader_future is not None and not self._loader_future.done():
+                return
+            executor = self._ensure_worker_executor()
+            self._last_event_label = "Loading installed recipes"
+            self.metricsChanged.emit()
+            future = executor.submit(create_installed_home_model, categories=config.home.categories)
+            self._loader_future = future
+            future.add_done_callback(self._complete_installed_recipe_load)
+
+        @Slot()
+        def shutdown(self) -> None:
+            if self._runtime_control is not None:
+                self._runtime_control.stop()
+            self.answerConfirmation(False)
+            if self._action_future is not None and not self._action_future.done():
+                try:
+                    self._action_future.result(timeout=2)
+                except TimeoutError:
+                    pass
+                except Exception:  # noqa: BLE001 - shutdown is best-effort finalization.
+                    pass
+            if self._loader_executor is None:
+                return
+            self._loader_executor.shutdown(wait=False, cancel_futures=True)
+            self._loader_executor = None
+
+        @Slot(str)
+        def runCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="run")
+            self._start_runtime_action(card_id, HomeCardAction.RUN)
+
+        @Slot(str)
+        def dryRunCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="dry_run")
+            self._start_runtime_action(card_id, HomeCardAction.DRY_RUN)
+
+        @Slot(str)
+        def doctorCard(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="doctor")
+            self._start_action(card_id, HomeCardAction.DOCTOR)
+
+        @Slot(str)
+        def viewRecipe(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="view_recipe")
+            self._start_action(card_id, HomeCardAction.VIEW_RECIPE)
+
+        @Slot(str)
+        def editSetup(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="edit_setup")
+            self._start_action(card_id, HomeCardAction.EDIT_SETUP)
+
+        @Slot(str)
+        def editRecipe(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="edit_recipe")
+            self._start_action(card_id, HomeCardAction.EDIT_RECIPE)
+
+        @Slot(str)
+        def openYaml(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="open_yaml")
+            self._start_action(card_id, HomeCardAction.OPEN_YAML)
+
+        @Slot(str)
+        def openLogs(self, card_id: str) -> None:
+            record_event("home.action.requested", card_id=card_id, action="open_logs")
+            self._start_action(card_id, HomeCardAction.OPEN_LOGS)
+
+        @Slot(str, str)
+        def openRoom(self, room_id: str, host: str) -> None:
+            try:
+                command, args, room = _room_launch_command(room_id, host)
+            except SetpieceError as exc:
+                self._last_event_label = str(exc)
+                self.metricsChanged.emit()
+                return
+            record_event(
+                "home.room.open_requested",
+                room_id=room.room_id,
+                canvas_id=room.canvas_id,
+                host=_normalize_room_host(host),
+            )
+            started = bool(self._process_starter(command, args))
+            self._last_event_label = (
+                f"Opening {room.name}"
+                if started
+                else f"Could not open {room.name}"
+            )
+            self.metricsChanged.emit()
+
+        @Slot()
+        def openClassicGui(self) -> None:
+            command, args = _classic_gui_launch_command()
+            record_event("home.classic_gui.open_requested")
+            started = bool(self._process_starter(command, args))
+            self._last_event_label = (
+                "Opening classic GUI"
+                if started
+                else "Could not open classic GUI"
+            )
+            self.metricsChanged.emit()
+
+        @Slot("QVariantList")
+        def enableLocalLearning(self, source_ids: object) -> None:
+            try:
+                payload = _enable_home_learning(_coerce_source_ids(source_ids))
+            except SetpieceError as exc:
+                self._last_event_label = str(exc)
+                self.metricsChanged.emit()
+                return
+            _complete_home_learning_onboarding("enabled", _coerce_source_ids(source_ids))
+            self._refresh_learning(payload)
+
+        @Slot()
+        def disableLocalLearning(self) -> None:
+            _complete_home_learning_onboarding("disabled", ())
+            self._refresh_learning(_disable_home_learning())
+
+        @Slot()
+        def skipLearningOnboarding(self) -> None:
+            self._onboarding_state = _skip_home_learning_onboarding()
+            self._last_event_label = "Local Learning skipped"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def customizeLearningSources(self) -> None:
+            self._onboarding_state = _skip_home_learning_onboarding(reopen_settings_later=True)
+            self._last_event_label = "Choose Local Learning sources"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def requestDeleteLearningData(self) -> None:
+            self._learning_delete_pending = True
+            self._last_event_label = "Confirm Delete Learning Data"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def cancelDeleteLearningData(self) -> None:
+            self._learning_delete_pending = False
+            self._last_event_label = "Delete Learning Data canceled"
+            self.learningChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def confirmDeleteLearningData(self) -> None:
+            payload = _delete_home_learning_data()
+            self._learning_delete_pending = False
+            self._refresh_learning()
+            self._last_event_label = f"Deleted {payload.get('deleted_count', 0)} learning data files"
+            self.metricsChanged.emit()
+
+        @Slot()
+        def openLearningActivityJournal(self) -> None:
+            payload = _home_learning_journal_payload()
+            path = Path(str(payload.get("path") or ""))
+            if path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+                self._last_event_label = f"Opened Activity Journal ({payload.get('count', 0)} events)"
+            else:
+                self._last_event_label = "Activity Journal is empty"
+            self.metricsChanged.emit()
+
+        @Slot(str)
+        def closeKeepOpenBrowser(self, card_id: str) -> None:
+            if self._mock:
+                self._last_event_label = "Close browser is disabled in mock mode"
+                self.metricsChanged.emit()
+                return
+            if self._action_busy:
+                self._last_event_label = "Another Home action is still running"
+                self.metricsChanged.emit()
+                return
+            closed = self._dispatcher.service.close_browser_state()
+            self._last_event_label = (
+                "Closed keep-open browser state"
+                if closed
+                else "No keep-open browser state to close"
+            )
+            if card_id:
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=card_id,
+                        keep_open_active=False,
+                        subtitle=self._last_event_label,
+                    )
+                )
+            self.metricsChanged.emit()
+
+        @Slot()
+        def stopCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="stop")
+            if self._runtime_control is None:
+                self._last_event_label = "No runtime run is active"
+                self.metricsChanged.emit()
+                return
+            self._runtime_control.stop()
+            self.answerConfirmation(False)
+            self._runtime_paused = False
+            self._last_event_label = "Stopping current run"
+            self.actionStateChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def pauseCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="pause")
+            if self._runtime_control is None:
+                self._last_event_label = "No runtime run is active"
+                self.metricsChanged.emit()
+                return
+            self._runtime_control.pause()
+            self._runtime_paused = True
+            self._last_event_label = "Pausing current run"
+            self.actionStateChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot()
+        def resumeCurrentRun(self) -> None:
+            record_event("home.runtime_control.requested", action="resume")
+            if self._runtime_control is None:
+                self._last_event_label = "No runtime run is active"
+                self.metricsChanged.emit()
+                return
+            self._runtime_control.resume()
+            self._runtime_paused = False
+            self._last_event_label = "Resuming current run"
+            self.actionStateChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot(bool)
+        def answerConfirmation(self, accepted: bool) -> None:
+            record_event("home.confirmation.answered", accepted=accepted)
+            if accepted and self._confirmation_card_id:
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=self._confirmation_card_id,
+                        status=HomeCardStatus.RUNNING,
+                        subtitle="Starting...",
+                        description="Approval accepted; runtime is resuming.",
+                        **_clear_wait_fields(),
+                    )
+                )
+            self._confirmation_card_id = ""
+            self._confirmation_result = accepted
+            self._confirmation_pending = False
+            self._confirmation_prompt = ""
+            self._confirmation_event.set()
+            self.confirmationChanged.emit()
+
+        def _apply_events(self, events: Sequence[HomeRuntimeEvent]) -> None:
+            if not events:
+                return
+            latest = events[-1]
+            status_label = latest.status.value if latest.status is not None else "updated"
+            self._last_event_label = f"{latest.card_id}: {status_label}"
+            self.payloadChanged.emit()
+            self.metricsChanged.emit()
+
+        def _start_runtime_action(self, card_id: str, action: HomeCardAction) -> None:
+            if self._action_guard(card_id, action):
+                return
+            from setpiece.runtime_control import RuntimeControl
+
+            self._runtime_control = RuntimeControl()
+            self._runtime_paused = False
+            self._set_action_busy(True)
+            label = "Dry run" if action is HomeCardAction.DRY_RUN else "Run"
+            self._publish_event(
+                HomeRuntimeEvent(
+                    card_id=card_id,
+                    status=HomeCardStatus.RUNNING,
+                    subtitle=f"{label} starting",
+                    description="Runtime worker started",
+                    keep_open_active=False,
+                    wait_action="",
+                    wait_target="",
+                    wait_started_at="",
+                    wait_elapsed_seconds="",
+                    wait_timeout_seconds="",
+                )
+            )
+            future = self._ensure_worker_executor().submit(
+                self._run_runtime_action,
+                card_id,
+                action,
+                self._runtime_control,
+            )
+            self._action_future = future
+            future.add_done_callback(lambda completed: self._complete_action_future(card_id, completed))
+
+        def _start_action(self, card_id: str, action: HomeCardAction) -> None:
+            if self._action_guard(card_id, action):
+                return
+            self._set_action_busy(True)
+            if action is HomeCardAction.DOCTOR:
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=card_id,
+                        status=HomeCardStatus.RUNNING,
+                        subtitle="Doctor running",
+                        description="Checking recipe compatibility",
+                    )
+                )
+            future = self._ensure_worker_executor().submit(self._dispatcher.dispatch, action, card_id)
+            self._action_future = future
+            future.add_done_callback(lambda completed: self._complete_action_future(card_id, completed))
+
+        def _run_runtime_action(self, card_id: str, action: HomeCardAction, control: object) -> object:
+            return self._dispatcher.dispatch(
+                action,
+                card_id,
+                runtime_event_callback=lambda event: self.runtimeEventReceived.emit(card_id, event),
+                status_callback=lambda event: self.statusEventReceived.emit(card_id, event),
+                confirmer=lambda prompt: self._confirm(card_id, prompt),
+                control=control,
+            )
+
+        def _confirm(self, card_id: str, prompt: object) -> bool:
+            self._confirmation_event.clear()
+            self.confirmationRequested.emit(card_id, prompt)
+            self._heartbeat_home_confirmation()
+            while not self._confirmation_event.wait(timeout=5):
+                self._heartbeat_home_confirmation()
+                if self._runtime_control is not None:
+                    self._runtime_control.raise_if_stopped()
+            self._heartbeat_home_confirmation()
+            return self._confirmation_result
+
+        def _heartbeat_home_confirmation(self) -> None:
+            if self._runtime_control is not None:
+                self._runtime_control.heartbeat()
+            executor = getattr(self._dispatcher.service, "_last_executor", None)
+            run_logger = getattr(executor, "run_logger", None)
+            if run_logger is None:
+                return
+            record_run_state = getattr(run_logger, "record_run_state", None)
+            if record_run_state is not None:
+                record_run_state("confirming", event="confirmation.waiting", message="confirmation pending")
+                return
+            heartbeat = getattr(run_logger, "heartbeat", None)
+            if heartbeat is not None:
+                heartbeat()
+
+        def _complete_action_future(self, card_id: str, future: Future[object]) -> None:
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - report worker failures to Home.
+                self.actionFailed.emit(card_id, str(exc))
+                return
+            self.actionCompleted.emit(card_id, result)
+
+        def _ensure_worker_executor(self) -> ThreadPoolExecutor:
+            if self._loader_executor is None:
+                self._loader_executor = ThreadPoolExecutor(
+                    max_workers=2,
+                    thread_name_prefix="setpiece-home-worker",
+                )
+            return self._loader_executor
+
+        def _action_guard(self, card_id: str, action: HomeCardAction) -> bool:
+            if self._mock:
+                self._last_event_label = f"{action.value} is disabled in mock mode"
+                self.metricsChanged.emit()
+                return True
+            if self._action_busy:
+                self._last_event_label = "Another Home action is still running"
+                self.metricsChanged.emit()
+                return True
+            if not card_id:
+                self._last_event_label = "No recipe card selected"
+                self.metricsChanged.emit()
+                return True
+            return False
+
+        def _publish_event(self, event: HomeRuntimeEvent) -> None:
+            record_event("home.runtime_event", home_event=event)
+            if self._activity.record(event) is not None:
+                self.recentActivityChanged.emit()
+            self._bridge.queue_runtime_event(event)
+            if _should_flush_home_event(event):
+                self._apply_events(self._bridge.flush())
+
+        def _refresh_learning(self, payload: dict[str, object] | None = None) -> None:
+            self._learning_status = payload or _home_learning_status_payload()
+            self._learning_sources = _home_learning_sources_payload()
+            self._onboarding_state = _home_onboarding_state_payload()
+            self.learningChanged.emit()
+            message = str(self._learning_status.get("message") or "").strip()
+            if message:
+                self._last_event_label = message
+                self.metricsChanged.emit()
+
+        def _set_action_busy(self, busy: bool) -> None:
+            if self._action_busy == busy:
+                return
+            self._action_busy = busy
+            self.actionStateChanged.emit()
+
+        def _complete_installed_recipe_load(self, future: Future[HomeModel]) -> None:
+            try:
+                model = future.result()
+            except Exception as exc:  # noqa: BLE001 - report best-effort Home load failures.
+                self.installedModelLoadFailed.emit(str(exc))
+                return
+            self.installedModelLoaded.emit(model)
+
+        @Slot(object)
+        def _replace_model(self, model: object) -> None:
+            if not isinstance(model, HomeModel):
+                return
+            self._model = model
+            self._bridge.replace_model(model)
+            self._last_event_label = f"{len(model.cards)} installed recipes"
+            self.payloadChanged.emit()
+            self.metricsChanged.emit()
+
+        @Slot(str)
+        def _mark_load_failed(self, message: str) -> None:
+            self._last_event_label = f"Home load failed: {message}"
+            self.metricsChanged.emit()
+
+        @Slot(str, object)
+        def _complete_action(self, card_id: str, outcome: object) -> None:
+            action = getattr(outcome, "action", None)
+            if action is HomeCardAction.DOCTOR:
+                report = getattr(outcome, "result", None)
+                compatibility = str(getattr(report, "compatibility", "complete"))
+                status = _doctor_status(compatibility)
+                self._publish_event(
+                    HomeRuntimeEvent(
+                        card_id=card_id,
+                        status=status,
+                        subtitle=f"Doctor: {compatibility}",
+                        description=_doctor_summary(report),
+                    )
+                )
+            elif action in {HomeCardAction.EDIT_RECIPE, HomeCardAction.OPEN_LOGS}:
+                path = getattr(outcome, "path", None)
+                if isinstance(path, Path):
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+                    self._last_event_label = f"Opened {path}"
+                    self.metricsChanged.emit()
+                else:
+                    self._last_event_label = "Path could not be resolved"
+                    self.metricsChanged.emit()
+            else:
+                self._last_event_label = f"{card_id}: action finished"
+                self.metricsChanged.emit()
+            self._runtime_control = None
+            self._runtime_paused = False
+            self.actionStateChanged.emit()
+            self._set_action_busy(False)
+
+        @Slot(str, str)
+        def _mark_action_failed(self, card_id: str, message: str) -> None:
+            self._publish_event(
+                HomeRuntimeEvent(
+                    card_id=card_id,
+                    status=HomeCardStatus.FAILED,
+                    subtitle="Action failed",
+                    description=message,
+                )
+            )
+            self._runtime_control = None
+            self._runtime_paused = False
+            self.actionStateChanged.emit()
+            self._set_action_busy(False)
+
+        @Slot(str, object)
+        def _apply_runtime_event(self, card_id: str, event: object) -> None:
+            home_event = home_event_from_runtime(card_id, event)
+            if home_event is not None:
+                self._publish_event(home_event)
+
+        @Slot(str, object)
+        def _apply_status_event(self, card_id: str, event: object) -> None:
+            self._publish_event(home_event_from_step_status(card_id, event))
+
+        @Slot(str, object)
+        def _request_confirmation(self, card_id: str, prompt: object) -> None:
+            record_event("home.confirmation.requested", card_id=card_id, prompt=prompt)
+            self._confirmation_card_id = card_id
+            self._show_confirmation_status(card_id, prompt)
+            self._confirmation_presenter.request_confirmation(
+                prompt,
+                on_decision=self.confirmationDecision.emit,
+            )
+
+        def _show_confirmation_status(self, card_id: str, prompt: object) -> None:
+            from setpiece.overlay import format_confirmation_request
+
+            self._confirmation_pending = True
+            self._confirmation_prompt = format_confirmation_request(prompt)
+            self.confirmationChanged.emit()
+            self._publish_event(
+                HomeRuntimeEvent(
+                    card_id=card_id,
+                    status=HomeCardStatus.WARNING,
+                    subtitle="Confirmation required",
+                    description=self._confirmation_prompt,
+                )
+            )
+
+    config = load_app_config()
+    app = QApplication.instance() or QApplication(sys.argv)
+    apply_qt_application_icon(app, QIcon)
+    overlay_controller = None if mock else _create_overlay_controller()
+    confirmation_presenter = None if mock else _create_confirmation_presenter()
+    model = (
+        create_mock_home_model(config.home.categories)
+        if mock
+        else HomeModel(categories=config.home.categories)
+    )
+    bridge = HomeEventBridge(model, target_hz=30.0)
+    controller = HomeController(
+        model,
+        bridge,
+        mock=mock,
+        overlay_controller=overlay_controller,
+        confirmation_presenter=confirmation_presenter,
+        process_starter=QProcess.startDetached,
+    )
+    emitter = FakeHomeStatusEmitter(bridge.queue_runtime_event) if mock else None
+
+    drain_timer = QTimer(controller)
+    drain_timer.setInterval(max(1, round(bridge.interval_seconds * 1000)))
+    drain_timer.timeout.connect(controller.drainMockEvents)
+
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("setpieceMockMode", mock)
+    engine.rootContext().setContextProperty("setpieceHomePayload", model.to_qml())
+    engine.rootContext().setContextProperty("setpieceRoomsPayload", _rooms_payload())
+    engine.rootContext().setContextProperty("setpieceHomeController", controller)
+
+    qml_resource = files("setpiece.home.qml").joinpath("Home.qml")
+    with as_file(qml_resource) as qml_path:
+        engine.load(QUrl.fromLocalFile(str(qml_path)))
+        if not engine.rootObjects():
+            raise SetpieceError(f"Home UI failed to load: {qml_path}")
+    record_event("home.ready", mock=mock)
+
+    drain_timer.start()
+    if emitter is not None:
+        emitter.start()
+        app.aboutToQuit.connect(emitter.stop)
+    else:
+        QTimer.singleShot(0, controller.loadInstalledRecipes)
+    app.aboutToQuit.connect(controller.shutdown)
+    try:
+        return app.exec()
+    finally:
+        if emitter is not None:
+            emitter.stop()
+        controller.shutdown()
+
+
+def _doctor_summary(report: object) -> str:
+    errors = getattr(report, "errors_count", None)
+    warnings = getattr(report, "warnings_count", None)
+    if errors is not None and warnings is not None:
+        return f"{errors} errors, {warnings} warnings"
+    return "Doctor completed"
+
+
+def _doctor_status(compatibility: str) -> HomeCardStatus:
+    if compatibility == "compatible":
+        return HomeCardStatus.SUCCESS
+    if compatibility == "incompatible":
+        return HomeCardStatus.FAILED
+    return HomeCardStatus.WARNING
+
+
+def _rooms_payload() -> dict[str, object]:
+    from setpiece.rooms import room_list_payload
+
+    return room_list_payload()
+
+
+def _home_learning_status_payload() -> dict[str, object]:
+    from setpiece.learning_service import learning_status_payload
+
+    return learning_status_payload()
+
+
+def _home_learning_sources_payload() -> dict[str, object]:
+    from setpiece.learning_service import learning_sources_payload
+
+    return learning_sources_payload()
+
+
+def _enable_home_learning(source_ids: Sequence[str]) -> dict[str, object]:
+    from setpiece.learning_service import enable_learning
+
+    return enable_learning(source_ids)
+
+
+def _disable_home_learning() -> dict[str, object]:
+    from setpiece.learning_service import disable_learning
+
+    return disable_learning()
+
+
+def _home_learning_journal_payload() -> dict[str, object]:
+    from setpiece.learning_service import learning_journal_payload
+
+    return learning_journal_payload()
+
+
+def _delete_home_learning_data() -> dict[str, object]:
+    from setpiece.learning_service import delete_learning_data
+
+    return delete_learning_data()
+
+
+def _home_onboarding_state_payload() -> dict[str, object]:
+    from setpiece.onboarding import load_onboarding_state
+
+    return _onboarding_payload(load_onboarding_state())
+
+
+def _complete_home_learning_onboarding(
+    decision: str,
+    source_ids: Sequence[str],
+) -> dict[str, object]:
+    from setpiece.onboarding import complete_onboarding, save_onboarding_state
+
+    state = complete_onboarding(
+        local_learning_decision=decision,
+        selected_recommended_source_ids=list(source_ids),
+    )
+    return _onboarding_payload(save_onboarding_state(state))
+
+
+def _skip_home_learning_onboarding(*, reopen_settings_later: bool = True) -> dict[str, object]:
+    from setpiece.onboarding import save_onboarding_state, skip_onboarding
+
+    return _onboarding_payload(
+        save_onboarding_state(skip_onboarding(reopen_settings_later=reopen_settings_later))
+    )
+
+
+def _onboarding_payload(state: object) -> dict[str, object]:
+    payload = dict(state.to_dict()) if hasattr(state, "to_dict") else {}
+    payload["should_show_first_run"] = bool(getattr(state, "should_show_first_run", False))
+    payload["local_learning_enabled"] = bool(getattr(state, "local_learning_enabled", False))
+    payload["has_selected_learning_sources"] = bool(
+        getattr(state, "has_selected_learning_sources", False)
+    )
+    return payload
+
+
+def _coerce_source_ids(raw: object) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, Sequence):
+        return tuple(str(item) for item in raw)
+    return ()
+
+
+def _room_launch_command(room_id: str, host: str) -> tuple[str, list[str], object]:
+    from setpiece.rooms import room_by_id
+
+    room = room_by_id(room_id)
+    normalized_host = _normalize_room_host(host)
+    if _running_from_packaged_app():
+        return (
+            sys.executable,
+            [
+                "--room",
+                room.room_id,
+                "--host",
+                normalized_host,
+                "--taskbar-policy",
+                "respect",
+            ],
+            room,
+        )
+    return (
+        sys.executable,
+        [
+            "-m",
+            "setpiece",
+            "canvas",
+            "use",
+            room.canvas_id,
+            "--host",
+            normalized_host,
+            "--taskbar-policy",
+            "respect",
+        ],
+        room,
+    )
+
+
+def _classic_gui_launch_command() -> tuple[str, list[str]]:
+    if _running_from_packaged_app():
+        return sys.executable, ["--classic-gui"]
+    return sys.executable, ["-m", "setpiece", "gui"]
+
+
+def _normalize_room_host(host: str) -> str:
+    normalized = str(host or "windowed").strip().casefold().replace("_", "-")
+    if normalized in {"windowed", "desktop-work-area"}:
+        return normalized
+    raise SetpieceError("Room host must be 'windowed' or 'desktop-work-area'.")
+
+
+def _running_from_packaged_app() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def _should_flush_home_event(event: HomeRuntimeEvent) -> bool:
+    if event.last_run_status is not None:
+        return True
+    if event.status is HomeCardStatus.FAILED:
+        return True
+    if event.subtitle == "Confirmation required":
+        return True
+    if event.subtitle == "Starting...":
+        return True
+    return False
+
+
+def _create_overlay_controller() -> object | None:
+    try:
+        from setpiece.ui.overlay import QtOverlayController
+    except Exception:  # noqa: BLE001 - Home remains usable if overlay setup is unavailable.
+        return None
+    try:
+        return QtOverlayController()
+    except Exception:  # noqa: BLE001 - visual trust remains best-effort.
+        return None
+
+
+def _create_confirmation_presenter() -> object | None:
+    try:
+        from setpiece.home.confirmation import (
+            create_qt_confirmation_presenter,
+            create_win32_confirmation_presenter,
+        )
+    except Exception:  # noqa: BLE001 - Home can fall back to inline status only.
+        return None
+    try:
+        return create_qt_confirmation_presenter()
+    except Exception:  # noqa: BLE001 - use native fallback before inline Home fallback.
+        if sys.platform == "win32":
+            try:
+                return create_win32_confirmation_presenter()
+            except Exception:  # noqa: BLE001 - confirmation fallback still preserves safety.
+                return None
+        return None
+
+
+class _InlineHomeConfirmationPresenter:
+    def request_confirmation(self, request: object, *, on_decision: Any) -> None:
+        return
+
+
+def _should_show_inline_confirmation(confirmation_presenter: object | None) -> bool:
+    return confirmation_presenter is None

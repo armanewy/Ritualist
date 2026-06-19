@@ -1,6 +1,6 @@
-# Ritualist Theme Tokens
+# Setpiece Theme Tokens
 
-Theme tokens are declarative visual data for built-in Ritualist UI surfaces.
+Theme tokens are declarative visual data for built-in Setpiece UI surfaces.
 They are not executable code and must not load arbitrary QML, HTML, JavaScript,
 or Python.
 
@@ -9,9 +9,9 @@ or Python.
 Initial theme documents should use a typed YAML shape:
 
 ```yaml
-schema: ritualist.theme.v1
-id: ritualist.paper
-name: Ritualist Paper
+schema: setpiece.theme.v1
+id: setpiece.paper
+name: Setpiece Paper
 version: 0.1.0
 tokens:
   color.background: "#f6f2ea"
@@ -74,7 +74,7 @@ without renaming the core schema:
 room:
   name: Gaming Room
   description: Setup and control a gaming session safely.
-theme: ritualist.paper
+theme: setpiece.paper
 components: []
 ```
 

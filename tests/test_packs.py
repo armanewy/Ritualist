@@ -8,8 +8,8 @@ import yaml
 
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.packs import (
+from setpiece.cli import app
+from setpiece.packs import (
     MANIFEST_NAME,
     README_NAME,
     RECIPE_NAME,
@@ -22,7 +22,7 @@ from ritualist.packs import (
     list_imports,
     validate_pack,
 )
-from ritualist.recipe_loader import load_recipe
+from setpiece.recipe_loader import load_recipe
 
 
 SAFETY = {
@@ -78,7 +78,7 @@ def test_validate_pack_rejects_missing_manifest(tmp_path):
 
 
 def test_validate_pack_rejects_unknown_schema(tmp_path):
-    manifest = _manifest(schema="ritualist.pack.v2")
+    manifest = _manifest(schema="setpiece.pack.v2")
     path = _write_pack(tmp_path, manifest=manifest, recipe=_recipe())
 
     with pytest.raises(PackValidationError, match="unsupported pack schema"):
@@ -262,7 +262,7 @@ steps:
     )
     readme_path = tmp_path / "README-source.md"
     readme_path.write_text("# Demo\nReview before enabling.\n", encoding="utf-8")
-    out_path = tmp_path / "demo.ritualistpack"
+    out_path = tmp_path / "demo.setpiecepack"
 
     result = export_recipe_pack(recipe_path, out_path, readme_path=readme_path)
 
@@ -302,7 +302,7 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    out_path = tmp_path / "secret.ritualistpack"
+    out_path = tmp_path / "secret.setpiecepack"
 
     export_recipe_pack(recipe_path, out_path)
 
@@ -344,7 +344,7 @@ name: Privacy Demo
 variables:
   battle_net_app: C:\\Users\\aoztu\\AppData\\Local\\Battle.net\\Battle.net Launcher.exe
   install_root: C:\\Program Files\\Vendor\\App.exe
-  browser_profile: /home/aoztu/.config/ritualist/browser-profiles/chromium/default
+  browser_profile: /home/aoztu/.config/setpiece/browser-profiles/chromium/default
 steps:
   - action: app.launch
     command: "{{ battle_net_app }}"
@@ -353,7 +353,7 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    out_path = tmp_path / "privacy.ritualistpack"
+    out_path = tmp_path / "privacy.setpiecepack"
 
     export_recipe_pack(recipe_path, out_path)
 
@@ -373,11 +373,11 @@ steps:
 def test_gaming_mode_sample_exports_and_validates_as_pack(tmp_path):
     sample_path = (
         Path(__file__).resolve().parents[1]
-        / "ritualist"
+        / "setpiece"
         / "sample_recipes"
         / "gaming_mode.yaml"
     )
-    out_path = tmp_path / "gaming_mode.ritualistpack"
+    out_path = tmp_path / "gaming_mode.setpiecepack"
 
     result = export_recipe_pack(sample_path, out_path)
     pack = validate_pack(out_path)
@@ -385,10 +385,10 @@ def test_gaming_mode_sample_exports_and_validates_as_pack(tmp_path):
     assert result.recipe_id == "gaming_mode"
     assert pack.manifest.id == "gaming_mode"
     assert pack.manifest.variables["ambience_url"]["validation_default"].startswith(
-        "https://example.invalid/ritualist-required/"
+        "https://example.invalid/setpiece-required/"
     )
     assert pack.recipe.variables["ambience_url"].startswith(
-        "https://example.invalid/ritualist-required/"
+        "https://example.invalid/setpiece-required/"
     )
     assert "browser.open" in pack.manifest.required_actions
     assert "desktop.click_text" in pack.manifest.required_actions
@@ -418,7 +418,7 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    out_path = tmp_path / "flow.ritualistpack"
+    out_path = tmp_path / "flow.setpiecepack"
 
     pack = validate_pack(export_recipe_pack(recipe_path, out_path).output_path)
 
@@ -477,13 +477,13 @@ def test_validate_pack_rejects_nested_coordinate_click_actions(tmp_path):
 def test_pack_import_quarantines_disabled_and_enable_copies_recipe(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(tmp_path, manifest=_manifest(), recipe=_recipe())
@@ -506,13 +506,13 @@ def test_pack_import_quarantines_disabled_and_enable_copies_recipe(tmp_path, mon
 def test_enable_import_allows_launch_actions_under_primitive_policy(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(
@@ -544,13 +544,13 @@ def test_enable_import_rejects_browser_click_actions_blocked_by_import_policy(
 ):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(
@@ -582,13 +582,13 @@ def test_enable_import_rejects_nested_branch_actions_blocked_by_import_policy(
 ):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(
@@ -623,13 +623,13 @@ def test_enable_import_rejects_nested_branch_actions_blocked_by_import_policy(
 def test_enable_import_allows_read_only_browser_wait_actions(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(
@@ -659,17 +659,17 @@ def test_enable_import_allows_read_only_browser_wait_when_playwright_missing(
 ):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     monkeypatch.setattr(
-        "ritualist.doctor._module_available",
+        "setpiece.doctor._module_available",
         lambda name: False if name == "playwright.sync_api" else True,
     )
     pack_path = _write_pack(
@@ -696,16 +696,16 @@ def test_enable_import_allows_read_only_browser_wait_when_playwright_missing(
 def test_enable_import_still_blocks_windows_only_doctor_errors(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "linux")
     manifest = _manifest(
         required_actions=["assert.window_exists"],
         required_capabilities=["windows_uia", "window_management"],
@@ -741,13 +741,13 @@ def test_enable_import_materializes_manifest_defaults_for_installed_recipe(
 ):
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     pack_path = _write_pack(
@@ -771,9 +771,9 @@ def test_enable_import_materializes_manifest_defaults_for_installed_recipe(
 
 def test_rejected_pack_is_not_imported(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     pack_path = _write_pack(
@@ -795,13 +795,13 @@ def test_rejected_pack_is_not_imported(tmp_path, monkeypatch):
 
 def test_pack_cli_export_import_and_list(tmp_path, monkeypatch):
     imported_root = tmp_path / "imported-packs"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     recipe_path = _write_recipe_file(tmp_path, "cli_demo")
-    out_path = tmp_path / "cli_demo.ritualistpack"
+    out_path = tmp_path / "cli_demo.setpiecepack"
 
     export_result = CliRunner().invoke(
         app,
@@ -822,7 +822,7 @@ def test_pack_cli_list_imports_reports_corrupt_records(monkeypatch):
     def raise_import_error():
         raise PackImportError("bad import record")
 
-    monkeypatch.setattr("ritualist.cli.list_pack_imports", raise_import_error)
+    monkeypatch.setattr("setpiece.cli.list_pack_imports", raise_import_error)
 
     result = CliRunner().invoke(app, ["pack", "list-imports"])
 
@@ -851,7 +851,7 @@ def _manifest(
         "id": "demo_pack",
         "name": "Demo Pack",
         "version": "1.0.0",
-        "required_ritualist_version": ">=0.1.0-alpha.1",
+        "required_setpiece_version": ">=0.1.0-alpha.1",
         "supported_os": ["windows", "macos", "linux"],
         "required_capabilities": required_capabilities or [],
         "required_actions": required_actions or ["wait.seconds"],
@@ -876,7 +876,7 @@ def _write_pack(
     recipe: dict[str, object] | None,
     extra: dict[str, str] | None = None,
 ) -> Path:
-    path = tmp_path / "demo.ritualistpack"
+    path = tmp_path / "demo.setpiecepack"
     with ZipFile(path, "w") as archive:
         if manifest is not None:
             archive.writestr("manifest.yaml", yaml.safe_dump(manifest, sort_keys=False))

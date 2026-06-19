@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -15,9 +15,9 @@ from ritualist.canvas import (
     CanvasRuntimeController,
     build_canvas_runtime_model,
 )
-from ritualist.actions.base import RunSummary, StepResult
-from ritualist.canvas.app import build_canvas_use_payload
-from ritualist.canvas.ritual_state import (
+from setpiece.actions.base import RunSummary, StepResult
+from setpiece.canvas.app import build_canvas_use_payload
+from setpiece.canvas.ritual_state import (
     RITUAL_STATE_SCHEMA_VERSION,
     RitualStateInputs,
     build_ritual_state,
@@ -25,7 +25,7 @@ from ritualist.canvas.ritual_state import (
     ritual_state_from_action_result,
     ritual_state_from_runtime_event,
 )
-from ritualist.run_logs import RunRecord
+from setpiece.run_logs import RunRecord
 
 
 def _canvas() -> CanvasDocument:
@@ -341,7 +341,7 @@ def test_interrupted_finished_event_populates_recovery_actions() -> None:
         SimpleNamespace(
             type="run.finished",
             state="interrupted",
-            message="Ritualist exited before finalizing this run.",
+            message="Setpiece exited before finalizing this run.",
             occurred_at="2026-06-18T00:01:00+00:00",
         ),
     )
@@ -355,7 +355,7 @@ def test_last_run_artifacts_and_interrupted_recovery_are_bounded(tmp_path: Path)
     record = _run_record(
         tmp_path,
         status="interrupted",
-        message="Ritualist exited before finalizing this run.",
+        message="Setpiece exited before finalizing this run.",
         extra_metadata={"interrupted_at": "2026-06-18T00:02:00+00:00"},
     )
 

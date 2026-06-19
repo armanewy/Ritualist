@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-from ritualist.activity_journal import JournalEvent
-from ritualist.agent.models import AgentRunState, AgentState, AgentStep
-from ritualist.agent.picker_model import HERO_ROOM_NAMES, build_picker_model
-from ritualist.recipe_loader import load_recipe
+from setpiece.activity_journal import JournalEvent
+from setpiece.agent.models import AgentRunState, AgentState, AgentStep
+from setpiece.agent.picker_model import HERO_ROOM_NAMES, build_picker_model
+from setpiece.recipe_loader import load_recipe
 
 
 def test_picker_uses_exact_hero_rooms_and_current_room_filter(tmp_path: Path) -> None:

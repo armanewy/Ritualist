@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.actions.metadata import (
+from setpiece.actions.metadata import (
     ALLOWED_CATEGORIES,
     ALLOWED_CONFIRMATION_POLICIES,
     ALLOWED_PLATFORMS,
     ALLOWED_SIDE_EFFECT_LEVELS,
     ActionMetadata,
 )
-from ritualist.actions.registry import ActionRegistry
-from ritualist.actions.registry import create_default_registry
+from setpiece.actions.registry import ActionRegistry
+from setpiece.actions.registry import create_default_registry
 
 
 def test_default_registry_contains_supported_actions():

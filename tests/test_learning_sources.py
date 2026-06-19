@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ritualist.learning_sources import (
+from setpiece.learning_sources import (
     ALLOWED_LEARNING_SOURCE_IDS,
     filter_allowed_learning_sources,
     get_learning_source,
@@ -13,7 +13,7 @@ def test_source_registry_only_exposes_allowed_v1_sources() -> None:
     registry = learning_source_registry()
 
     assert tuple(registry) == ALLOWED_LEARNING_SOURCE_IDS
-    assert set(registry) == {"ritualist_journal", "open_windows", "recent_items"}
+    assert set(registry) == {"setpiece_journal", "open_windows", "recent_items"}
     assert all(source.enabled_by_default is False for source in registry.values())
     assert all(source.background_collection is False for source in registry.values())
 
@@ -39,7 +39,7 @@ def test_source_registry_rejects_forbidden_capture_sources() -> None:
 def test_filter_allowed_learning_sources_ignores_unknown_and_forbidden_sources() -> None:
     assert filter_allowed_learning_sources(
         (
-            "ritualist_journal",
+            "setpiece_journal",
             "watch_me",
             "open-windows",
             "screenshots",
@@ -47,4 +47,4 @@ def test_filter_allowed_learning_sources_ignores_unknown_and_forbidden_sources()
             "browser_history",
             "open_windows",
         )
-    ) == ("ritualist_journal", "open_windows", "recent_items")
+    ) == ("setpiece_journal", "open_windows", "recent_items")

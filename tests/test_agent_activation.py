@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.agent.activation import (
+from setpiece.agent.activation import (
     ACTIVATION_INTENTS,
     ACTIVATION_SCHEMA_VERSION,
     ActivationIntent,
@@ -53,7 +53,7 @@ def test_startup_silent_helper_uses_startup_intent() -> None:
     "payload",
     [
         {},
-        {"schema_version": "ritualist.activation.v0", "intent": "open_picker"},
+        {"schema_version": "setpiece.activation.v0", "intent": "open_picker"},
         {"schema_version": ACTIVATION_SCHEMA_VERSION, "intent": "open_home"},
         {
             "schema_version": ACTIVATION_SCHEMA_VERSION,

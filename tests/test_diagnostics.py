@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from ritualist import diagnostics
+from setpiece import diagnostics
 
 
 def test_collect_diagnostics_includes_packaged_app_fields(monkeypatch, tmp_path):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import Recipe
-from ritualist.overlay import ConfirmationRequest
-from ritualist.run_logs import RunLogWriter
-from ritualist.runtime_control import RuntimeControl
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import Recipe
+from setpiece.overlay import ConfirmationRequest
+from setpiece.run_logs import RunLogWriter
+from setpiece.runtime_control import RuntimeControl
 
 
 def test_human_prompt_records_safe_operator_response_metadata(tmp_path) -> None:

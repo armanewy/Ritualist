@@ -10,22 +10,22 @@ from zipfile import ZipFile
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.cli import app
-from ritualist.executor import WorkflowExecutor
-from ritualist.integrations.battlenet_readiness import BattleNetReadinessState
-from ritualist.home import HomeRunHistoryCache, load_installed_home_cards
-from ritualist.models import Recipe
-from ritualist.packs import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.cli import app
+from setpiece.executor import WorkflowExecutor
+from setpiece.integrations.battlenet_readiness import BattleNetReadinessState
+from setpiece.home import HomeRunHistoryCache, load_installed_home_cards
+from setpiece.models import Recipe
+from setpiece.packs import (
     MANIFEST_NAME,
     PACK_SCHEMA_V1,
     RECIPE_NAME,
     import_pack,
 )
-from ritualist.recipe_loader import load_recipe
-from ritualist.run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
-from ritualist.runtime_control import RuntimeControl
-from ritualist.target_resolution import (
+from setpiece.recipe_loader import load_recipe
+from setpiece.run_logs import RunLogWriter, list_recent_runs, load_run, reconcile_running_runs
+from setpiece.runtime_control import RuntimeControl
+from setpiece.target_resolution import (
     TargetCandidate,
     TargetResolutionResult,
     TargetState,
@@ -43,8 +43,8 @@ def test_bundled_gaming_mode_validates_and_dry_runs_without_adapters(tmp_path, m
         writers.append(writer)
         return writer
 
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", writer_factory)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", writer_factory)
 
     validate_result = CliRunner().invoke(app, ["validate", str(sample_path)])
     dry_run_result = CliRunner().invoke(app, ["dry-run", str(sample_path)])
@@ -78,15 +78,15 @@ def test_bundled_gaming_mode_doctor_json_reports_healthy_when_dependencies_are_a
     window_calls = []
     label_calls = []
 
-    monkeypatch.setattr("ritualist.doctor.browser_profiles_dir", lambda: profile_root)
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda _name: object())
+    monkeypatch.setattr("setpiece.doctor.browser_profiles_dir", lambda: profile_root)
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda _name: object())
     monkeypatch.setattr(
-        "ritualist.adapters.window_manager.WindowsWindowManager.window_exists",
+        "setpiece.adapters.window_manager.WindowsWindowManager.window_exists",
         lambda self, **kwargs: window_calls.append(kwargs) or True,
     )
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
         lambda self, **kwargs: label_calls.append(kwargs) or True,
     )
 
@@ -163,13 +163,13 @@ def test_runs_show_run_and_interrupted_repair_use_local_run_logs(tmp_path, monke
             **kwargs,
         )
 
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", repair_runs)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", repair_runs)
     monkeypatch.setattr(
-        "ritualist.cli.list_recent_runs",
+        "setpiece.cli.list_recent_runs",
         lambda *, limit: list_recent_runs(limit=limit, base_dir=runs_root),
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_run",
+        "setpiece.cli.load_run",
         lambda ref: load_run(ref, base_dir=runs_root),
     )
 
@@ -199,13 +199,13 @@ def test_bundled_gaming_mode_keep_open_survives_declined_play_confirmation(
     fakes = FakeAdapters()
     keep_alive_calls = []
 
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
     monkeypatch.setattr(
-        "ritualist.cli.RunLogWriter",
+        "setpiece.cli.RunLogWriter",
         lambda: RunLogWriter(base_dir=tmp_path / "runs"),
     )
     monkeypatch.setattr(
-        "ritualist.cli._keep_alive_until_interrupted",
+        "setpiece.cli._keep_alive_until_interrupted",
         lambda: keep_alive_calls.append(True),
     )
     _install_fake_play_ready_resolution(monkeypatch)
@@ -293,16 +293,16 @@ def test_pack_import_quarantines_without_enabling_or_running(tmp_path, monkeypat
     recipes_root = tmp_path / "recipes"
     pack_path = _write_wait_pack(tmp_path)
 
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
-    monkeypatch.setattr("ritualist.cli.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.cli.imported_packs_path", lambda: imported_root)
 
     record = import_pack(pack_path)
 
@@ -313,7 +313,7 @@ def test_pack_import_quarantines_without_enabling_or_running(tmp_path, monkeypat
     def fail_load(*_args, **_kwargs):
         raise AssertionError("quarantined import should be rejected before recipe loading")
 
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", fail_load)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", fail_load)
     result = CliRunner().invoke(app, ["run", str(record.recipe_path)])
 
     assert result.exit_code == 1
@@ -321,7 +321,7 @@ def test_pack_import_quarantines_without_enabling_or_running(tmp_path, monkeypat
 
 
 def _gaming_mode_sample_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+    return Path(__file__).resolve().parents[1] / "setpiece" / "sample_recipes" / "gaming_mode.yaml"
 
 
 def _read_steps(run_dir: Path) -> list[dict[str, object]]:
@@ -347,7 +347,7 @@ def _write_steps(run_dir: Path, steps: list[dict[str, object]]) -> None:
 
 
 def _write_wait_pack(tmp_path: Path) -> Path:
-    path = tmp_path / "demo.ritualistpack"
+    path = tmp_path / "demo.setpiecepack"
     with ZipFile(path, "w") as archive:
         archive.writestr(
             MANIFEST_NAME,
@@ -357,7 +357,7 @@ def _write_wait_pack(tmp_path: Path) -> Path:
                     "id": "demo_pack",
                     "name": "Demo Pack",
                     "version": "1.0.0",
-                    "required_ritualist_version": ">=0.1.0-alpha.1",
+                    "required_setpiece_version": ">=0.1.0-alpha.1",
                     "supported_os": ["windows", "macos", "linux"],
                     "required_capabilities": [],
                     "required_actions": ["wait.seconds"],
@@ -389,8 +389,8 @@ def _write_wait_pack(tmp_path: Path) -> Path:
 
 def _install_fake_play_ready_resolution(monkeypatch) -> None:
     resolution = _fake_readiness_resolution(BattleNetReadinessState.PLAY_AVAILABLE_ENABLED)
-    monkeypatch.setattr("ritualist.predicates.resolve_target", lambda _target: resolution)
-    monkeypatch.setattr("ritualist.actions.target_actions.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("setpiece.predicates.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("setpiece.actions.target_actions.resolve_target", lambda _target: resolution)
 
 
 def _fake_readiness_resolution(readiness_state: BattleNetReadinessState) -> TargetResolutionResult:

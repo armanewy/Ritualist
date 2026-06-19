@@ -1,4 +1,4 @@
-# Ritualist v0.2.0-alpha.1 Release Checklist
+# Setpiece v0.2.0-alpha.1 Release Checklist
 
 Use this checklist for the local v0.2.0-alpha.1 Canvas-era release candidate.
 
@@ -7,7 +7,7 @@ Use this checklist for the local v0.2.0-alpha.1 Canvas-era release candidate.
 - [ ] Confirm clean git status.
 - [ ] Run `python -m pytest -q`.
 - [ ] Run `python -m pip install -e ".[dev]"`.
-- [ ] Run `python -m ritualist --help`.
+- [ ] Run `python -m setpiece --help`.
 - [ ] Run `python -m pip install -e ".[all,dev]"`.
 - [ ] Run `python -m playwright install chromium`.
 - [ ] Run `.\scripts\build_windows_app.ps1`.
@@ -15,7 +15,7 @@ Use this checklist for the local v0.2.0-alpha.1 Canvas-era release candidate.
 ## Dev CLI / Home / Pack Dogfood Commands
 
 Run this block from the development checkout before packaging. It does not run
-the real runtime smoke tests unless `RITUALIST_RUNTIME_SMOKE=1` is set.
+the real runtime smoke tests unless `SETPIECE_RUNTIME_SMOKE=1` is set.
 
 ```powershell
 $env:QT_QPA_PLATFORM = "offscreen"
@@ -23,27 +23,128 @@ $env:PYTHONFAULTHANDLER = "1"
 python -m pip install -e ".[all,dev]"
 python -m playwright install chromium
 python -m pytest -q
-python -m compileall -q ritualist tests
-python -m ritualist init
-python -m ritualist doctor gaming_mode --json --no-strict
-python -m ritualist dry-run gaming_mode
-python -m ritualist actions --json
-python -m ritualist home --help
-python -m ritualist pack --help
-python -m ritualist perf fake-run gaming_mode --json
-python -m ritualist perf home-model --mock-cards 100 --json
-python -m ritualist perf home-model --mock-cards 300 --json
-$packDir = Join-Path $env:TEMP "ritualist-pack-dogfood"
+python -m compileall -q setpiece tests
+python -m setpiece init
+python -m setpiece doctor gaming_mode --json --no-strict
+python -m setpiece dry-run gaming_mode
+python -m setpiece actions --json
+python -m setpiece home --help
+python -m setpiece pack --help
+python -m setpiece perf fake-run gaming_mode --json
+python -m setpiece perf home-model --mock-cards 100 --json
+python -m setpiece perf home-model --mock-cards 300 --json
+$packDir = Join-Path $env:TEMP "setpiece-pack-dogfood"
 New-Item -ItemType Directory -Force -Path $packDir | Out-Null
-$packPath = Join-Path $packDir "gaming_mode.ritualistpack"
-python -m ritualist pack export gaming_mode --out $packPath
-python -m ritualist pack import $packPath
-python -m ritualist pack list-imports
+$packPath = Join-Path $packDir "gaming_mode.setpiecepack"
+python -m setpiece pack export gaming_mode --out $packPath
+python -m setpiece pack import $packPath
+python -m setpiece pack list-imports
 Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
 Remove-Item Env:\PYTHONFAULTHANDLER -ErrorAction SilentlyContinue
 ```
 
 On Linux CI, keep `QT_QPA_PLATFORM=offscreen` for optional GUI/Home tests.
+
+## Setpiece Rebrand UX3 Evidence - 2026-06-19
+
+Status: Atomic product identity integration for UX3 human prototype review.
+This did not start UX4, did not add automation capabilities, and did not
+create a release tag.
+
+Starting HEAD:
+
+- `4136b09` (`Integrate Agent quiet instrument flow`).
+
+Rebrand scope completed:
+
+- Canonical Python package, CLI, GUI entry point, app data root, logs, scripts,
+  docs, contract IDs, QML context names, and packaging identity moved to
+  Setpiece.
+- `ritual` remains the domain noun for attended multi-step procedures.
+- Source identity kit material is preserved under `brand/setpiece-v1/`.
+- Packaged runtime brand assets are under `setpiece/assets/brand/` and are
+  loaded through packaged resources.
+- Legacy Ritualist data roots and old `.ritualistpack`, `.ritualistcanvas`,
+  `.ritualisttheme`, `.ritualistsuite`, and legacy schema IDs remain readable
+  only at migration/import compatibility boundaries.
+- `scripts/check_setpiece_rebrand.py` passed; remaining old-brand references
+  are limited to legacy compatibility tests/constants and historical
+  changelog/release evidence.
+
+Validation commands:
+
+- `python -m pytest -q`: `1468 passed, 2 skipped`.
+- `python -m compileall -q setpiece tests`: passed.
+- `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
+  passed for 48 managed files.
+- `python scripts/check_setpiece_rebrand.py`: passed.
+- `python -m setpiece --help`: passed.
+- `python -m setpiece doctor gaming_mode --json --no-strict`: compatible,
+  `0` errors, `0` warnings.
+- `python -m setpiece dry-run gaming_mode`: passed, `7` dry-run steps, final
+  status `success`.
+- Focused pack, schema, release-acceptance, and rebrand regression tests:
+  `72 passed`, including true old-manifest imports using
+  `required_ritualist_version` and legacy suite schema
+  `ritualist.suite_pack.v1`.
+- Offscreen Picker and Quiet Instrument QML contract tests:
+  `13 passed`.
+- `.\scripts\build_windows_app.ps1`: passed and built
+  `dist\Setpiece\Setpiece.exe`.
+- Packaged executable metadata:
+  `ProductName=Setpiece`, `FileDescription=Setpiece`,
+  `InternalName=Setpiece`, `OriginalFilename=Setpiece.exe`.
+- Packaged runtime resource checks passed for app icon, design tokens, and
+  nested tray-state assets. `dist\Ritualist` is absent.
+- `python -m setpiece migrate-legacy-data --dry-run --json`: passed with
+  `errors: []`; evidence saved at
+  `artifacts\setpiece-rebrand\migration-dry-run-20260619.json`.
+
+Packaged acceptance command:
+
+```powershell
+.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-setpiece-rebrand-final-pass
+```
+
+Packaged acceptance result:
+
+- `32 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
+- Summary JSON:
+  `artifacts\release-acceptance-setpiece-rebrand-final-pass\acceptance-summary.json`
+- Summary Markdown:
+  `artifacts\release-acceptance-setpiece-rebrand-final-pass\acceptance-summary.md`
+- Evidence root:
+  `artifacts\release-acceptance-setpiece-rebrand-final-pass\evidence`
+
+Acceptance coverage recorded:
+
+- Packaged Home, Canvas Use Mode, and classic GUI opened and stayed alive.
+- `gaming_desktop` rendered with expected controls and recent activity.
+- Ritual card Doctor, Dry Run, and safe Run paths passed.
+- Runtime status, pause/resume/stop, target preview, declined confirmation,
+  `show-run`, and hard-kill interrupted repair evidence passed.
+- Native confirmation appeared above the fake Battle.net fixture.
+- No recording or preview-capture surface was exposed.
+- Canvas/theme packs and Suite Packs imported into quarantine without auto-run.
+- Arbitrary component code was rejected.
+- 100/300 component performance and QML heartbeat evidence were recorded.
+
+Release truth from generated summary:
+
+- `engine_tests_pass`: `NOT_RUN` in the packaged harness; full test suite
+  evidence is recorded separately above.
+- `simulated_acceptance_pass`: `PASS`.
+- `live_integration_pass`: `NOT_RUN`.
+- `human_ux_pass`: `NOT_RUN`.
+- `release_pass`: `NOT_RUN`.
+- `taggable`: `false`.
+- Tag created: `false`.
+
+Release blocker status:
+
+- Live real-application integration is still `NOT_RUN`.
+- Human UX review is still `NOT_RUN`.
+- `v0.2.0-alpha.1` is not taggable from this evidence alone.
 
 ## Set 2 Wave F1 Contract Validation - 2026-06-18
 
@@ -59,7 +160,7 @@ Starting HEAD:
 Contract updates validated:
 
 - Added `browser.open_native` as an HTTP/HTTPS-only OS default browser handoff.
-  It does not initialize Playwright, create a Ritualist browser profile, or claim
+  It does not initialize Playwright, create a Setpiece browser profile, or claim
   DOM/media control.
 - Kept `browser.open` as the managed Playwright browser session and documented
   its dedicated-profile behavior.
@@ -85,12 +186,12 @@ Contract updates validated:
 Validation commands:
 
 - `python -m pytest -q`: `1230 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 45 managed files.
 - `.\scripts\build_windows_app.ps1`: passed and rebuilt
-  `dist\Ritualist\Ritualist.exe`.
-- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f1-rerun`:
+  `dist\Setpiece\Setpiece.exe`.
+- `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f1-rerun`:
   passed with `32 PASS`, `0 FAIL`, and `0 NEEDS_HUMAN_REVIEW`.
 
 Acceptance artifacts:
@@ -146,36 +247,36 @@ Repository and environment:
 - `python -m playwright install chromium`: passed.
 - `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
   `402 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 
 CLI validation:
 
-- `python -m ritualist init`: passed; app data was already up to date.
-- `python -m ritualist doctor gaming_mode --json --no-strict`: passed;
+- `python -m setpiece init`: passed; app data was already up to date.
+- `python -m setpiece doctor gaming_mode --json --no-strict`: passed;
   compatibility status `compatible`, `errors_count: 0`, `warnings_count: 0`.
-- `python -m ritualist dry-run gaming_mode`: passed; final run state `success`,
+- `python -m setpiece dry-run gaming_mode`: passed; final run state `success`,
   keep-open inactive.
-- `python -m ritualist actions --json`: passed.
-- `python -m ritualist perf fake-run gaming_mode --json`: passed in 18.219 ms,
+- `python -m setpiece actions --json`: passed.
+- `python -m setpiece perf fake-run gaming_mode --json`: passed in 18.219 ms,
   7/7 fake steps successful.
-- `python -m ritualist perf home-model --mock-cards 100 --json`: passed in
+- `python -m setpiece perf home-model --mock-cards 100 --json`: passed in
   12.827 ms, 100 cards, 6 categories, no warnings.
-- `python -m ritualist perf home-model --mock-cards 300 --json`: passed in
+- `python -m setpiece perf home-model --mock-cards 300 --json`: passed in
   13.425 ms, 300 cards, 6 categories, no warnings.
 
 Packaged build validation:
 
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
-- Verified `dist\Ritualist\Ritualist.exe` exists.
+  `dist\Setpiece\Setpiece.exe`.
+- Verified `dist\Setpiece\Setpiece.exe` exists.
 - Verified bundled sample recipe exists:
-  `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`.
+  `dist\Setpiece\_internal\setpiece\sample_recipes\gaming_mode.yaml`.
 - Verified bundled Home QML exists:
-  `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`.
-- Brief packaged launch created a `Ritualist Home` window.
+  `dist\Setpiece\_internal\setpiece\home\qml\Home.qml`.
+- Brief packaged launch created a `Setpiece Home` window.
 - Existing old `startup-error.log` was not modified by the normal packaged launch.
 - PyInstaller still reports Conda-environment warnings in
-  `build\Ritualist\warn-Ritualist.txt`, including optional/platform-specific
+  `build\Setpiece\warn-Setpiece.txt`, including optional/platform-specific
   missing modules and MKL/SYCL/MSMPI-related DLL warnings. No startup failure was
   observed from those warnings in this validation.
 
@@ -199,17 +300,17 @@ Packaged Home confirmation trust regression:
   was treated as a release blocker because a risky desktop action confirmation
   must remain visible above the target app.
 - Fix applied for the next rebuild: Home now creates a `QApplication` for widget
-  support, packaged builds explicitly include `ritualist.home.confirmation`, the
+  support, packaged builds explicitly include `setpiece.home.confirmation`, the
   Qt confirmation dialog is promoted with topmost/foreground Win32 calls, and a
   topmost Win32 MessageBox fallback is available if Qt dialog presentation fails.
 - Post-fix validation: `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m
   pytest -q` passed with `455 passed, 1 skipped`; `python -m compileall -q
-  ritualist tests`, `python -m ritualist dry-run gaming_mode`, `python -m
-  ritualist actions --json`, `python -m ritualist doctor gaming_mode --json
-  --no-strict`, and `python -m ritualist perf fake-run gaming_mode --json`
-  passed; `.\scripts\build_windows_app.ps1` rebuilt `dist\Ritualist\Ritualist.exe`;
-  a brief packaged launch smoke opened a `Ritualist Home` window.
-- Re-test requirement: after rebuilding `dist\Ritualist\Ritualist.exe`, start
+  setpiece tests`, `python -m setpiece dry-run gaming_mode`, `python -m
+  setpiece actions --json`, `python -m setpiece doctor gaming_mode --json
+  --no-strict`, and `python -m setpiece perf fake-run gaming_mode --json`
+  passed; `.\scripts\build_windows_app.ps1` rebuilt `dist\Setpiece\Setpiece.exe`;
+  a brief packaged launch smoke opened a `Setpiece Home` window.
+- Re-test requirement: after rebuilding `dist\Setpiece\Setpiece.exe`, start
   `gaming_mode` from Home and verify the Play confirmation appears as a separate
   top-level/native dialog above Battle.net, not as the inline Home panel.
 
@@ -219,31 +320,31 @@ Automated Windows development-checkout checks passed:
 - `python -m playwright install chromium`.
 - `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
   `402 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`.
-- `python -m ritualist init`.
-- `python -m ritualist doctor gaming_mode --json --no-strict`.
-- `python -m ritualist dry-run gaming_mode`.
-- `python -m ritualist perf home-model --mock-cards 100 --json`:
+- `python -m compileall -q setpiece tests`.
+- `python -m setpiece init`.
+- `python -m setpiece doctor gaming_mode --json --no-strict`.
+- `python -m setpiece dry-run gaming_mode`.
+- `python -m setpiece perf home-model --mock-cards 100 --json`:
   100 cards, 6 categories, 10.915 ms, no warnings.
-- `python -m ritualist perf home-model --mock-cards 300 --json`:
+- `python -m setpiece perf home-model --mock-cards 300 --json`:
   300 cards, 6 categories, 12.545 ms, no warnings.
-- `python -m ritualist pack export gaming_mode --out <temp>`.
-- `python -m ritualist pack import <temp>`.
+- `python -m setpiece pack export gaming_mode --out <temp>`.
+- `python -m setpiece pack import <temp>`.
 - `.\scripts\build_windows_app.ps1`.
 
 Packaged app observations:
 
-- `dist\Ritualist\Ritualist.exe` launched a `Ritualist Home` window.
+- `dist\Setpiece\Setpiece.exe` launched a `Setpiece Home` window.
 - Cold packaged Home launch was observed between about 1.0 and 2.6 seconds.
 - Home rendered installed recipes after a QML fix that selects the first populated
   category instead of leaving an empty default category selected.
-- `dist\Ritualist\Ritualist.exe --classic-gui` launched and showed installed
+- `dist\Setpiece\Setpiece.exe --classic-gui` launched and showed installed
   recipe, Run, Dry Run, Doctor, Pause, Resume, Stop, Close Browser, folder, and
   About / Diagnostics controls.
 - About / Diagnostics was hardened to keep a persistent non-modal dialog and
   report construction failures instead of silently dropping the request.
 - PyInstaller build completed, with Conda-environment DLL warnings recorded in
-  `build\Ritualist\warn-Ritualist.txt`; no packaged startup failure was observed.
+  `build\Setpiece\warn-Setpiece.txt`; no packaged startup failure was observed.
 
 Manual Windows-only checks still required:
 
@@ -269,22 +370,22 @@ Repository and environment:
 - `python -m playwright install chromium`: passed.
 - `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
   `628 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
-- `python -m ritualist canvas validate gaming_desktop`: passed.
-- `python -m ritualist canvas runtime gaming_desktop --json`: passed.
-- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
-- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed.
-- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed.
+- `python -m compileall -q setpiece tests`: passed.
+- `python -m setpiece canvas validate gaming_desktop`: passed.
+- `python -m setpiece canvas runtime gaming_desktop --json`: passed.
+- `python -m setpiece canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m setpiece perf canvas-use --mock-components 100 --json`: passed.
+- `python -m setpiece perf canvas-use --mock-components 300 --json`: passed.
 
 Release-blocking packaged Canvas issue found and fixed:
 
 - The Windows build script collected Home QML and sample recipes, but not Canvas
   QML, Canvas submodules, or bundled sample canvases. Packaged Canvas Use Mode
   could not be treated as release-ready without those bundled resources.
-- Fix applied: `scripts\build_windows_app.ps1` now collects `ritualist.canvas`,
-  `ritualist.canvas.qml`, and `ritualist.sample_canvases`.
-- Fix applied: `Ritualist.exe --canvas [canvas-id-or-path]` and
-  `Ritualist.exe --canvas-use [canvas-id-or-path]` launch packaged Canvas Use
+- Fix applied: `scripts\build_windows_app.ps1` now collects `setpiece.canvas`,
+  `setpiece.canvas.qml`, and `setpiece.sample_canvases`.
+- Fix applied: `Setpiece.exe --canvas [canvas-id-or-path]` and
+  `Setpiece.exe --canvas-use [canvas-id-or-path]` launch packaged Canvas Use
   Mode. Home remains the default, and `--classic-gui` remains available.
 - Packaging tests now assert Canvas QML/sample-canvas collection and packaged
   Canvas launch routing.
@@ -292,14 +393,14 @@ Release-blocking packaged Canvas issue found and fixed:
 Packaged build validation:
 
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Verified packaged files exist:
-  - `dist\Ritualist\Ritualist.exe`
-  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
-  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
-- `Ritualist.exe --canvas gaming_desktop` with `QT_QPA_PLATFORM=offscreen`
+  - `dist\Setpiece\Setpiece.exe`
+  - `dist\Setpiece\_internal\setpiece\canvas\qml\CanvasUse.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_canvases\gaming_desktop.yaml`
+  - `dist\Setpiece\_internal\setpiece\home\qml\Home.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_recipes\gaming_mode.yaml`
+- `Setpiece.exe --canvas gaming_desktop` with `QT_QPA_PLATFORM=offscreen`
   stayed alive for 8 seconds, which confirms packaged Canvas Use Mode loads its
   event loop and bundled QML path. The smoke process was then killed.
 
@@ -309,7 +410,7 @@ Automated observations:
 - Canvas runtime/action/performance JSON checks pass from the development
   checkout.
 - PyInstaller still reports Conda-environment optional DLL warnings in
-  `build\Ritualist\warn-Ritualist.txt`. These warnings were already present in
+  `build\Setpiece\warn-Setpiece.txt`. These warnings were already present in
   earlier packaged Home builds and did not block the Canvas offscreen launch.
 
 Manual checks still required:
@@ -326,8 +427,8 @@ Manual checks still required:
 
 ## Packaged App Smoke
 
-- [ ] Launch `dist\Ritualist\Ritualist.exe` and confirm Home opens.
-- [ ] Launch `dist\Ritualist\Ritualist.exe --classic-gui`.
+- [ ] Launch `dist\Setpiece\Setpiece.exe` and confirm Home opens.
+- [ ] Launch `dist\Setpiece\Setpiece.exe --classic-gui`.
 - [ ] Open About / Diagnostics.
 - [ ] Confirm diagnostics reports version `0.2.0-alpha.1`.
 - [ ] Copy diagnostics and save it with the release notes.
@@ -340,10 +441,10 @@ Manual checks still required:
 
 ## Home Alpha Dogfood
 
-- [ ] Launch the packaged app with `dist\Ritualist\Ritualist.exe`.
+- [ ] Launch the packaged app with `dist\Setpiece\Setpiece.exe`.
 - [ ] Confirm Home opens by default.
-- [ ] Launch `dist\Ritualist\Ritualist.exe --classic-gui` and open diagnostics.
-- [ ] Run mock Home with `python -m ritualist home --mock`.
+- [ ] Launch `dist\Setpiece\Setpiece.exe --classic-gui` and open diagnostics.
+- [ ] Run mock Home with `python -m setpiece home --mock`.
 - [ ] Run `gaming_mode` from Home.
 - [ ] Pause a visible `window.wait` action from Home, then resume it.
 - [ ] Stop the active ritual from Home.
@@ -378,18 +479,18 @@ Manual checks still required:
 - [ ] Wait until the Play confirmation is visible.
 - [ ] Confirm the Play confirmation is a separate top-level/native dialog above
   Battle.net, not the inline QML panel inside Home.
-- [ ] Kill `Ritualist.exe` from Task Manager or PowerShell.
-- [ ] Relaunch `dist\Ritualist\Ritualist.exe`.
+- [ ] Kill `Setpiece.exe` from Task Manager or PowerShell.
+- [ ] Relaunch `dist\Setpiece\Setpiece.exe`.
 - [ ] Confirm Home startup or Refresh reconciles the abandoned run.
-- [ ] Run `python -m ritualist runs` and confirm the abandoned run is `interrupted`.
-- [ ] Run `python -m ritualist show-run <run-id>` and confirm `final_message` explains that Ritualist exited before finalizing the run.
+- [ ] Run `python -m setpiece runs` and confirm the abandoned run is `interrupted`.
+- [ ] Run `python -m setpiece show-run <run-id>` and confirm `final_message` explains that Setpiece exited before finalizing the run.
 
 ## Release Artifacts
 
-- [ ] Keep `dist\Ritualist` as the release folder.
+- [ ] Keep `dist\Setpiece` as the release folder.
 - [ ] Include `README.md`, `CHANGELOG.md`, `RELEASE_NOTES.md`, and this checklist.
 - [ ] Include known limitations from `RELEASE_NOTES.md`.
-- [ ] Do not include `build`, `.pytest_cache`, `__pycache__`, or `Ritualist.spec`.
+- [ ] Do not include `build`, `.pytest_cache`, `__pycache__`, or `Setpiece.spec`.
 
 ## v0.2.0-alpha.1 Release Candidate Validation - 2026-06-17
 
@@ -403,55 +504,55 @@ Automated development-checkout gate:
 - Project version and diagnostics version: `0.2.0-alpha.1`.
 - `QT_QPA_PLATFORM=offscreen PYTHONFAULTHANDLER=1 python -m pytest -q`:
   `702 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
-- `python -m ritualist init`: passed; migrated installed `gaming_mode.yaml`
+- `python -m compileall -q setpiece tests`: passed.
+- `python -m setpiece init`: passed; migrated installed `gaming_mode.yaml`
   browser clean-start fields.
-- `python -m ritualist doctor gaming_mode --json --no-strict`: passed;
+- `python -m setpiece doctor gaming_mode --json --no-strict`: passed;
   compatibility `compatible`, `errors_count: 0`, `warnings_count: 0`.
-- `python -m ritualist dry-run gaming_mode`: passed; final state `success`.
-- `python -m ritualist canvas validate gaming_desktop`: passed.
-- `python -m ritualist canvas runtime gaming_desktop --json`: passed. Live
+- `python -m setpiece dry-run gaming_mode`: passed; final state `success`.
+- `python -m setpiece canvas validate gaming_desktop`: passed.
+- `python -m setpiece canvas runtime gaming_desktop --json`: passed. Live
   user-data runtime build reported about 1680 ms with 20 recent activity rows.
-- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
-- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed,
+- `python -m setpiece canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m setpiece perf canvas-use --mock-components 100 --json`: passed,
   4.324 ms, no warnings.
-- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed,
+- `python -m setpiece perf canvas-use --mock-components 300 --json`: passed,
   11.379 ms, no warnings.
-- `python -m ritualist perf canvas-runtime --mock-components 100 --json`: passed,
+- `python -m setpiece perf canvas-runtime --mock-components 100 --json`: passed,
   5.827 ms, no warnings.
-- `python -m ritualist perf canvas-runtime --mock-components 300 --json`: passed,
+- `python -m setpiece perf canvas-runtime --mock-components 300 --json`: passed,
   9.638 ms, no warnings.
-- `python -m ritualist target plan diablo_iv --json`: passed; local state
+- `python -m setpiece target plan diablo_iv --json`: passed; local state
   `not_found` on this machine.
-- `python -m ritualist plan preview target.start:diablo_iv --json`: passed.
-- `python -m ritualist pack export gaming_mode --out <temp>`: passed.
-- `python -m ritualist pack import <temp>`: passed into quarantine. Temporary
+- `python -m setpiece plan preview target.start:diablo_iv --json`: passed.
+- `python -m setpiece pack export gaming_mode --out <temp>`: passed.
+- `python -m setpiece pack import <temp>`: passed into quarantine. Temporary
   `gaming_mode-3` validation import was removed afterward.
-- `python -m ritualist canvas pack export <visual-test-canvas> --out <temp> --json`: passed.
-- `python -m ritualist canvas pack import <temp> --json`: passed into quarantine.
+- `python -m setpiece canvas pack export <visual-test-canvas> --out <temp> --json`: passed.
+- `python -m setpiece canvas pack import <temp> --json`: passed into quarantine.
   Temporary `rc_visual` validation import was removed afterward.
 
 Packaged build and smoke:
 
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Verified packaged files exist:
-  - `dist\Ritualist\Ritualist.exe`
-  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
-  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
-- `dist\Ritualist\Ritualist.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
+  - `dist\Setpiece\Setpiece.exe`
+  - `dist\Setpiece\_internal\setpiece\canvas\qml\CanvasUse.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_canvases\gaming_desktop.yaml`
+  - `dist\Setpiece\_internal\setpiece\home\qml\Home.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_recipes\gaming_mode.yaml`
+- `dist\Setpiece\Setpiece.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
   for 8 seconds.
-- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` with
+- `dist\Setpiece\Setpiece.exe --canvas gaming_desktop` with
   `QT_QPA_PLATFORM=offscreen` stayed alive for 8 seconds.
-- `dist\Ritualist\Ritualist.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
+- `dist\Setpiece\Setpiece.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
   stayed alive for 8 seconds.
 - Release-candidate artifact created:
-  `dist\Ritualist-v0.2.0-alpha.1-rc.zip` (packaged app plus README,
+  `dist\Setpiece-v0.2.0-alpha.1-rc.zip` (packaged app plus README,
   CHANGELOG, RELEASE_NOTES, and RELEASE_CHECKLIST).
 - PyInstaller still reports Conda-environment optional DLL warnings in
-  `build\Ritualist\warn-Ritualist.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
+  `build\Setpiece\warn-Setpiece.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
   `UR_LOADER.dll`, `ze_loader.dll`) plus hidden-import warnings already seen in
   prior builds. Offscreen packaged startup smokes passed despite these warnings.
 
@@ -475,9 +576,9 @@ Validation commit: `edcf54a` (`Check Git blobs in line ending guard`).
 Source hygiene release blocker:
 
 - Public raw GitHub was rechecked for the watched Canvas files after push:
-  - `ritualist/canvas/runtime.py`: 539 LF-delimited lines, longest line 114 bytes.
-  - `ritualist/canvas/controller.py`: 255 LF-delimited lines, longest line 112 bytes.
-  - `ritualist/canvas/view_model.py`: 122 LF-delimited lines, longest line 106 bytes.
+  - `setpiece/canvas/runtime.py`: 539 LF-delimited lines, longest line 114 bytes.
+  - `setpiece/canvas/controller.py`: 255 LF-delimited lines, longest line 112 bytes.
+  - `setpiece/canvas/view_model.py`: 122 LF-delimited lines, longest line 106 bytes.
   - `tests/test_canvas_runtime.py`: 668 LF-delimited lines, longest line 107 bytes.
 - `scripts/check_line_endings.py` now checks working-tree bytes, Git `HEAD`
   blobs, and Git index blobs.
@@ -491,36 +592,36 @@ Automated development-checkout gate:
 - `python -m pip install -e ".[all,dev]"`: passed.
 - `python -m playwright install chromium`: passed.
 - `python -m pytest -q`: `711 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
-- `python -m ritualist --help`: passed.
-- `python -m ritualist actions --json`: passed.
-- `python -m ritualist primitives --json`: passed.
-- `python -m ritualist policy show --json`: passed.
-- `python -m ritualist init`: passed; app data already up to date.
-- `python -m ritualist doctor gaming_mode --json --no-strict`: passed.
-- `python -m ritualist dry-run gaming_mode`: passed; final state `success`.
+- `python -m compileall -q setpiece tests`: passed.
+- `python -m setpiece --help`: passed.
+- `python -m setpiece actions --json`: passed.
+- `python -m setpiece primitives --json`: passed.
+- `python -m setpiece policy show --json`: passed.
+- `python -m setpiece init`: passed; app data already up to date.
+- `python -m setpiece doctor gaming_mode --json --no-strict`: passed.
+- `python -m setpiece dry-run gaming_mode`: passed; final state `success`.
 - Bundled sample recipe dry-run sweep: 12/12 sample YAML recipes passed.
-- `python -m ritualist canvas validate gaming_desktop`: passed.
-- `python -m ritualist canvas runtime gaming_desktop --json`: passed. Live
+- `python -m setpiece canvas validate gaming_desktop`: passed.
+- `python -m setpiece canvas runtime gaming_desktop --json`: passed. Live
   user-data runtime build reported about 1225 ms with 20 recent activity rows.
-- `python -m ritualist canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
-- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed,
+- `python -m setpiece canvas action gaming_desktop diablo_night doctor --dry-run --json`: passed.
+- `python -m setpiece perf canvas-use --mock-components 100 --json`: passed,
   3.944 ms, no warnings.
-- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed,
+- `python -m setpiece perf canvas-use --mock-components 300 --json`: passed,
   11.462 ms, no warnings.
-- `python -m ritualist perf canvas-runtime --mock-components 100 --json`: passed,
+- `python -m setpiece perf canvas-runtime --mock-components 100 --json`: passed,
   3.570 ms, no warnings.
-- `python -m ritualist perf canvas-runtime --mock-components 300 --json`: passed,
+- `python -m setpiece perf canvas-runtime --mock-components 300 --json`: passed,
   10.844 ms, no warnings.
-- `python -m ritualist target discover diablo_iv --json`: passed.
-- `python -m ritualist target plan diablo_iv --json`: passed; local state
+- `python -m setpiece target discover diablo_iv --json`: passed.
+- `python -m setpiece target plan diablo_iv --json`: passed; local state
   `not_found` on this machine.
-- `python -m ritualist plan preview target.start:diablo_iv --json`: passed.
+- `python -m setpiece plan preview target.start:diablo_iv --json`: passed.
 - Isolated app-data pack smoke passed:
-  - `python -m ritualist pack export gaming_mode --out <temp>` and import passed.
-  - `python -m ritualist canvas pack export minimal_desktop --out <temp> --json`
+  - `python -m setpiece pack export gaming_mode --out <temp>` and import passed.
+  - `python -m setpiece canvas pack export minimal_desktop --out <temp> --json`
     and import passed.
-  - `python -m ritualist canvas theme export default --out <temp> --json` and
+  - `python -m setpiece canvas theme export default --out <temp> --json` and
     import passed.
 - `gaming_desktop` export as a visual Canvas pack is intentionally blocked
   because it contains behavior-bound components (`ritual.card`,
@@ -530,22 +631,22 @@ Automated development-checkout gate:
 Packaged build and non-visual smoke:
 
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Verified packaged files exist:
-  - `dist\Ritualist\Ritualist.exe`
-  - `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`
-  - `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`
-  - `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`
+  - `dist\Setpiece\Setpiece.exe`
+  - `dist\Setpiece\_internal\setpiece\canvas\qml\CanvasUse.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_canvases\gaming_desktop.yaml`
+  - `dist\Setpiece\_internal\setpiece\home\qml\Home.qml`
+  - `dist\Setpiece\_internal\setpiece\sample_recipes\gaming_mode.yaml`
 - With `QT_QPA_PLATFORM=offscreen`, these packaged modes stayed alive for 8
   seconds and were then force-stopped:
-  - `dist\Ritualist\Ritualist.exe`
-  - `dist\Ritualist\Ritualist.exe --canvas gaming_desktop`
-  - `dist\Ritualist\Ritualist.exe --classic-gui`
+  - `dist\Setpiece\Setpiece.exe`
+  - `dist\Setpiece\Setpiece.exe --canvas gaming_desktop`
+  - `dist\Setpiece\Setpiece.exe --classic-gui`
 - Release-candidate artifact refreshed:
-  `dist\Ritualist-v0.2.0-alpha.1-rc.zip` (395,188,611 bytes).
+  `dist\Setpiece-v0.2.0-alpha.1-rc.zip` (395,188,611 bytes).
 - PyInstaller still reports Conda-environment optional DLL warnings in
-  `build\Ritualist\warn-Ritualist.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
+  `build\Setpiece\warn-Setpiece.txt` (`impi.dll`, `sycl8.dll`, `msmpi.dll`,
   `UR_LOADER.dll`, `ze_loader.dll`) plus hidden-import warnings already seen in
   prior builds. Offscreen packaged startup smokes passed despite these warnings.
 
@@ -574,9 +675,9 @@ Evidence:
 - Canvas source/test files verified LF-delimited in working tree, Git index, and
   Git HEAD.
 - Key files:
-  - `ritualist/canvas/runtime.py`: 538 LF, 0 CR, longest line 114.
-  - `ritualist/canvas/controller.py`: 254 LF, 0 CR, longest line 112.
-  - `ritualist/canvas/view_model.py`: 121 LF, 0 CR, longest line 106.
+  - `setpiece/canvas/runtime.py`: 538 LF, 0 CR, longest line 114.
+  - `setpiece/canvas/controller.py`: 254 LF, 0 CR, longest line 112.
+  - `setpiece/canvas/view_model.py`: 121 LF, 0 CR, longest line 106.
   - `tests/test_canvas_runtime.py`: 667 LF, 0 CR, longest line 107.
 - `python scripts\check_line_endings.py --stats --check-git-head --check-git-index`
   passed for 34 managed files.
@@ -596,27 +697,27 @@ Automated command path:
 - `python -m pip install -e ".[all,dev]"`: passed.
 - `python -m playwright install chromium`: passed.
 - `python -m pytest -q`: `713 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
-- `python -m ritualist --help`: passed.
+- `python -m compileall -q setpiece tests`: passed.
+- `python -m setpiece --help`: passed.
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 
 Packaged file checks:
 
-- `dist\Ritualist\Ritualist.exe`: present.
-- `dist\Ritualist\_internal\ritualist\canvas\qml\CanvasUse.qml`: present.
-- `dist\Ritualist\_internal\ritualist\sample_canvases\gaming_desktop.yaml`:
+- `dist\Setpiece\Setpiece.exe`: present.
+- `dist\Setpiece\_internal\setpiece\canvas\qml\CanvasUse.qml`: present.
+- `dist\Setpiece\_internal\setpiece\sample_canvases\gaming_desktop.yaml`:
   present.
-- `dist\Ritualist\_internal\ritualist\home\qml\Home.qml`: present.
-- `dist\Ritualist\_internal\ritualist\sample_recipes\gaming_mode.yaml`: present.
+- `dist\Setpiece\_internal\setpiece\home\qml\Home.qml`: present.
+- `dist\Setpiece\_internal\setpiece\sample_recipes\gaming_mode.yaml`: present.
 
 Non-visual packaged smokes:
 
-- `dist\Ritualist\Ritualist.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
+- `dist\Setpiece\Setpiece.exe` with `QT_QPA_PLATFORM=offscreen` stayed alive
   for 8 seconds.
-- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` with
+- `dist\Setpiece\Setpiece.exe --canvas gaming_desktop` with
   `QT_QPA_PLATFORM=offscreen` stayed alive for 8 seconds.
-- `dist\Ritualist\Ritualist.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
+- `dist\Setpiece\Setpiece.exe --classic-gui` with `QT_QPA_PLATFORM=offscreen`
   stayed alive for 8 seconds.
 
 Manual gate remains open:
@@ -644,12 +745,12 @@ Workspace state at start:
 
 Visible packaged launch checks:
 
-- `dist\Ritualist\Ritualist.exe` opened a visible `Ritualist Home` window.
-- `dist\Ritualist\Ritualist.exe --canvas gaming_desktop` opened a visible
-  `Ritualist Canvas` window. `gaming_desktop` rendered real components and was
+- `dist\Setpiece\Setpiece.exe` opened a visible `Setpiece Home` window.
+- `dist\Setpiece\Setpiece.exe --canvas gaming_desktop` opened a visible
+  `Setpiece Canvas` window. `gaming_desktop` rendered real components and was
   not blank or white.
-- `dist\Ritualist\Ritualist.exe --classic-gui` opened a visible classic
-  `Ritualist` window.
+- `dist\Setpiece\Setpiece.exe --classic-gui` opened a visible classic
+  `Setpiece` window.
 - Packaged Canvas buttons were exposed through Windows UI Automation and were
   invoked by accessible name, not by coordinate clicks. Packaged Home exposed
   only the card container through UI Automation, so Home card buttons still need
@@ -683,7 +784,7 @@ Real `gaming_mode` run checks:
   event text during the real run. This did not separately validate the
   dedicated `ritual.status` component after each transition, and
   `gaming_desktop` does not include a dedicated `recent.activity` component.
-- The native `Ritualist Confirmation Required` dialog appeared as a separate
+- The native `Setpiece Confirmation Required` dialog appeared as a separate
   top-level dialog above Battle.net before the Play click.
 - Declining/stopping the Play confirmation ended as `stopped` with
   `stopped_reason: stopped_user_declined_confirmation`. `show-run
@@ -693,14 +794,14 @@ Real `gaming_mode` run checks:
 - Hard-killing packaged Canvas during an active run and then relaunching
   packaged Home repaired abandoned run `20260617T144316Z_gaming_mode` to
   `interrupted`. `show-run 20260617T144316Z_gaming_mode --no-repair` reports
-  `final_message: Ritualist exited before finalizing this run. Last recorded
+  `final_message: Setpiece exited before finalizing this run. Last recorded
   step: Ask before clicking Play.`
 
 Performance and pack-safety checks:
 
-- `python -m ritualist perf canvas-use --mock-components 100 --json`: passed in
+- `python -m setpiece perf canvas-use --mock-components 100 --json`: passed in
   3.852 ms with 0 warnings.
-- `python -m ritualist perf canvas-use --mock-components 300 --json`: passed in
+- `python -m setpiece perf canvas-use --mock-components 300 --json`: passed in
   10.916 ms with 0 warnings.
 - These are command-path timings only, not a human subjective feel pass for
   visible 100/300 component desktop interaction.
@@ -732,11 +833,11 @@ Command evidence:
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed.
 - `python -m pytest -q`: `789 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`; the build script now throws if PyInstaller
+  `dist\Setpiece\Setpiece.exe`; the build script now throws if PyInstaller
   exits nonzero.
-- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
+- `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
   passed with `22` `PASS`, `0` `FAIL`, and `0` `NEEDS_HUMAN_REVIEW`.
 
 Acceptance artifacts:
@@ -797,9 +898,9 @@ it is superseded by the post-removal packaged acceptance evidence above.
 Harness/spec added:
 
 - `tests/acceptance/release_v0_2_alpha_1.yaml`
-- `scripts/ritualist_release_acceptance.ps1`
-- E2E instrumentation is opt-in through `RITUALIST_E2E=1`,
-  `RITUALIST_E2E_ARTIFACT_DIR`, and `RITUALIST_E2E_APP_DATA_DIR`.
+- `scripts/setpiece_release_acceptance.ps1`
+- E2E instrumentation is opt-in through `SETPIECE_E2E=1`,
+  `SETPIECE_E2E_ARTIFACT_DIR`, and `SETPIECE_E2E_APP_DATA_DIR`.
 - Fixture mode uses an isolated app-data root plus a fake `Battle.net Fixture`
   window. It does not depend on real game login and does not run gameplay
   automation.
@@ -810,15 +911,15 @@ Command evidence:
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 39 managed files.
 - `python -m pytest -q`: `764 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `.\scripts\build_windows_app.ps1`: passed and built
-  `dist\Ritualist\Ritualist.exe`.
-- `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
+  `dist\Setpiece\Setpiece.exe`.
+- `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`:
   passed at capture time with `22` `PASS`, `0` `FAIL`, and `0`
   `NEEDS_HUMAN_REVIEW`. This summary is pre-removal evidence and is not current
   taggability evidence.
 - Command scope: the packaged executable is used for Home, Canvas Use Mode,
-  classic GUI, and runtime scenarios. Source-tree `python -m ritualist` is used
+  classic GUI, and runtime scenarios. Source-tree `python -m setpiece` is used
   for supplemental CLI-only safety, perf, run-log, and visual-pack command
   evidence because the Windows app bundle is a GUI entry point.
 
@@ -914,7 +1015,7 @@ Acceptance contract updates:
 - Added `edit_mode_builder_visible` to the acceptance spec and aggregate gate
   after integration found the harness already emitted that check.
 - Updated the test-only Desktop Work-Area capture harness to focus the launched
-  Ritualist Canvas window before screenshots. A post-rebuild run exposed that
+  Setpiece Canvas window before screenshots. A post-rebuild run exposed that
   the fake wallpaper fixture could otherwise occlude the Room UI screenshot; the
   final evidence records `canvas_focused_before_capture=true` for the hero Room
   captures.
@@ -932,18 +1033,18 @@ Validation commands:
   passed with `7 passed`.
 - Full test suite: `python -m pytest -q` passed with
   `1175 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 41 managed files.
-- PowerShell parser check for `scripts\ritualist_release_acceptance.ps1`:
+- PowerShell parser check for `scripts\setpiece_release_acceptance.ps1`:
   passed.
 - `.\scripts\build_windows_app.ps1`: passed and rebuilt
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Packaged smoke without `-RecordScreen` in
   `artifacts\release-acceptance-wave14c`: `30 PASS`, `0 FAIL`,
   `1 NEEDS_HUMAN_REVIEW` because frame timing was not captured.
 - Final full packaged acceptance with screen frames against the rebuilt package:
-  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`
+  `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance`
   passed with `31 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
 
 Acceptance artifacts:
@@ -980,35 +1081,35 @@ Validation commands:
   passed with `49 passed`.
 - Full test suite: `python -m pytest -q` passed with
   `1192 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 41 managed files.
 - `.\scripts\build_windows_app.ps1`: passed and rebuilt
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Final packaged acceptance:
-  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-ui-phase6`
+  `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-ui-phase6`
   passed with `31 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
 
 Fresh performance command output:
 
-- `python -m ritualist perf canvas-model --mock-components 100 --json`:
+- `python -m setpiece perf canvas-model --mock-components 100 --json`:
   `2.394 ms`, no top-level warnings, advisory budget `250 ms`.
-- `python -m ritualist perf canvas-model --mock-components 300 --json`:
+- `python -m setpiece perf canvas-model --mock-components 300 --json`:
   `4.765 ms`, no top-level warnings, advisory budget `250 ms`.
-- `python -m ritualist perf canvas-runtime --mock-components 100 --json`:
+- `python -m setpiece perf canvas-runtime --mock-components 100 --json`:
   `5.049 ms`, no top-level warnings, advisory budget `250 ms`.
-- `python -m ritualist perf canvas-runtime --mock-components 300 --json`:
+- `python -m setpiece perf canvas-runtime --mock-components 300 --json`:
   `11.783 ms`, no top-level warnings, advisory budget `250 ms`.
-- `python -m ritualist perf canvas-use --mock-components 100 --json`:
+- `python -m setpiece perf canvas-use --mock-components 100 --json`:
   `5.895 ms`, no top-level warnings, advisory budget `250 ms`.
-- `python -m ritualist perf canvas-use --mock-components 300 --json`:
+- `python -m setpiece perf canvas-use --mock-components 300 --json`:
   `21.610 ms`, no top-level warnings, advisory budget `250 ms`;
   visual diagnostics remain honestly high-cost with 3 advisory warnings for
   `217` live widgets, `217` animated components, and high estimated visual
   cost.
-- `python -m ritualist perf home-model --mock-cards 100 --json`:
+- `python -m setpiece perf home-model --mock-cards 100 --json`:
   `0.998 ms`, no warnings, advisory budget `250 ms`.
-- `python -m ritualist perf home-model --mock-cards 300 --json`:
+- `python -m setpiece perf home-model --mock-cards 300 --json`:
   `2.879 ms`, no warnings, advisory budget `250 ms`.
 
 Acceptance artifacts:
@@ -1045,7 +1146,7 @@ Scope:
   Advanced Open YAML path resolution; setup overrides are stored separately
   from bundled YAML and never auto-run after editing.
 - Added an opt-in live Gaming acceptance procedure and schema in
-  `scripts\ritualist_live_gaming_acceptance.ps1`,
+  `scripts\setpiece_live_gaming_acceptance.ps1`,
   `tests\acceptance\live_gaming_v0_2_alpha_1.yaml`, and
   `docs\LIVE_GAMING_ACCEPTANCE.md`. The live procedure requires explicit
   `-Live -IUnderstandThisIsLive` initiation and was not run in this pass.
@@ -1057,13 +1158,13 @@ Validation commands:
   passed with `301 passed`.
 - Full test suite: `python -m pytest -q` passed with
   `1270 passed, 1 skipped`.
-- `python -m compileall -q ritualist tests`: passed.
+- `python -m compileall -q setpiece tests`: passed.
 - `python scripts/check_line_endings.py --stats --check-git-head --check-git-index`:
   passed for 46 managed files.
 - `.\scripts\build_windows_app.ps1`: passed and rebuilt
-  `dist\Ritualist\Ritualist.exe`.
+  `dist\Setpiece\Setpiece.exe`.
 - Simulated packaged acceptance:
-  `.\scripts\ritualist_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f2`
+  `.\scripts\setpiece_release_acceptance.ps1 -Packaged -RecordScreen -EvidenceDir artifacts\release-acceptance-set2-f2`
   passed with `32 PASS`, `0 FAIL`, `0 NEEDS_HUMAN_REVIEW`.
 
 Acceptance artifacts:

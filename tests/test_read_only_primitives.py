@@ -8,17 +8,17 @@ from zipfile import ZipFile
 import pytest
 from typer.testing import CliRunner
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.cli import app
-from ritualist.errors import PlatformUnsupportedError, RitualistError
-from ritualist.models import Recipe
-from ritualist.overlay import ScreenRect
-from ritualist.primitive_runtime import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.cli import app
+from setpiece.errors import PlatformUnsupportedError, SetpieceError
+from setpiece.models import Recipe
+from setpiece.overlay import ScreenRect
+from setpiece.primitive_runtime import (
     FORBIDDEN_DIAGNOSTIC_CLASSES,
     run_read_only_primitive,
 )
-from ritualist.primitives import PrimitiveRisk, create_primitive_registry
-from ritualist.doctor import build_doctor_report
+from setpiece.primitives import PrimitiveRisk, create_primitive_registry
+from setpiece.doctor import build_doctor_report
 
 
 REQUESTED_READ_ONLY_PRIMITIVES = {
@@ -104,13 +104,13 @@ def test_process_primitive_uses_process_name_metadata_alias(monkeypatch) -> None
 
         @staticmethod
         def process_iter(_attrs):
-            return [FakeProcess(1, "Ritualist.exe"), FakeProcess(2, "Other.exe")]
+            return [FakeProcess(1, "Setpiece.exe"), FakeProcess(2, "Other.exe")]
 
-    monkeypatch.setattr("ritualist.primitive_runtime._psutil", lambda: FakePsutil)
+    monkeypatch.setattr("setpiece.primitive_runtime._psutil", lambda: FakePsutil)
 
     result = run_read_only_primitive(
         "app.process.is_running",
-        parameters={"process_name": "Ritualist.exe"},
+        parameters={"process_name": "Setpiece.exe"},
     )
 
     assert result.status == "success"
@@ -131,21 +131,21 @@ def test_process_read_only_verbs_use_fake_psutil(monkeypatch) -> None:
 
         @staticmethod
         def process_iter(_attrs):
-            return [FakeProcess(1, "Ritualist.exe"), FakeProcess(2, "Other.exe")]
+            return [FakeProcess(1, "Setpiece.exe"), FakeProcess(2, "Other.exe")]
 
-    monkeypatch.setattr("ritualist.primitive_runtime._psutil", lambda: FakePsutil)
+    monkeypatch.setattr("setpiece.primitive_runtime._psutil", lambda: FakePsutil)
 
     results = [
         run_read_only_primitive("app.process.list"),
-        run_read_only_primitive("app.process.find", parameters={"contains": "ritual"}),
-        run_read_only_primitive("app.process.is_running", parameters={"name": "Ritualist.exe"}),
-        run_read_only_primitive("app.process.wait_running", parameters={"name": "Ritualist.exe"}),
+        run_read_only_primitive("app.process.find", parameters={"contains": "setpiece"}),
+        run_read_only_primitive("app.process.is_running", parameters={"name": "Setpiece.exe"}),
+        run_read_only_primitive("app.process.wait_running", parameters={"name": "Setpiece.exe"}),
         run_read_only_primitive("app.process.wait_exit", parameters={"name": "Missing.exe"}),
     ]
 
     assert [result.status for result in results] == ["success"] * 5
     assert results[0].details["count"] == 2
-    assert results[1].details["processes"][0]["name"] == "Ritualist.exe"
+    assert results[1].details["processes"][0]["name"] == "Setpiece.exe"
     assert results[2].details["matched"] is True
     assert results[3].details["waited_for"] == "wait_running"
     assert results[4].details["waited_for"] == "wait_exit"
@@ -163,9 +163,9 @@ def test_process_primitive_requires_specific_target(monkeypatch) -> None:
         def process_iter(_attrs):
             return []
 
-    monkeypatch.setattr("ritualist.primitive_runtime._psutil", lambda: FakePsutil)
+    monkeypatch.setattr("setpiece.primitive_runtime._psutil", lambda: FakePsutil)
 
-    with pytest.raises(RitualistError, match="requires one of pid, name, process_name, or contains"):
+    with pytest.raises(SetpieceError, match="requires one of pid, name, process_name, or contains"):
         run_read_only_primitive("app.process.is_running")
 
 
@@ -339,12 +339,12 @@ def test_browser_assert_read_only_verbs_do_not_click_or_open() -> None:
 
 
 def test_primitive_run_rejects_non_read_only_primitives() -> None:
-    with pytest.raises(RitualistError, match="only supports read-only primitives"):
+    with pytest.raises(SetpieceError, match="only supports read-only primitives"):
         run_read_only_primitive("uia.element.click_text", dry_run=True)
 
 
 def test_hardware_inventory_unsupported_platform_is_friendly(monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.primitive_runtime.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.primitive_runtime.sys.platform", "linux")
 
     with pytest.raises(PlatformUnsupportedError, match="only supported on Windows"):
         run_read_only_primitive("hardware.inventory.snapshot")
@@ -376,8 +376,8 @@ def test_hardware_inventory_component_verbs_use_fake_psutil(monkeypatch) -> None
                 ]
             }
 
-    monkeypatch.setattr("ritualist.primitive_runtime.sys.platform", "win32")
-    monkeypatch.setattr("ritualist.primitive_runtime._optional_psutil", lambda: FakePsutil)
+    monkeypatch.setattr("setpiece.primitive_runtime.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.primitive_runtime._optional_psutil", lambda: FakePsutil)
 
     primitive_ids = [
         "hardware.inventory.snapshot",
@@ -423,17 +423,17 @@ def test_network_connectivity_verbs_use_socket_fakes(monkeypatch) -> None:
         def getsockname(self):
             return ("192.0.2.10", 50000)
 
-    monkeypatch.setattr("ritualist.primitive_runtime.socket.gethostname", lambda: "host")
-    monkeypatch.setattr("ritualist.primitive_runtime.socket.getfqdn", lambda: "host.example")
+    monkeypatch.setattr("setpiece.primitive_runtime.socket.gethostname", lambda: "host")
+    monkeypatch.setattr("setpiece.primitive_runtime.socket.getfqdn", lambda: "host.example")
     monkeypatch.setattr(
-        "ritualist.primitive_runtime.socket.getaddrinfo",
+        "setpiece.primitive_runtime.socket.getaddrinfo",
         lambda host, _port: calls.append(("dns", host)) or [(2, None, None, None, None)],
     )
     monkeypatch.setattr(
-        "ritualist.primitive_runtime.socket.create_connection",
+        "setpiece.primitive_runtime.socket.create_connection",
         lambda target, timeout=None: calls.append(("tcp", target)) or FakeConnection(),
     )
-    monkeypatch.setattr("ritualist.primitive_runtime.socket.socket", FakeSocket)
+    monkeypatch.setattr("setpiece.primitive_runtime.socket.socket", FakeSocket)
 
     results = [
         run_read_only_primitive("network.connectivity.profile"),
@@ -579,7 +579,7 @@ def test_inspect_window_uses_uia_list_labels_primitive(monkeypatch) -> None:
             details={"windows": [{"title": "Battle.net", "labels": ["Diablo IV", "Play"]}]},
         )
 
-    monkeypatch.setattr("ritualist.cli.run_read_only_primitive", fake_run)
+    monkeypatch.setattr("setpiece.cli.run_read_only_primitive", fake_run)
 
     result = CliRunner().invoke(
         app,

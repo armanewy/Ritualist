@@ -1,20 +1,20 @@
-# Ritualist Desktop Work-Area Canvas
+# Setpiece Desktop Work-Area Canvas
 
-Desktop Work-Area Canvas is the next desktop-canvas direction for Ritualist. It
+Desktop Work-Area Canvas is the next desktop-canvas direction for Setpiece. It
 is a host-mode design for making a Room feel like the desktop while keeping
 Windows visibly available.
 
 The product goal is:
 
-- Ritualist should feel like the desktop, but not make users feel trapped inside
-  Ritualist.
+- Setpiece should feel like the desktop, but not make users feel trapped inside
+  Setpiece.
 - The first desktop-canvas host occupies the Windows work area above the
   taskbar.
 - The taskbar remains visible as a trust and recovery surface.
 - Explorer remains the Windows shell.
 - Home and windowed Canvas remain available as compatibility and recovery
   surfaces.
-- Windows and the user's wallpaper app own the wallpaper. Ritualist owns a
+- Windows and the user's wallpaper app own the wallpaper. Setpiece owns a
   transparent component layer above it.
 
 This document defines the host model and follow-up requirements for desktop
@@ -32,7 +32,7 @@ risky/mutating primitives.
 - **Desktop Work-Area Canvas** is the first desktop-canvas host: borderless or
   seamless, sized to the Windows work area, and leaving the taskbar visible.
 - **Wallpaper passthrough** is the default desktop-work-area background model:
-  Ritualist does not paint an opaque canvas background, so Windows static
+  Setpiece does not paint an opaque canvas background, so Windows static
   wallpaper or a third-party live wallpaper app remains visible underneath.
 - **Use Mode** is the interactive Room surface.
 - **Edit Mode / Room Builder** edits typed components through validation and
@@ -43,25 +43,25 @@ risky/mutating primitives.
 Desktop Work-Area Canvas is implemented as a transparent desktop component
 layer by default in `desktop_work_area` host mode, not as a wallpaper renderer.
 Wallpaper belongs to Windows and user-selected wallpaper apps such as Wallpaper
-Engine or Lively Wallpaper. Ritualist must not import, decode, render, manage,
+Engine or Lively Wallpaper. Setpiece must not import, decode, render, manage,
 pause, stop, or replace live wallpapers.
 
 The layer model is:
 
 1. Windows wallpaper or third-party live wallpaper.
 2. Optional Windows desktop icons.
-3. Ritualist Room components, docks, status, and edit chrome.
+3. Setpiece Room components, docks, status, and edit chrome.
 4. Normal app windows.
-5. Native Ritualist confirmations and safety dialogs.
+5. Native Setpiece confirmations and safety dialogs.
 
 Compatibility requirements:
 
 - `desktop_work_area` defaults to transparent or `system_wallpaper`
   passthrough.
-- Ritualist does not render video, web, app, animated, or live wallpapers.
-- Ritualist does not control Wallpaper Engine, Lively Wallpaper, or similar
+- Setpiece does not render video, web, app, animated, or live wallpapers.
+- Setpiece does not control Wallpaper Engine, Lively Wallpaper, or similar
   apps.
-- Ritualist avoids fullscreen defaults so wallpaper apps do not misclassify it
+- Setpiece avoids fullscreen defaults so wallpaper apps do not misclassify it
   as a game or fullscreen workload.
 - The taskbar, Explorer, Alt+Tab, Win key, and normal Windows shortcuts remain
   normal.
@@ -69,7 +69,7 @@ Compatibility requirements:
 Compatibility risks to test:
 
 - an opaque background covering the user's chosen wallpaper
-- wallpaper apps pausing because Ritualist appears fullscreen
+- wallpaper apps pausing because Setpiece appears fullscreen
 - a transparent overlay blocking interactive wallpaper or desktop clicks
 - high GPU cost from transparent compositing
 - user confusion if an exit path or Windows recovery surface is not visible
@@ -81,7 +81,7 @@ Allowed background modes:
 - `system_wallpaper` / `transparent`: implemented default for
   `desktop_work_area`; the Canvas background is not painted and the system
   wallpaper shows through.
-- `ritualist_background`: existing opaque Ritualist background; allowed for
+- `setpiece_background`: existing opaque Setpiece background; allowed for
   `windowed` mode and for a future explicit user choice in desktop host modes.
 - `dim_system_wallpaper`: future optional translucent scrim or dim treatment;
   this is a visual treatment over passthrough, not a wallpaper renderer.
@@ -99,7 +99,7 @@ Disallowed background modes:
 
 ### `windowed`
 
-The existing behavior. Ritualist opens Canvas Use Mode as a normal Qt
+The existing behavior. Setpiece opens Canvas Use Mode as a normal Qt
 application window with title bar, taskbar presence, normal z-order behavior,
 and normal close controls.
 
@@ -123,7 +123,7 @@ Requirements:
 - Taskbar remains visible and usable.
 - Window bounds match monitor work area, not full monitor.
 - Background defaults to transparent / `system_wallpaper` passthrough.
-- Only Ritualist components, panels, docks, status, and edit chrome are drawn
+- Only Setpiece components, panels, docks, status, and edit chrome are drawn
   by default.
 - A safe exit affordance is always visible.
 - Escape or a documented safe shortcut exits Desktop Work-Area Canvas.
@@ -206,7 +206,7 @@ This mode must not be implied by `Room`, `Canvas`, `desktop_work_area`,
 ## Taskbar Policy
 
 The taskbar is a trust and recovery surface, not visual clutter to remove.
-Ritualist should preserve a visible connection to Windows in the first Desktop
+Setpiece should preserve a visible connection to Windows in the first Desktop
 Canvas Mode.
 
 Allowed implemented value now:
@@ -304,7 +304,7 @@ The acceptance harness must record:
 
 - top-level window list
 - foreground window
-- Ritualist window title and process id
+- Setpiece window title and process id
 - confirmation dialog z-order relative to fake external apps
 - taskbar visibility evidence where available
 
@@ -316,13 +316,13 @@ Use Mode options:
 
 - `capture_all`: the Room surface receives all input inside its window.
 - `component_only`: only component bounds receive input; blank canvas can pass
-  through or be ignored by Ritualist.
+  through or be ignored by Setpiece.
 - `disabled`: no pass-through; normal window behavior.
 
 Edit Mode must capture input inside the Canvas because drag, resize, selection,
 grid, and property editing need predictable behavior.
 
-The target Use Mode policy is `component_only`: Ritualist components receive
+The target Use Mode policy is `component_only`: Setpiece components receive
 input, while blank transparent Canvas areas pass through to Windows or an
 interactive wallpaper when the host can prove it safely. Edit Mode always
 captures Canvas input for editing.
@@ -367,7 +367,7 @@ Future recovery additions:
 
 Implemented recovery additions:
 
-- `RITUALIST_CANVAS_FORCE_WINDOWED=1` forces Canvas launches back to
+- `SETPIECE_CANVAS_FORCE_WINDOWED=1` forces Canvas launches back to
   `windowed`, while recording the originally requested host in E2E evidence.
 
 Recovery must not rely on a user editing registry keys, killing Explorer, or
@@ -396,7 +396,7 @@ For `desktop_work_area`:
   animated or changing-color wallpaper fixture when a live wallpaper app is not
   present
 - Wallpaper Engine or similar wallpaper processes, if present, remain running
-  and are not controlled by Ritualist
+  and are not controlled by Setpiece
 - blank-area click-through is marked PASS only with machine evidence; otherwise
   it remains NEEDS_HUMAN_REVIEW
 - Explorer process remains running
@@ -409,7 +409,7 @@ For `desktop_work_area`:
 - safe exit control is visible and works
 - keyboard safe exit works
 - fallback to `windowed` works
-- `RITUALIST_CANVAS_FORCE_WINDOWED=1` fallback evidence records requested and
+- `SETPIECE_CANVAS_FORCE_WINDOWED=1` fallback evidence records requested and
   applied host modes
 - confirmation dialog appears above fake Chrome/Battle.net foreground windows
 - run controls still work during active waits/runs

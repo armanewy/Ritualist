@@ -1,11 +1,11 @@
-# Ritualist Suite Packs
+# Setpiece Suite Packs
 
-Suite Packs (`.ritualistsuite`) are local whole-Room bundles. They are a wrapper
+Suite Packs (`.setpiecesuite`) are local whole-Room bundles. They are a wrapper
 around existing pack types:
 
-- one Canvas/Room pack (`.ritualistcanvas`)
-- optional Theme pack (`.ritualisttheme`)
-- zero or more behavior-bearing Ritual packs (`.ritualistpack`)
+- one Canvas/Room pack (`.setpiececanvas`)
+- optional Theme pack (`.setpiecetheme`)
+- zero or more behavior-bearing Ritual packs (`.setpiecepack`)
 - optional `README.md` review notes
 
 Suite import is deliberately inert. Importing a suite validates every nested
@@ -29,11 +29,11 @@ any previous review state.
 ## Commands
 
 ```powershell
-ritualist suite export --canvas-pack room.ritualistcanvas --theme-pack theme.ritualisttheme --ritual-pack setup.ritualistpack --out room.ritualistsuite
-ritualist suite validate room.ritualistsuite --json
-ritualist suite import room.ritualistsuite --json
-ritualist suite import room.ritualistsuite --visuals-only
-ritualist suite list-imports
+setpiece suite export --canvas-pack room.setpiececanvas --theme-pack theme.setpiecetheme --ritual-pack setup.setpiecepack --out room.setpiecesuite
+setpiece suite validate room.setpiecesuite --json
+setpiece suite import room.setpiecesuite --json
+setpiece suite import room.setpiecesuite --visuals-only
+setpiece suite list-imports
 ```
 
 There is intentionally no `suite enable` command. Enabling behavior remains a

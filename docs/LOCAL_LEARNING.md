@@ -1,6 +1,6 @@
 # Local Learning Privacy Contract
 
-This document defines the privacy contract for Ritualist Local Learning. It is
+This document defines the privacy contract for Setpiece Local Learning. It is
 a specification and test target, not a claim that a user-facing Local Learning
 Suggestions UI is currently shipped.
 
@@ -33,10 +33,10 @@ collection, remote telemetry, or automatic creation or execution behavior.
 
 The current source registry is intentionally small:
 
-- `ritualist_journal`: local Ritualist run summaries and user-authored notes.
+- `setpiece_journal`: local Setpiece run summaries and user-authored notes.
 - `open_windows`: current top-level app/window names observed only during
   explicit use.
-- `recent_items`: local recent Ritualist Rooms, shortcuts, and recipes.
+- `recent_items`: local recent Setpiece Rooms, shortcuts, and recipes.
 
 Every source is disabled by default. A source is usable only when Local Learning
 is enabled, the source is selected, and the consent record explicitly includes

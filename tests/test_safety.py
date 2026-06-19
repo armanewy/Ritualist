@@ -4,8 +4,8 @@ from textwrap import dedent
 
 import pytest
 
-from ritualist.errors import RecipeValidationError
-from ritualist.recipe_loader import load_recipe
+from setpiece.errors import RecipeValidationError
+from setpiece.recipe_loader import load_recipe
 
 
 def test_clicking_play_requires_confirmation(tmp_path):

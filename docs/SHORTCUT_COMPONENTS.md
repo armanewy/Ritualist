@@ -1,4 +1,4 @@
-# Ritualist Shortcut Components
+# Setpiece Shortcut Components
 
 Shortcut Components are Room/Canvas components for instant native access. They
 are not rituals, recipes, runbooks, macros, or automation recordings.
@@ -40,7 +40,7 @@ native app:
 - A URL opens in the user's default browser.
 - A future file shortcut opens through the OS file association.
 
-Ritualist should not stay in the middle after the handoff. It may show a small
+Setpiece should not stay in the middle after the handoff. It may show a small
 status or warning if the target cannot be opened, but it should not create a
 runtime workflow around the action.
 
@@ -96,7 +96,7 @@ user reviews and creates them.
 
 ## Non-Goals
 
-Shortcut Components must not turn Ritualist into:
+Shortcut Components must not turn Setpiece into:
 
 - a file manager
 - an Explorer replacement

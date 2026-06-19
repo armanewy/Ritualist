@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasDocument,
     CanvasEditSession,
     CanvasEditUiBridge,
@@ -12,8 +12,8 @@ from ritualist.canvas import (
     load_canvas,
     validate_canvas_structure,
 )
-from ritualist.errors import RitualistError
-from ritualist.shortcuts import ShortcutService
+from setpiece.errors import SetpieceError
+from setpiece.shortcuts import ShortcutService
 
 
 def _empty_room() -> CanvasDocument:
@@ -37,7 +37,7 @@ def test_room_builder_palette_exposes_typed_shortcuts() -> None:
 
 
 def test_room_builder_adds_edits_saves_and_reopens_shortcuts(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.edit.canvases_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.edit.canvases_dir", lambda: tmp_path)
     folder = tmp_path / "project"
     folder.mkdir()
     app = tmp_path / "editor.exe"
@@ -98,21 +98,21 @@ def test_room_builder_rejects_arbitrary_shortcut_commands_and_scripts(tmp_path: 
 
     bridge.create_component("shortcut.app")
     app_component = _component_by_type(bridge.session, "shortcut.app")
-    with pytest.raises(RitualistError, match="not a shell command"):
+    with pytest.raises(SetpieceError, match="not a shell command"):
         bridge.edit_property(app_component.id, "path", "cmd /c calc.exe")
-    with pytest.raises(RitualistError, match="must not be a script"):
+    with pytest.raises(SetpieceError, match="must not be a script"):
         bridge.edit_property(app_component.id, "path", str(script))
-    with pytest.raises(RitualistError, match="unknown prop 'command_line'"):
+    with pytest.raises(SetpieceError, match="unknown prop 'command_line'"):
         bridge.edit_property(app_component.id, "command_line", "python unsafe.py")
 
     bridge.create_component("shortcut.folder")
     folder_component = _component_by_type(bridge.session, "shortcut.folder")
-    with pytest.raises(RitualistError, match="not an executable or script"):
+    with pytest.raises(SetpieceError, match="not an executable or script"):
         bridge.edit_property(folder_component.id, "path", str(script))
 
     bridge.create_component("shortcut.url")
     url_component = _component_by_type(bridge.session, "shortcut.url")
-    with pytest.raises(RitualistError, match="http or https"):
+    with pytest.raises(SetpieceError, match="http or https"):
         bridge.edit_property(url_component.id, "url", "javascript:alert(1)")
 
 

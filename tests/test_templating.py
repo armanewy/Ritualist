@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.errors import TemplateError
-from ritualist.templating import render_template_data
+from setpiece.errors import TemplateError
+from setpiece.templating import render_template_data
 
 
 def test_render_template_data_supports_nested_values():

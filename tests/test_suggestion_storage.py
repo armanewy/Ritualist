@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from ritualist.suggestions.models import Suggestion, SuggestionStatus
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.suggestions.models import Suggestion, SuggestionStatus
+from setpiece.suggestions.storage import SuggestionStore
 
 
 def _suggestion(title: str = "Open Project") -> Suggestion:
@@ -40,10 +40,10 @@ def test_suggestion_store_handles_corrupted_storage_safely(tmp_path) -> None:
             (
                 "{not-json}",
                 json.dumps({"schema_version": "other", "suggestion": suggestion.to_dict()}),
-                json.dumps({"schema_version": "ritualist.suggestions.storage.v1"}),
+                json.dumps({"schema_version": "setpiece.suggestions.storage.v1"}),
                 json.dumps(
                     {
-                        "schema_version": "ritualist.suggestions.storage.v1",
+                        "schema_version": "setpiece.suggestions.storage.v1",
                         "suggestion": suggestion.to_dict(),
                     }
                 ),

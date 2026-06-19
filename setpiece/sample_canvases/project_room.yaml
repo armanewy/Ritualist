@@ -1,0 +1,240 @@
+schema: setpiece.canvas.v1
+id: project_room
+name: Project Room
+description: Project setup Room with a Coding Mode hero loop, runtime state, recent activity, and reviewed local shortcuts.
+mode: desktop_canvas
+resolution_policy: responsive
+theme:
+  id: setpiece.paper
+  name: Setpiece Paper
+background:
+  type: solid
+  value: "{color.background}"
+grid:
+  enabled: true
+  size: 16
+components:
+  - id: title
+    type: text.label
+    x: 56
+    y: 40
+    width: 420
+    height: 64
+    z: 1
+    props:
+      text: Project Room
+      size: 28
+  - id: project_clock
+    type: clock
+    x: 840
+    y: 40
+    width: 140
+    height: 72
+    z: 2
+    props:
+      format: short
+  - id: categories
+    type: category.dock
+    x: 624
+    y: 552
+    width: 180
+    height: 160
+    z: 3
+    props:
+      categories:
+        - Setup
+        - Shortcuts
+        - Runtime
+        - Reference
+  - id: spatial_field_shell
+    type: shape
+    x: 612
+    y: 124
+    width: 384
+    height: 296
+    z: 4
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 8
+  - id: editor_ghost_zone
+    type: shape
+    x: 804
+    y: 124
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.focus_ring}"
+      border_width: 1
+      radius: 6
+  - id: terminal_ghost_zone
+    type: shape
+    x: 616
+    y: 220
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 6
+  - id: docs_ghost_zone
+    type: shape
+    x: 804
+    y: 220
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.border}"
+      border_width: 1
+      radius: 6
+  - id: optional_tracker_ghost_zone
+    type: shape
+    x: 804
+    y: 316
+    width: 192
+    height: 104
+    z: 5
+    props:
+      fill: transparent
+      stroke: "{color.warning}"
+      border_width: 1
+      radius: 6
+  - id: spatial_preflight_note
+    type: text.label
+    x: 624
+    y: 328
+    width: 172
+    height: 80
+    z: 6
+    props:
+      text: Preflight shows intended editor, terminal, docs, and optional tracker zones. Existing windows stay user-owned.
+      size: 11
+  - id: coding_mode_card
+    type: ritual.card
+    x: 56
+    y: 136
+    width: 540
+    height: 220
+    z: 10
+    props:
+      title: Coding Mode
+      subtitle: Confirm, open the editor, optional terminal, docs, and tracker
+      recipe_id: coding_mode
+      primary_action: run
+    binding:
+      kind: recipe
+      recipe_id: coding_mode
+  - id: coding_status
+    type: ritual.status
+    x: 56
+    y: 384
+    width: 540
+    height: 128
+    z: 11
+    props:
+      title: Coding Mode Status
+      recipe_id: coding_mode
+    binding:
+      kind: recipe
+      recipe_id: coding_mode
+  - id: coding_controller
+    type: ritual.controller
+    x: 624
+    y: 424
+    width: 360
+    height: 128
+    z: 12
+    props:
+      recipe_id: coding_mode
+      controls:
+        - pause
+        - resume
+        - stop
+    binding:
+      kind: recipe
+      recipe_id: coding_mode
+  - id: project_folder
+    type: shortcut.folder
+    x: 624
+    y: 136
+    width: 172
+    height: 80
+    z: 13
+    props:
+      title: Project Folder
+      path: '~/Documents/Project'
+    binding:
+      kind: shortcut.folder
+      path: '~/Documents/Project'
+  - id: editor_shortcut
+    type: shortcut.app
+    x: 812
+    y: 136
+    width: 172
+    height: 80
+    z: 14
+    props:
+      title: Editor
+      path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+    binding:
+      kind: shortcut.app
+      path: 'C:\Program Files\Microsoft VS Code\Code.exe'
+  - id: terminal_shortcut
+    type: shortcut.app
+    x: 624
+    y: 232
+    width: 172
+    height: 80
+    z: 15
+    props:
+      title: Terminal
+      path: 'C:\Program Files\Windows Terminal\wt.exe'
+    binding:
+      kind: shortcut.app
+      path: 'C:\Program Files\Windows Terminal\wt.exe'
+  - id: docs_shortcut
+    type: shortcut.url
+    x: 812
+    y: 232
+    width: 172
+    height: 80
+    z: 16
+    props:
+      title: Docs
+      url: "https://docs.python.org/3/"
+    binding:
+      kind: shortcut.url
+      url: "https://docs.python.org/3/"
+  - id: tracker_shortcut
+    type: shortcut.url
+    x: 812
+    y: 328
+    width: 172
+    height: 80
+    z: 17
+    props:
+      title: Tracker
+      url: "https://example.invalid/issues"
+    binding:
+      kind: shortcut.url
+      url: "https://example.invalid/issues"
+  - id: recent_activity
+    type: recent.activity
+    x: 56
+    y: 520
+    width: 540
+    height: 168
+    z: 18
+    props:
+      title: Recent activity
+      limit: 6
+    binding:
+      kind: recent_runs
+      id: local

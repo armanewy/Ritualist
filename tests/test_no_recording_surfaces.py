@@ -6,10 +6,10 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.actions.registry import create_default_registry
-from ritualist.app_setup import _planned_paths
-from ritualist.cli import app
-from ritualist.config import load_app_config
+from setpiece.actions.registry import create_default_registry
+from setpiece.app_setup import _planned_paths
+from setpiece.cli import app
+from setpiece.config import load_app_config
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -39,9 +39,9 @@ def test_cli_help_does_not_expose_watch_me_command() -> None:
 
 def test_gui_canvas_and_home_visible_text_do_not_expose_watch_me() -> None:
     surface_files = (
-        REPO_ROOT / "ritualist" / "canvas" / "qml" / "CanvasUse.qml",
-        REPO_ROOT / "ritualist" / "home" / "qml" / "Home.qml",
-        REPO_ROOT / "ritualist" / "ui" / "main_window.py",
+        REPO_ROOT / "setpiece" / "canvas" / "qml" / "CanvasUse.qml",
+        REPO_ROOT / "setpiece" / "home" / "qml" / "Home.qml",
+        REPO_ROOT / "setpiece" / "ui" / "main_window.py",
     )
 
     for path in surface_files:

@@ -1,6 +1,6 @@
 {
-  "schema": "ritualist.golden_contract.v1",
-  "output": "ritualist actions --json",
+  "schema": "setpiece.golden_contract.v1",
+  "output": "setpiece actions --json",
   "ordering": "action_name ascending by registry metadata order",
   "required_top_level_fields": [
     "action_name",

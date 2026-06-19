@@ -1,4 +1,4 @@
-# Ritualist UI Migration Roadmap
+# Setpiece UI Migration Roadmap
 
 This roadmap turns the accepted Quiet Instrument design into executable phases.
 It is scoped to the tray-first UI migration and does not authorize new
@@ -23,7 +23,7 @@ Current baseline at `4789b4c1b1795b89d91d109050c9153b9e41f13a` or later:
 
 | Current item | Target item | Migration rule | Exit evidence |
 | --- | --- | --- | --- |
-| `Ritualist.exe` opens Home | Resident Agent opens silently at startup and Picker on manual activation | Default entry moves to the Agent; Home is removed after replacement passes | Packaged manual launch opens Picker through one Agent; startup shows tray only |
+| `Setpiece.exe` opens Home | Resident Agent opens silently at startup and Picker on manual activation | Default entry moves to the Agent; Home is removed after replacement passes | Packaged manual launch opens Picker through one Agent; startup shows tray only |
 | Home Room launcher | Contextual Picker | Picker exposes current Room, search, recents, browse all, Builder, and return to active | Picker tests and screenshots at 100/125/150% show no dashboard shell |
 | Home-spawned Room process | Single Agent activation and one-run coordinator | Second process redirects narrow intent and exits | Single-instance tests; no duplicate active runtime process |
 | Canvas `ApplicationWindow` runtime shell | Quiet Instrument owned by Agent | Active run uses one compact Instrument; Canvas no longer appears for Agent-started runs | Packaged active-run evidence shows no Home or Canvas runtime window |
@@ -75,7 +75,7 @@ Exit criteria:
 
 Scope:
 
-- Add `Ritualist.exe --agent`, `--agent --startup`, and
+- Add `Setpiece.exe --agent`, `--agent --startup`, and
   `--agent --open-picker` as opt-in paths.
 - Own one tray icon, the stable right-click menu, local activation service, and
   explicit Exit.
@@ -83,7 +83,7 @@ Scope:
 Exit criteria:
 
 - Startup silent shows no window.
-- Tray tooltip reports `Ritualist - Ready`.
+- Tray tooltip reports `Setpiece - Ready`.
 - Right-click menu works.
 - Redirected activation reaches the existing Agent.
 - Closing any temporary surface does not exit the Agent.

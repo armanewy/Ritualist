@@ -1,6 +1,6 @@
-# Ritualist Performance Contract
+# Setpiece Performance Contract
 
-Ritualist is a local-first desktop app. Runtime work can touch browsers, native windows, run logs, and recipe files, but the Home UI must stay responsive while that work happens. This contract defines the rules and budgets for changes that affect startup, Home, cards, run status, logging, and runtime events.
+Setpiece is a local-first desktop app. Runtime work can touch browsers, native windows, run logs, and recipe files, but the Home UI must stay responsive while that work happens. This contract defines the rules and budgets for changes that affect startup, Home, cards, run status, logging, and runtime events.
 
 ## Performance Non-Negotiables
 
@@ -40,7 +40,7 @@ Runtime events are the bridge between workflow execution and UI state. They shou
 
 ## Event Coalescing Helper
 
-Use `ritualist.event_coalescing.EventCoalescer` for noisy UI-facing updates such as progress ticks, wait timers, or repeated status refreshes. It keeps only the newest state for each key, emits at a bounded target rate, and can be flushed explicitly when a final state must be delivered.
+Use `setpiece.event_coalescing.EventCoalescer` for noisy UI-facing updates such as progress ticks, wait timers, or repeated status refreshes. It keeps only the newest state for each key, emits at a bounded target rate, and can be flushed explicitly when a final state must be delivered.
 
 - The default target is 60 Hz.
 - Prefer 30-60 Hz for UI updates.
@@ -65,12 +65,12 @@ Card visuals should be predictable, bounded, and cheap to present.
 
 - Use stable asset dimensions so cards do not relayout after images load.
 - Keep large image decoding off the UI thread.
-- Prepare Home card images through `ritualist.home.assets.HomeThumbnailCache` and pass QML only cached local thumbnail URLs or an empty image value.
+- Prepare Home card images through `setpiece.home.assets.HomeThumbnailCache` and pass QML only cached local thumbnail URLs or an empty image value.
 - Build thumbnails from a worker, setup task, or other non-GUI path; `ensure_thumbnail()` may decode image data and must not run from QML bindings or UI signal handlers.
 - The default Home thumbnail bound is 512x288. Increase it only with a measured reason and keep dimensions explicit.
 - Cache decoded or scaled assets when cards are reused.
 - Prefer pre-sized thumbnails for Home cards.
-- Avoid loading remote assets. Ritualist should remain local-first.
+- Avoid loading remote assets. Setpiece should remain local-first.
 - Missing or invalid assets should fall back quickly without blocking card rendering.
 - Animated card backgrounds are intentionally out of scope for now.
 
@@ -113,7 +113,7 @@ The test evidence covers:
 - A shortcut-heavy test-only Room where folder/app/URL actions remain Shortcuts, not Rituals.
 - Recent Activity rendering with 20 bounded run records.
 
-The measurements are attached as pytest record properties under schema `ritualist.hero_room.performance_evidence.v1`. Timing budgets in this file are advisory: the tests warn when a measurement exceeds its budget, but they do not fail solely because a local machine is slow. Functional assertions still fail for broken model shape, missing hero Rooms, accidental side effects, or shortcut/ritual boundary regressions.
+The measurements are attached as pytest record properties under schema `setpiece.hero_room.performance_evidence.v1`. Timing budgets in this file are advisory: the tests warn when a measurement exceeds its budget, but they do not fail solely because a local machine is slow. Functional assertions still fail for broken model shape, missing hero Rooms, accidental side effects, or shortcut/ritual boundary regressions.
 
 Refresh this evidence with:
 

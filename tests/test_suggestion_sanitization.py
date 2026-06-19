@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.suggestions.sanitize import (
+from setpiece.suggestions.sanitize import (
     HISTORY_OMITTED,
     REDACTED,
     sanitize_app_name,
@@ -35,8 +35,8 @@ def test_url_sanitization_redacts_credentials_and_private_markers() -> None:
 
 
 def test_local_path_sanitization_returns_minimal_labels_without_ancestors() -> None:
-    assert sanitize_local_path(r"C:\Users\alice\Documents\Ritualist\deck.md") == "deck.md"
-    assert sanitize_local_path("/home/alice/projects/ritualist") == "ritualist"
+    assert sanitize_local_path(r"C:\Users\alice\Documents\Setpiece\deck.md") == "deck.md"
+    assert sanitize_local_path("/home/alice/projects/setpiece") == "setpiece"
     assert sanitize_local_path(r"C:\Users\alice") == "user folder"
     assert sanitize_local_path(r"\\fileserver\team\Plans\launch.xlsx") == "launch.xlsx"
     assert sanitize_local_path(r"C:\Users\alice\PrivateVault\notes.txt") == REDACTED
@@ -46,7 +46,7 @@ def test_local_path_sanitization_returns_minimal_labels_without_ancestors() -> N
     assert sanitize_local_path("x:server/share/raw") == REDACTED
 
     summary = sanitize_evidence_summary(
-        r"Opened C:\Users\alice\Documents\Ritualist\deck.md and /home/alice/projects/notes.txt"
+        r"Opened C:\Users\alice\Documents\Setpiece\deck.md and /home/alice/projects/notes.txt"
     )
     assert "alice" not in summary
     assert "Documents" not in summary
@@ -67,7 +67,7 @@ def test_window_title_and_app_name_sanitization_reject_sensitive_context() -> No
         == REDACTED
     )
 
-    assert sanitize_app_name(r"C:\Program Files\Ritualist\Ritualist.exe") == "Ritualist"
+    assert sanitize_app_name(r"C:\Program Files\Setpiece\Setpiece.exe") == "Setpiece"
     assert sanitize_app_name("Code.exe") == "Code"
     assert sanitize_app_name("project.example.test") == REDACTED
     assert sanitize_app_name("file://server/share/raw") == REDACTED
@@ -194,13 +194,13 @@ def test_evidence_mapping_outputs_only_sanitized_labels() -> None:
         {
             "url": "https://project.example.com/a/b?refresh_token=secret",
             "window_title": "Project Room - Browser",
-            "path": r"C:\Users\alice\Projects\Ritualist\README.md",
-            "app_name": r"C:\Program Files\Ritualist\Ritualist.exe",
+            "path": r"C:\Users\alice\Projects\Setpiece\README.md",
+            "app_name": r"C:\Program Files\Setpiece\Setpiece.exe",
             "message_body": "From: Alice\nTo: Bob\nSubject: Private",
         }
     )
 
-    assert summary == "[redacted]; Project Room - Browser; README.md; Ritualist"
+    assert summary == "[redacted]; Project Room - Browser; README.md; Setpiece"
     assert "alice" not in summary
     assert "refresh_token" not in summary
     assert "message_body" not in summary
@@ -225,7 +225,7 @@ def test_evidence_mapping_blocks_schemeless_urls_and_coordinate_keys() -> None:
 
 
 def test_sanitizer_module_has_no_collection_or_execution_imports() -> None:
-    source = Path("ritualist/suggestions/sanitize.py").read_text(encoding="utf-8")
+    source = Path("setpiece/suggestions/sanitize.py").read_text(encoding="utf-8")
 
     forbidden_imports = (
         "import keyboard",

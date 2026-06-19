@@ -4,11 +4,11 @@ import json
 
 from typer.testing import CliRunner
 
-from ritualist.canvas import load_bundled_canvas, validate_canvas_document
-from ritualist.canvas.storage import canvas_show_payload
-from ritualist.canvas.theme_bridge import validate_canvas_theme_selection
-from ritualist.cli import app
-from ritualist.rooms import room_list_payload, room_show_payload
+from setpiece.canvas import load_bundled_canvas, validate_canvas_document
+from setpiece.canvas.storage import canvas_show_payload
+from setpiece.canvas.theme_bridge import validate_canvas_theme_selection
+from setpiece.cli import app
+from setpiece.rooms import room_list_payload, room_show_payload
 
 
 EXPECTED_ROOM_IDS = {"gaming", "project", "support_desk"}
@@ -19,7 +19,7 @@ def test_room_list_cli_exposes_starter_rooms() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["schema_version"] == "ritualist.rooms.v1"
+    assert payload["schema_version"] == "setpiece.rooms.v1"
     assert {room["id"] for room in payload["rooms"]} == EXPECTED_ROOM_IDS
     assert {room["canvas_id"] for room in payload["rooms"]} == {
         "gaming_desktop",
@@ -33,7 +33,7 @@ def test_room_show_alias_matches_bundled_canvas_payload() -> None:
         room_payload = room_show_payload(str(room["id"]))
         canvas_payload = canvas_show_payload(load_bundled_canvas(str(room["canvas_id"])))
 
-        assert room_payload["schema_version"] == "ritualist.room.show.v1"
+        assert room_payload["schema_version"] == "setpiece.room.show.v1"
         assert room_payload["room"] == room
         assert room_payload["canvas"] == canvas_payload["canvas"]
         assert room_payload["validation"] == canvas_payload["validation"]

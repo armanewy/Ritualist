@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -13,7 +13,7 @@ from ritualist.canvas import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CANVAS_USE_QML = REPO_ROOT / "ritualist" / "canvas" / "qml" / "CanvasUse.qml"
+CANVAS_USE_QML = REPO_ROOT / "setpiece" / "canvas" / "qml" / "CanvasUse.qml"
 
 
 def _qml() -> str:
@@ -257,7 +257,7 @@ def test_canvas_use_qml_recent_activity_adds_ledger_context_without_paths() -> N
         "Declined confirmation",
         "Cleanup available",
         "Cleanup: \" + root.formatLedgerToken(item.cleanup_choice)",
-        "Ritualist-opened resource",
+        "Setpiece-opened resource",
         "root.activityLedgerSummary(modelData)",
     ):
         assert snippet in qml

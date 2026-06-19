@@ -1,11 +1,11 @@
-# Ritualist UI/UX Convergence
+# Setpiece UI/UX Convergence
 
 This document binds the post-north-star UI direction. It is a product design
 contract, not a new capability plan.
 
 ## Design Character
 
-Ritualist uses one design system with three expressions:
+Setpiece uses one design system with three expressions:
 
 - Quiet Instrument: the default invocation and active-run surface.
 - Spatial Field: a preflight or recovery visualization when desktop geometry
@@ -73,7 +73,7 @@ It should preserve chronology and distinguish `completed`, `failed`, `not run`,
 
 ## Confirmation
 
-Ritualist keeps the native top-level confirmation dialog. The active Room and
+Setpiece keeps the native top-level confirmation dialog. The active Room and
 Quiet Instrument should visibly enter `Confirmation required`, while the native
 dialog remains the authoritative decision surface above other applications.
 

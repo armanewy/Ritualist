@@ -6,9 +6,9 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.errors import RecipeValidationError
-from ritualist.cli import app
-from ritualist.recipe_transparency import (
+from setpiece.errors import RecipeValidationError
+from setpiece.cli import app
+from setpiece.recipe_transparency import (
     load_recipe_overrides,
     open_yaml_payload,
     save_recipe_setup_overrides,
@@ -38,9 +38,9 @@ def test_view_recipe_payload_explains_setup_and_safety(tmp_path: Path) -> None:
         "target_id",
     ]
     assert payload["actions"]["auto_run_after_edit"] is False
-    assert "python -m ritualist doctor gaming_mode" == payload["actions"]["doctor"]
-    assert "python -m ritualist dry-run gaming_mode" == payload["actions"]["dry_run"]
-    assert any("Never automates gameplay" in item for item in payload["what_ritualist_will_never_do"])
+    assert "python -m setpiece doctor gaming_mode" == payload["actions"]["doctor"]
+    assert "python -m setpiece dry-run gaming_mode" == payload["actions"]["dry_run"]
+    assert any("Never automates gameplay" in item for item in payload["what_setpiece_will_never_do"])
     assert any(step["requires_confirmation"] for step in payload["confirmations"])
     assert payload["blocked_branches"]
     assert any("Editing setup saves overrides only" in line for line in payload["plain_language_plan"])

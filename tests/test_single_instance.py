@@ -3,8 +3,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from ritualist.agent.activation import ActivationIntent, parse_activation_message
-from ritualist.agent.single_instance import (
+from setpiece.agent.activation import ActivationIntent, parse_activation_message
+from setpiece.agent.single_instance import (
     ActivationServer,
     SingleInstanceCoordinator,
     default_activation_server_name,
@@ -104,7 +104,7 @@ class FakeClientSocket:
 def test_single_instance_import_does_not_import_pyside() -> None:
     script = """
 import sys
-import ritualist.agent.single_instance
+import setpiece.agent.single_instance
 loaded = [name for name in sys.modules if name == "PySide6" or name.startswith("PySide6.")]
 raise SystemExit(1 if loaded else 0)
 """
@@ -114,29 +114,29 @@ raise SystemExit(1 if loaded else 0)
 
 
 def test_default_activation_server_name_is_user_scoped_and_safe() -> None:
-    name = default_activation_server_name("ritualist")
+    name = default_activation_server_name("setpiece")
 
     assert name.endswith("-activation-v1")
     assert "/" not in name
     assert "\\" not in name
-    assert "ritualist-" in name
+    assert "setpiece-" in name
 
 
 def test_activation_server_accepts_valid_intent_and_rejects_malformed_message() -> None:
     valid_socket = FakeAcceptedSocket(ActivationIntent("open_picker").to_bytes())
-    malformed_socket = FakeAcceptedSocket(b'{"schema_version":"ritualist.activation.v1","intent":"bad"}')
+    malformed_socket = FakeAcceptedSocket(b'{"schema_version":"setpiece.activation.v1","intent":"bad"}')
     adapter = FakeServerAdapter(sockets=[valid_socket, malformed_socket])
     received: list[str] = []
     server = ActivationServer(
         lambda intent: received.append(intent.intent),
-        server_name="ritualist-test",
+        server_name="setpiece-test",
         server_adapter=adapter,
     )
 
     assert server.start() is True
     adapter.trigger()
 
-    assert adapter.listened_name == "ritualist-test"
+    assert adapter.listened_name == "setpiece-test"
     assert received == ["open_picker"]
     assert valid_socket.disconnected is True
     assert malformed_socket.disconnected is True
@@ -147,12 +147,12 @@ def test_send_activation_intent_uses_local_socket_adapter_contract() -> None:
 
     redirected = send_activation_intent(
         ActivationIntent("open_settings"),
-        server_name="ritualist-test",
+        server_name="setpiece-test",
         socket_factory=lambda: client,
     )
 
     assert redirected is True
-    assert client.server_name == "ritualist-test"
+    assert client.server_name == "setpiece-test"
     assert parse_activation_message(client.data).intent == "open_settings"
     assert client.disconnected is True
 
@@ -162,7 +162,7 @@ def test_send_activation_intent_reports_failed_connection() -> None:
 
     redirected = send_activation_intent(
         ActivationIntent("open_builder"),
-        server_name="ritualist-test",
+        server_name="setpiece-test",
         socket_factory=lambda: client,
     )
 
@@ -175,7 +175,7 @@ def test_coordinator_redirects_second_process_when_primary_exists() -> None:
     server = FakeServerAdapter(listen_result=False)
     client = FakeClientSocket()
     coordinator = SingleInstanceCoordinator(
-        server_name="ritualist-test",
+        server_name="setpiece-test",
         server_factory=lambda: server,
         socket_factory=lambda: client,
         server_adapter_type=FakeServerAdapter,
@@ -198,7 +198,7 @@ def test_coordinator_removes_stale_server_and_retries_primary_claim() -> None:
     servers = [first, second]
     client = FakeClientSocket(connected=False)
     coordinator = SingleInstanceCoordinator(
-        server_name="ritualist-test",
+        server_name="setpiece-test",
         server_factory=lambda: servers.pop(0),
         socket_factory=lambda: client,
         server_adapter_type=FakeServerAdapter,
@@ -212,5 +212,5 @@ def test_coordinator_removes_stale_server_and_retries_primary_claim() -> None:
     assert result.is_primary is True
     assert result.redirected is False
     assert result.server is not None
-    assert result.server.server_name == "ritualist-test"
-    assert FakeServerAdapter.removed == ["ritualist-test"]
+    assert result.server.server_name == "setpiece-test"
+    assert FakeServerAdapter.removed == ["setpiece-test"]

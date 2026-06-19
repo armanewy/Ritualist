@@ -4,14 +4,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ritualist.agent.notification_policy import (
+from setpiece.agent.notification_policy import (
     LONG_HIDDEN_RUN_SECONDS,
     NotificationDecision,
     NotificationEvent,
     NotificationRequest,
     NotificationUrgency,
 )
-from ritualist.agent.notifications import (
+from setpiece.agent.notifications import (
     AgentNotificationAction,
     AgentNotificationButton,
     AgentNotificationMessage,
@@ -69,7 +69,7 @@ def test_foreground_confirmation_stays_in_app() -> None:
     assert message is None
 
 
-def test_background_failure_and_recovery_open_ritualist_without_mutating_actions() -> None:
+def test_background_failure_and_recovery_open_setpiece_without_mutating_actions() -> None:
     failure = build_agent_notification_message(
         NotificationRequest(
             event=NotificationEvent.FAILURE,
@@ -89,13 +89,13 @@ def test_background_failure_and_recovery_open_ritualist_without_mutating_actions
     assert failure is not None
     assert recovery is not None
     assert [(action.action, action.label) for action in failure.actions] == [
-        (AgentNotificationAction.OPEN_RITUALIST, "Open Ritualist")
+        (AgentNotificationAction.OPEN_SETPIECE, "Open Setpiece")
     ]
     assert [(action.action, action.label) for action in recovery.actions] == [
-        (AgentNotificationAction.OPEN_RITUALIST, "Open Ritualist")
+        (AgentNotificationAction.OPEN_SETPIECE, "Open Setpiece")
     ]
     exposed_actions = {action.value for action in AgentNotificationAction}
-    assert exposed_actions == {"review", "open_ritualist", "check_again"}
+    assert exposed_actions == {"review", "open_setpiece", "check_again"}
     assert exposed_actions.isdisjoint(
         {"approve", "approve_r2", "approve_r3", "run_ritual", "stop_ritual"}
     )
@@ -114,7 +114,7 @@ def test_foreground_failure_does_not_duplicate_visible_failure() -> None:
     assert message is None
 
 
-def test_long_hidden_completion_notifies_once_with_open_ritualist_action() -> None:
+def test_long_hidden_completion_notifies_once_with_open_setpiece_action() -> None:
     backend = RecordingNotificationBackend()
     router = AgentNotificationRouter(backend)
 
@@ -134,7 +134,7 @@ def test_long_hidden_completion_notifies_once_with_open_ritualist_action() -> No
     assert message.title == "Ritual complete"
     assert message.urgency == NotificationUrgency.QUIET
     assert [(action.action, action.label) for action in message.actions] == [
-        (AgentNotificationAction.OPEN_RITUALIST, "Open Ritualist")
+        (AgentNotificationAction.OPEN_SETPIECE, "Open Setpiece")
     ]
 
 
@@ -176,12 +176,12 @@ def test_router_dispatches_only_known_notification_actions() -> None:
     router = AgentNotificationRouter(RecordingNotificationBackend(), on_action=routed.append)
 
     assert router.dispatch_action(AgentNotificationAction.REVIEW)
-    assert router.dispatch_action("open_ritualist")
+    assert router.dispatch_action("open_setpiece")
     assert not router.dispatch_action("run_ritual")
     assert not router.dispatch_action("stop_ritual")
     assert routed == [
         AgentNotificationAction.REVIEW,
-        AgentNotificationAction.OPEN_RITUALIST,
+        AgentNotificationAction.OPEN_SETPIECE,
     ]
 
 
@@ -238,7 +238,7 @@ def test_agent_notifications_import_without_gui_or_windows_dependencies() -> Non
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.notifications
+import setpiece.agent.notifications
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

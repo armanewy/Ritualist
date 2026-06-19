@@ -1,0 +1,4 @@
+interface:
+  display_name: "Setpiece Release Validation"
+  short_description: "Gate Setpiece releases with evidence"
+  default_prompt: "Use $setpiece-release-validation to run the Setpiece release gate and report tag readiness."

@@ -5,7 +5,7 @@ from pathlib import Path
 from types import ModuleType
 from types import SimpleNamespace
 
-from ritualist.adapters.browser_playwright import PlaywrightBrowserAdapter
+from setpiece.adapters.browser_playwright import PlaywrightBrowserAdapter
 
 
 class FakePage:
@@ -148,7 +148,7 @@ def install_fake_playwright(monkeypatch, fake_playwright: FakePlaywright) -> Non
 def test_browser_open_uses_persistent_profile_and_new_window(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -169,7 +169,7 @@ def test_browser_open_uses_persistent_profile_and_new_window(tmp_path, monkeypat
 def test_browser_open_clean_start_adds_prevention_launch_flags(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -187,7 +187,7 @@ def test_browser_open_clean_start_adds_prevention_launch_flags(tmp_path, monkeyp
 def test_browser_open_launch_args_do_not_disable_browser_sandbox(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -202,7 +202,7 @@ def test_browser_open_launch_args_do_not_disable_browser_sandbox(tmp_path, monke
 def test_browser_open_rejects_non_dedicated_profiles(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -226,7 +226,7 @@ def test_browser_open_rejects_non_dedicated_profiles(tmp_path, monkeypatch):
 def test_browser_open_restore_prompt_absent_noops(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -250,7 +250,7 @@ def test_browser_open_unknown_prompt_is_not_dismissed(tmp_path, monkeypatch):
     page.visible_roles.add(("button", "OK"))
     fake_playwright.chromium.context.pages.append(page)
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -273,7 +273,7 @@ def test_browser_open_restore_prompt_text_in_page_content_is_not_dismissed(tmp_p
     page.visible_roles.add(("button", "Cancel"))
     fake_playwright.chromium.context.pages.append(page)
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -292,7 +292,7 @@ def test_browser_open_restore_prompt_text_in_page_content_is_not_dismissed(tmp_p
 def test_browser_text_visible_is_read_only(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -309,7 +309,7 @@ def test_browser_text_visible_is_read_only(tmp_path, monkeypatch):
 def test_browser_structured_waits_and_clicks_use_playwright_locators(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -345,7 +345,7 @@ def test_browser_structured_waits_and_clicks_use_playwright_locators(tmp_path, m
 def test_browser_wait_media_playing_requires_time_advancement(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)
@@ -367,7 +367,7 @@ def test_browser_wait_media_playing_requires_time_advancement(tmp_path, monkeypa
 def test_browser_wait_media_playing_rejects_paused_and_stalled_media(tmp_path, monkeypatch):
     fake_playwright = FakePlaywright()
     monkeypatch.setattr(
-        "ritualist.adapters.browser_playwright.browser_profiles_dir",
+        "setpiece.adapters.browser_playwright.browser_profiles_dir",
         lambda: tmp_path,
     )
     install_fake_playwright(monkeypatch, fake_playwright)

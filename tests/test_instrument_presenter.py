@@ -4,13 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ritualist.agent.instrument_model import build_instrument_model
-from ritualist.agent.instrument_presenter import (
+from setpiece.agent.instrument_model import build_instrument_model
+from setpiece.agent.instrument_presenter import (
     PresentedInstrument,
     build_instrument_presentation,
     present_instrument,
 )
-from ritualist.agent.models import AgentConfirmation, AgentRunState, AgentState, AgentStep
+from setpiece.agent.models import AgentConfirmation, AgentRunState, AgentState, AgentStep
 
 
 def test_presenter_groups_ready_overview_and_primary_actions() -> None:
@@ -176,7 +176,7 @@ def test_presenter_keeps_interruption_history_compact_until_explicitly_opened() 
     assert opened.compact_history is False
     assert opened.sections[-1].collapsed is False
     assert [row.text for row in opened.sections[-1].rows] == [
-        "Ritualist exited before finalizing this run.",
+        "Setpiece exited before finalizing this run.",
         "Step 1: Open launcher (success)",
         "Step 2: Wait for Play (waiting)",
     ]
@@ -186,8 +186,8 @@ def test_instrument_modules_import_without_gui_or_windows_dependencies() -> None
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.instrument_model
-import ritualist.agent.instrument_presenter
+import setpiece.agent.instrument_model
+import setpiece.agent.instrument_presenter
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]
@@ -211,7 +211,7 @@ def _interrupted_state() -> dict[str, object]:
         "recipe_id": "gaming_mode",
         "last_run": {
             "state": "interrupted",
-            "final_message": "Ritualist exited before finalizing this run.",
+            "final_message": "Setpiece exited before finalizing this run.",
             "run_log_path": "C:/runs/run-2",
             "step_summaries": (
                 {"index": 1, "name": "Open launcher", "state": "success"},

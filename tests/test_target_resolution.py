@@ -8,9 +8,9 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.intent_planner import IntentSpec, compile_intent_to_plan, compile_plan_reference
-from ritualist.target_resolution import (
+from setpiece.cli import app
+from setpiece.intent_planner import IntentSpec, compile_intent_to_plan, compile_plan_reference
+from setpiece.target_resolution import (
     DesktopShortcutProvider,
     ExecutablePathProvider,
     RemovableMediaProvider,
@@ -318,8 +318,8 @@ def test_target_discovery_does_not_create_runtime_adapters(monkeypatch) -> None:
     def fail_executor(*_args, **_kwargs):
         raise AssertionError("target discovery must not create workflow executor")
 
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", fail_adapter_creation)
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_executor)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", fail_adapter_creation)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", fail_executor)
 
     result = resolve_target(
         "diablo_iv",
@@ -334,7 +334,7 @@ def test_explicit_empty_provider_list_does_not_use_defaults(monkeypatch) -> None
     def fail_defaults():
         raise AssertionError("explicit providers=() must not use default providers")
 
-    monkeypatch.setattr("ritualist.target_resolution.default_target_providers", fail_defaults)
+    monkeypatch.setattr("setpiece.target_resolution.default_target_providers", fail_defaults)
 
     result = resolve_target(
         "diablo_iv",
@@ -611,7 +611,7 @@ def test_target_start_intent_compiles_through_target_resolution(monkeypatch) -> 
             ),
         ),
     )
-    monkeypatch.setattr("ritualist.target_resolution.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("setpiece.target_resolution.resolve_target", lambda _target: resolution)
 
     plan = compile_intent_to_plan(
         IntentSpec(
@@ -655,7 +655,7 @@ def test_target_start_yaml_shorthand_compiles(tmp_path: Path, monkeypatch) -> No
             ),
         ),
     )
-    monkeypatch.setattr("ritualist.target_resolution.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("setpiece.target_resolution.resolve_target", lambda _target: resolution)
     intent_path = tmp_path / "target_start.yaml"
     intent_path.write_text(
         """
@@ -680,7 +680,7 @@ def test_target_start_cli_fixture_compiles_concrete_target(monkeypatch) -> None:
         state=TargetState.NOT_FOUND,
         suggestions=("Choose a local executable or shortcut for this target.",),
     )
-    monkeypatch.setattr("ritualist.target_resolution.resolve_target", lambda _target: resolution)
+    monkeypatch.setattr("setpiece.target_resolution.resolve_target", lambda _target: resolution)
 
     result = CliRunner().invoke(app, ["plan", "preview", "target.start:diablo_iv", "--json"])
 
@@ -694,7 +694,7 @@ def test_target_start_cli_fixture_compiles_concrete_target(monkeypatch) -> None:
 def test_target_cli_discover_json_shape(monkeypatch) -> None:
     target = builtin_target_catalog().resolve("diablo_iv")[0]
     monkeypatch.setattr(
-        "ritualist.cli.resolve_target",
+        "setpiece.cli.resolve_target",
         lambda _target: TargetResolutionResult(
             query="diablo_iv",
             target=target,
@@ -715,7 +715,7 @@ def test_target_cli_discover_json_shape(monkeypatch) -> None:
 def test_target_cli_plan_json_includes_home_summary(monkeypatch) -> None:
     target = builtin_target_catalog().resolve("diablo_iv")[0]
     monkeypatch.setattr(
-        "ritualist.cli.resolve_target",
+        "setpiece.cli.resolve_target",
         lambda _target: TargetResolutionResult(
             query="diablo_iv",
             target=target,
@@ -741,10 +741,10 @@ def test_doctor_target_json_is_plan_doctor_and_side_effect_free(monkeypatch) -> 
     def fail_executor(*_args, **_kwargs):
         raise AssertionError("target doctor must not create workflow executor")
 
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", fail_adapter_creation)
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", fail_executor)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", fail_adapter_creation)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", fail_executor)
     monkeypatch.setattr(
-        "ritualist.cli.resolve_target",
+        "setpiece.cli.resolve_target",
         lambda _target: TargetResolutionResult(
             query="diablo_iv",
             target=target,

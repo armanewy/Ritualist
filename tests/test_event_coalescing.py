@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ritualist.event_coalescing import DEFAULT_TARGET_HZ, EventCoalescer
+from setpiece.event_coalescing import DEFAULT_TARGET_HZ, EventCoalescer
 
 
 class FakeClock:

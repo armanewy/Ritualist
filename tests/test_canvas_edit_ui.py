@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasDocument,
@@ -10,7 +10,7 @@ from ritualist.canvas import (
     CanvasEditUiBridge,
     load_canvas,
 )
-from ritualist.errors import RitualistError
+from setpiece.errors import SetpieceError
 
 
 def _canvas() -> CanvasDocument:
@@ -32,7 +32,7 @@ def _canvas() -> CanvasDocument:
 
 
 def test_edit_ui_bridge_selects_moves_resizes_and_saves(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("ritualist.canvas.edit.canvases_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.canvas.edit.canvases_dir", lambda: tmp_path)
     bridge = CanvasEditUiBridge(CanvasEditSession(document=_canvas()))
 
     bridge.select("title")
@@ -57,7 +57,7 @@ def test_edit_ui_bridge_exposes_selected_property_and_binding_model() -> None:
     model = bridge.select("title")
     palette = {entry["type_id"] for entry in model["palette"]}
 
-    assert model["schema_version"] == "ritualist.canvas.edit_ui.v1"
+    assert model["schema_version"] == "setpiece.canvas.edit_ui.v1"
     assert model["selected_component"]["id"] == "title"
     assert {
         "ritual.card",
@@ -91,16 +91,16 @@ def test_edit_ui_bridge_rejects_unsafe_or_unsupported_edits() -> None:
     ):
         try:
             operation()
-        except RitualistError as exc:
+        except SetpieceError as exc:
             assert expected in str(exc)
         else:  # pragma: no cover - assertion clarity
             raise AssertionError("unsafe edit should fail")
 
 
 def test_canvas_use_qml_contains_edit_mode_controls() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
-    text_field_qml = Path("ritualist/canvas/qml/CanvasPaperTextField.qml").read_text(encoding="utf-8")
-    combo_box_qml = Path("ritualist/canvas/qml/CanvasPaperComboBox.qml").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    text_field_qml = Path("setpiece/canvas/qml/CanvasPaperTextField.qml").read_text(encoding="utf-8")
+    combo_box_qml = Path("setpiece/canvas/qml/CanvasPaperComboBox.qml").read_text(encoding="utf-8")
 
     assert "setEditMode" in qml
     assert "Edit Room" in qml
@@ -124,10 +124,10 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
     assert "Apply Binding" in qml
     assert "if (root.canvasController.saveCanvas())" in qml
     assert "dispatch(componentId, actionId)" in qml
-    assert "ritualistE2EEnabled" in qml
+    assert "setpieceE2EEnabled" in qml
     assert "recordUiHeartbeat" in qml
 
-    app = Path("ritualist/canvas/app.py").read_text(encoding="utf-8")
+    app = Path("setpiece/canvas/app.py").read_text(encoding="utf-8")
     assert "@Slot(result=bool)" in app
     assert "def saveCanvas(self) -> bool:" in app
     assert "return True" in app
@@ -136,9 +136,9 @@ def test_canvas_use_qml_contains_edit_mode_controls() -> None:
 
 
 def test_canvas_use_qml_contains_low_spec_performance_controls() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
 
-    assert "ritualistCanvasPerformance" in qml
+    assert "setpieceCanvasPerformance" in qml
     assert "showPerformanceOverlay" in qml
     assert "Canvas performance" in qml
     assert "Behavior on opacity" in qml

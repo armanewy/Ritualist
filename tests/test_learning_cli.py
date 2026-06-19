@@ -5,14 +5,14 @@ import json
 import yaml
 from typer.testing import CliRunner
 
-from ritualist.activity_journal import ActivityJournal
-from ritualist.cli import app
-from ritualist.paths import config_file_path, learning_journal_path, learning_suggestions_path
+from setpiece.activity_journal import ActivityJournal
+from setpiece.cli import app
+from setpiece.paths import config_file_path, learning_journal_path, learning_suggestions_path
 
 
 def _use_app_data(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("RITUALIST_E2E", "1")
-    monkeypatch.setenv("RITUALIST_E2E_APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SETPIECE_E2E", "1")
+    monkeypatch.setenv("SETPIECE_E2E_APP_DATA_DIR", str(tmp_path))
 
 
 def test_learning_status_defaults_disabled_and_local(monkeypatch, tmp_path) -> None:
@@ -56,7 +56,7 @@ def test_learning_enable_writes_source_consent_and_explains_local_only(
 
     result = CliRunner().invoke(
         app,
-        ["learning", "enable", "--source", "ritualist_journal", "--source", "recent-items"],
+        ["learning", "enable", "--source", "setpiece_journal", "--source", "recent-items"],
     )
 
     assert result.exit_code == 0
@@ -64,8 +64,8 @@ def test_learning_enable_writes_source_consent_and_explains_local_only(
     assert "No Watch Me" in result.output
     config = yaml.safe_load(config_file_path().read_text(encoding="utf-8"))
     assert config["learning"]["enabled"] is True
-    assert config["learning"]["sources"] == ["ritualist_journal", "recent_items"]
-    assert config["learning"]["consent"]["sources"] == ["ritualist_journal", "recent_items"]
+    assert config["learning"]["sources"] == ["setpiece_journal", "recent_items"]
+    assert config["learning"]["consent"]["sources"] == ["setpiece_journal", "recent_items"]
     assert config["learning"]["background_collection"] is False
 
 
@@ -73,7 +73,7 @@ def test_learning_disable_preserves_existing_data_and_consent(monkeypatch, tmp_p
     _use_app_data(monkeypatch, tmp_path)
     assert CliRunner().invoke(
         app,
-        ["learning", "enable", "--source", "ritualist_journal", "--json"],
+        ["learning", "enable", "--source", "setpiece_journal", "--json"],
     ).exit_code == 0
     journal = ActivityJournal(enabled=True)
     assert journal.write("room_opened", room_id="gaming_desktop") is True
@@ -84,8 +84,8 @@ def test_learning_disable_preserves_existing_data_and_consent(monkeypatch, tmp_p
     data = json.loads(result.output)
     assert data["enabled"] is False
     assert data["effective_enabled"] is False
-    assert data["selected_sources"] == ["ritualist_journal"]
-    assert data["consented_sources"] == ["ritualist_journal"]
+    assert data["selected_sources"] == ["setpiece_journal"]
+    assert data["consented_sources"] == ["setpiece_journal"]
     assert learning_journal_path().exists()
 
 
@@ -97,7 +97,7 @@ def test_learning_sources_lists_only_allowed_v1_sources(monkeypatch, tmp_path) -
     assert result.exit_code == 0
     data = json.loads(result.output)
     source_ids = [source["id"] for source in data["sources"]]
-    assert source_ids == ["ritualist_journal", "open_windows", "recent_items"]
+    assert source_ids == ["setpiece_journal", "open_windows", "recent_items"]
     assert "browser_history" not in source_ids
     assert all(source["requires_explicit_selection"] is True for source in data["sources"])
     assert all(source["background_collection"] is False for source in data["sources"])

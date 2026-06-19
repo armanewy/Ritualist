@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.executor import WorkflowExecutor
-from ritualist.integrations.battlenet_readiness import BattleNetReadinessState
-from ritualist.recipe_loader import load_recipe
-from ritualist.target_resolution import (
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.executor import WorkflowExecutor
+from setpiece.integrations.battlenet_readiness import BattleNetReadinessState
+from setpiece.recipe_loader import load_recipe
+from setpiece.target_resolution import (
     TargetCandidate,
     TargetResolutionResult,
     TargetState,
@@ -178,12 +178,12 @@ def _gaming_recipe(overrides: dict[str, object] | None = None):
 
 
 def _gaming_recipe_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+    return Path(__file__).resolve().parents[1] / "setpiece" / "sample_recipes" / "gaming_mode.yaml"
 
 
 def _install_resolver(monkeypatch, resolver: Callable[[str], TargetResolutionResult]) -> None:
-    monkeypatch.setattr("ritualist.predicates.resolve_target", resolver)
-    monkeypatch.setattr("ritualist.actions.target_actions.resolve_target", resolver)
+    monkeypatch.setattr("setpiece.predicates.resolve_target", resolver)
+    monkeypatch.setattr("setpiece.actions.target_actions.resolve_target", resolver)
 
 
 def _static_resolver(resolution: TargetResolutionResult) -> Callable[[str], TargetResolutionResult]:

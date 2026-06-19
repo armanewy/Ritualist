@@ -6,7 +6,7 @@ from time import perf_counter
 from typing import Any
 import warnings
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -18,8 +18,8 @@ from ritualist.canvas import (
     load_bundled_canvas,
     validate_canvas_structure,
 )
-from ritualist.run_logs import RunRecord
-from ritualist.rooms import list_rooms
+from setpiece.run_logs import RunRecord
+from setpiece.rooms import list_rooms
 
 
 HERO_ROOM_IDS = ("gaming", "project", "support_desk")
@@ -37,7 +37,7 @@ HERO_TARGET_IDS = {"diablo_iv"}
 ADVISORY_MODEL_BUILD_BUDGET_MS = 75.0
 ADVISORY_STRESS_BUILD_BUDGET_MS = 250.0
 ADVISORY_STATE_UPDATE_BUDGET_MS = 25.0
-PERFORMANCE_EVIDENCE_SCHEMA = "ritualist.hero_room.performance_evidence.v1"
+PERFORMANCE_EVIDENCE_SCHEMA = "setpiece.hero_room.performance_evidence.v1"
 
 
 def test_hero_room_model_builds_record_advisory_evidence(record_property: Any) -> None:

@@ -1,6 +1,6 @@
 # Target Resolution Engine
 
-Target Resolution v1 lets Ritualist answer, "what local evidence says this
+Target Resolution v1 lets Setpiece answer, "what local evidence says this
 target can be started?" It is a deterministic discovery and planning layer on
 top of the Primitive Kernel. It is not a launcher-specific feature, not AI
 planning, and not an installer.
@@ -114,25 +114,25 @@ action, not a special provider, and not a bespoke automation path.
 Use discovery when you want local evidence:
 
 ```powershell
-python -m ritualist target discover diablo_iv --json
+python -m setpiece target discover diablo_iv --json
 ```
 
 Use target plan when you want a side-effect-free primitive plan preview:
 
 ```powershell
-python -m ritualist target plan diablo_iv --json
+python -m setpiece target plan diablo_iv --json
 ```
 
 Use Intent Plan preview when Home-style intent routing is desired:
 
 ```powershell
-python -m ritualist plan preview target.start:diablo_iv --json
+python -m setpiece plan preview target.start:diablo_iv --json
 ```
 
 Use Doctor for target plan compatibility:
 
 ```powershell
-python -m ritualist doctor target:diablo_iv --json --no-strict
+python -m setpiece doctor target:diablo_iv --json --no-strict
 ```
 
 All of these commands are preview/diagnostic operations. They do not execute
@@ -154,7 +154,7 @@ Target Resolution v1 does not add:
 - marketplace behavior
 - gameplay automation
 
-If a target is not found, Ritualist should suggest choosing a local executable
+If a target is not found, Setpiece should suggest choosing a local executable
 or shortcut, inserting media, inspecting visible windows, or using future local,
 review-only Ritual Suggestions from consented Activity Signals. It must not
 infer a download URL, silently install anything, or rely on recording.

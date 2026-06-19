@@ -5,11 +5,11 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from ritualist.actions.registry import create_default_registry
-from ritualist.cli import app
-from ritualist.doctor import build_doctor_report
-from ritualist.models import Recipe
-from ritualist.primitives import (
+from setpiece.actions.registry import create_default_registry
+from setpiece.cli import app
+from setpiece.doctor import build_doctor_report
+from setpiece.models import Recipe
+from setpiece.primitives import (
     FakePrimitiveAdapter,
     KNOWN_PRIMITIVE_FAMILIES,
     PrimitiveAdapterBinding,

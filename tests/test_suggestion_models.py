@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ritualist.suggestions.models import (
+from setpiece.suggestions.models import (
     Suggestion,
     SuggestionApproval,
     SuggestionKind,
@@ -20,7 +20,7 @@ def test_suggestion_model_normalizes_required_contract_fields() -> None:
         sources=(
             "recent_items",
             "recent_items",
-            "ritualist_journal",
+            "setpiece_journal",
             "https://secret.example/raw",
         ),
         proposed_actions=(
@@ -38,10 +38,10 @@ def test_suggestion_model_normalizes_required_contract_fields() -> None:
     assert suggestion.title == "Open Project Folder"
     assert suggestion.confidence == 1.0
     assert suggestion.evidence_count == 3
-    assert suggestion.sources == ("recent_items", "ritualist_journal")
+    assert suggestion.sources == ("recent_items", "setpiece_journal")
     assert suggestion.privacy_level is SuggestionPrivacyLevel.LOW
     assert suggestion.status is SuggestionStatus.NEW
-    assert suggestion.to_dict()["schema_version"] == "ritualist.suggestion.v1"
+    assert suggestion.to_dict()["schema_version"] == "setpiece.suggestion.v1"
 
 
 def test_suggestion_model_contains_no_executable_code_fields() -> None:

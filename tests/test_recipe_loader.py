@@ -5,8 +5,8 @@ from textwrap import dedent
 
 import pytest
 
-from ritualist.errors import RecipeValidationError
-from ritualist.recipe_loader import load_recipe, load_recipe_for_diagnostics, load_recipe_reference
+from setpiece.errors import RecipeValidationError
+from setpiece.recipe_loader import load_recipe, load_recipe_for_diagnostics, load_recipe_reference
 
 
 def test_load_recipe_renders_variables(tmp_path):
@@ -352,7 +352,7 @@ def test_load_recipe_reference_resolves_recipe_id(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr("ritualist.recipe_loader.recipes_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.recipe_loader.recipes_dir", lambda: tmp_path)
 
     recipe = load_recipe_reference("gaming_mode")
 
@@ -360,7 +360,7 @@ def test_load_recipe_reference_resolves_recipe_id(tmp_path, monkeypatch):
 
 
 def test_bundled_gaming_mode_sample_includes_home_metadata():
-    sample = Path(__file__).resolve().parents[1] / "ritualist" / "sample_recipes" / "gaming_mode.yaml"
+    sample = Path(__file__).resolve().parents[1] / "setpiece" / "sample_recipes" / "gaming_mode.yaml"
 
     recipe = load_recipe(sample)
 

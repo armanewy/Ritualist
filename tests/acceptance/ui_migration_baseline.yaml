@@ -1,4 +1,4 @@
-schema: ritualist.ui_migration_baseline.v1
+schema: setpiece.ui_migration_baseline.v1
 baseline_head: 4789b4c1b1795b89d91d109050c9153b9e41f13a
 scope: current_before_state_only
 product_goal_note: "Legacy surfaces are recorded factually as before-state only; this baseline does not retain legacy UI as a product goal."

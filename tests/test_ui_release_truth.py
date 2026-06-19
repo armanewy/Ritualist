@@ -26,7 +26,7 @@ def _load_spec() -> dict:
 def test_ui_release_truth_declares_all_explicit_gates() -> None:
     spec = _load_spec()
 
-    assert spec["schema"] == "ritualist.ui_release_truth.v1"
+    assert spec["schema"] == "setpiece.ui_release_truth.v1"
     assert spec["baseline"]["head"] == "4789b4c1b1795b89d91d109050c9153b9e41f13a"
     assert spec["baseline"]["product_goal"]["retain_unused_legacy_behavior"] is False
     assert set(spec["status_values"]) == {"PASS", "FAIL", "NOT_RUN", "NEEDS_HUMAN_REVIEW"}

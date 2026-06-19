@@ -4,14 +4,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ritualist.agent.menu_model import (
+from setpiece.agent.menu_model import (
     ActiveRitualMenuContext,
     MenuAction,
     TrayMenuContext,
     build_active_ritual_menu,
     build_tray_menu,
 )
-from ritualist.agent.tray_model import TrayAttention, TrayContext, TrayState, build_tray_model
+from setpiece.agent.tray_model import TrayAttention, TrayContext, TrayState, build_tray_model
 
 
 def test_tray_state_values_are_stable() -> None:
@@ -22,13 +22,15 @@ def test_tray_state_values_are_stable() -> None:
         "confirmation",
         "failure",
         "recovery",
+        "paused",
+        "stopped",
     ]
 
 
 def test_ready_tooltip_is_plain_language() -> None:
     model = build_tray_model(TrayContext(state=TrayState.READY))
 
-    assert model.tooltip == "Ritualist is ready"
+    assert model.tooltip == "Setpiece is ready"
     assert model.attention == TrayAttention.NONE
 
 
@@ -96,20 +98,20 @@ def test_tray_menu_order_is_stable_without_active_ritual() -> None:
     menu = build_tray_menu()
 
     assert [item.label for item in menu] == [
-        "Open Ritualist",
+        "Open Setpiece",
         "Rooms...",
         "Recent rituals...",
         "Run log",
         "Settings",
-        "Exit Ritualist",
+        "Exit Setpiece",
     ]
     assert [item.action for item in menu] == [
-        MenuAction.OPEN_RITUALIST,
+        MenuAction.OPEN_SETPIECE,
         MenuAction.OPEN_ROOMS,
         MenuAction.OPEN_RECENT_RITUALS,
         MenuAction.OPEN_RUN_LOG,
         MenuAction.OPEN_SETTINGS,
-        MenuAction.EXIT_RITUALIST,
+        MenuAction.EXIT_SETPIECE,
     ]
 
 
@@ -125,13 +127,13 @@ def test_tray_menu_includes_active_ritual_submenu_conditionally() -> None:
     )
 
     assert [item.label for item in menu] == [
-        "Open Ritualist",
+        "Open Setpiece",
         "Active ritual...",
         "Rooms...",
         "Recent rituals...",
         "Run log",
         "Settings",
-        "Exit Ritualist",
+        "Exit Setpiece",
     ]
     active = menu[1]
     assert active.action is None
@@ -172,9 +174,9 @@ def test_agent_models_import_without_gui_or_windows_dependencies() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.agent.menu_model
-import ritualist.agent.notification_policy
-import ritualist.agent.tray_model
+import setpiece.agent.menu_model
+import setpiece.agent.notification_policy
+import setpiece.agent.tray_model
 
 blocked = ["PySide6", "pywinauto", "win32api", "win32gui", "win32con"]
 loaded = [name for name in blocked if name in sys.modules]

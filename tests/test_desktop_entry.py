@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ritualist import desktop_entry
-from ritualist.errors import DependencyMissingError
+from setpiece import desktop_entry
+from setpiece.errors import DependencyMissingError
 
 
 def test_desktop_entry_launches_home_by_default(monkeypatch):
@@ -175,16 +175,16 @@ def test_desktop_entry_reports_home_dependency_error(monkeypatch, capsys):
     logs = []
 
     def missing_home() -> None:
-        raise DependencyMissingError("Home UI requires PySide6; install ritualist[gui]")
+        raise DependencyMissingError("Home UI requires PySide6; install setpiece[gui]")
 
     monkeypatch.setattr(desktop_entry, "_run_home", missing_home)
     monkeypatch.setattr(desktop_entry, "_show_error_dialog", messages.append)
     monkeypatch.setattr(desktop_entry, "_write_startup_error_log", lambda *args: logs.append(args))
 
     assert desktop_entry.main([]) == 1
-    assert messages == ["Home UI requires PySide6; install ritualist[gui]"]
-    assert logs[0][0] == "Home UI requires PySide6; install ritualist[gui]"
-    assert "ritualist[gui]" in capsys.readouterr().err
+    assert messages == ["Home UI requires PySide6; install setpiece[gui]"]
+    assert logs[0][0] == "Home UI requires PySide6; install setpiece[gui]"
+    assert "setpiece[gui]" in capsys.readouterr().err
 
 
 def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
@@ -195,15 +195,15 @@ def test_desktop_entry_rejects_unknown_options(monkeypatch, capsys):
 
     assert desktop_entry.main(["--unknown"]) == 1
     assert "Unsupported desktop option" in messages[0]
-    assert "Ritualist.exe --agent" in logs[0][0]
-    assert "Ritualist.exe --classic-gui" in logs[0][0]
-    assert "Ritualist.exe --room gaming --host desktop-work-area" in logs[0][0]
-    assert "Ritualist.exe --canvas gaming_desktop" in logs[0][0]
+    assert "Setpiece.exe --agent" in logs[0][0]
+    assert "Setpiece.exe --classic-gui" in logs[0][0]
+    assert "Setpiece.exe --room gaming --host desktop-work-area" in logs[0][0]
+    assert "Setpiece.exe --canvas gaming_desktop" in logs[0][0]
     assert "Unsupported desktop option" in capsys.readouterr().err
 
 
 def test_desktop_entry_writes_startup_error_log(tmp_path, monkeypatch):
-    monkeypatch.setattr("ritualist.paths.logs_dir", lambda: tmp_path)
+    monkeypatch.setattr("setpiece.paths.logs_dir", lambda: tmp_path)
 
     desktop_entry._write_startup_error_log("failed to start", "traceback details")
 

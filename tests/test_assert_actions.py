@@ -7,16 +7,16 @@ from types import ModuleType
 
 import pytest
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.actions.assert_actions import AssertFileExistsHandler, AssertPathExistsHandler
-from ritualist.actions.base import ActionContext
-from ritualist.actions.metadata import ALL_PLATFORMS, WINDOWS_ONLY
-from ritualist.actions.registry import create_default_registry
-from ritualist.config import AppConfig
-from ritualist.executor import WorkflowExecutor
-from ritualist.models import AssertFileExistsStep, AssertPathExistsStep, AssertRegistryValueStep, Recipe
-from ritualist.overlay import NullOverlayController
-from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.actions.assert_actions import AssertFileExistsHandler, AssertPathExistsHandler
+from setpiece.actions.base import ActionContext
+from setpiece.actions.metadata import ALL_PLATFORMS, WINDOWS_ONLY
+from setpiece.actions.registry import create_default_registry
+from setpiece.config import AppConfig
+from setpiece.executor import WorkflowExecutor
+from setpiece.models import AssertFileExistsStep, AssertPathExistsStep, AssertRegistryValueStep, Recipe
+from setpiece.overlay import NullOverlayController
+from setpiece.runtime_control import RuntimeControl, RuntimeStoppedError
 
 
 ASSERTION_METADATA = {
@@ -326,7 +326,7 @@ def test_false_adapter_assertion_result_fails_without_mutating():
 
 
 def test_registry_assertion_is_windows_only(monkeypatch, tmp_path):
-    monkeypatch.setattr("ritualist.actions.assert_actions.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.actions.assert_actions.sys.platform", "linux")
     step = AssertRegistryValueStep.model_validate(
         {
             "action": "assert.registry_value",
@@ -337,7 +337,7 @@ def test_registry_assertion_is_windows_only(monkeypatch, tmp_path):
 
     summary = WorkflowExecutor(
         adapters=FakeAdapters().bundle(),
-        config=AppConfig(log_file=tmp_path / "ritualist.log"),
+        config=AppConfig(log_file=tmp_path / "setpiece.log"),
     ).run(
         Recipe.model_validate(
             {
@@ -382,7 +382,7 @@ def test_registry_assertion_reads_value_with_fake_winreg(monkeypatch):
 
     winreg.OpenKey = open_key
     winreg.QueryValueEx = query_value
-    monkeypatch.setattr("ritualist.actions.assert_actions.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.actions.assert_actions.sys.platform", "win32")
     monkeypatch.setitem(sys.modules, "winreg", winreg)
     recipe = Recipe.model_validate(
         {

@@ -1,4 +1,4 @@
-schema: ritualist.ui_release_truth.v1
+schema: setpiece.ui_release_truth.v1
 release: v0.2.0-alpha.1
 baseline:
   head: 4789b4c1b1795b89d91d109050c9153b9e41f13a
@@ -30,7 +30,7 @@ ui_gates:
   shell_architecture_pass:
     status: FAIL
     current_blockers:
-      - Ritualist.exe still opens Home by default at the baseline.
+      - Setpiece.exe still opens Home by default at the baseline.
       - Home still owns the default shell during this migration point.
     pass_requires:
       - tray-first startup with no visible window at rest

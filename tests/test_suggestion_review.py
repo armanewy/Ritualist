@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.suggestions.models import Suggestion, SuggestionStatus
-from ritualist.suggestions.review import (
+from setpiece.suggestions.models import Suggestion, SuggestionStatus
+from setpiece.suggestions.review import (
     approve_suggestion,
     can_create_draft,
     cancel_suggestion,
@@ -18,7 +18,7 @@ from ritualist.suggestions.review import (
     SuggestionReviewRequiredError,
     SuggestionRuntimeExecutionBlockedError,
 )
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.suggestions.storage import SuggestionStore
 
 
 REVIEWED_AT = "2026-06-18T10:11:12Z"
@@ -42,7 +42,7 @@ def _suggestion(
         confidence=0.8,
         evidence_summary="Repeated project setup pattern",
         evidence_count=3,
-        sources=("ritualist_journal", "recent_items"),
+        sources=("setpiece_journal", "recent_items"),
         proposed_actions=proposed_actions,
         missing_inputs=("project_root",),
     )

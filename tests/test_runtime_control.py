@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from ritualist.runtime_control import RuntimeControl, RuntimeStoppedError
+from setpiece.runtime_control import RuntimeControl, RuntimeStoppedError
 
 
 def test_pause_sets_paused() -> None:

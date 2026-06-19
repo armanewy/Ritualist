@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ritualist.adapters.fake import FakeWindowAdapter
-from ritualist.adapters.window_manager import WindowsWindowManager
-from ritualist.errors import PlatformUnsupportedError
-from ritualist.overlay import ScreenRect
+from setpiece.adapters.fake import FakeWindowAdapter
+from setpiece.adapters.window_manager import WindowsWindowManager
+from setpiece.errors import PlatformUnsupportedError
+from setpiece.overlay import ScreenRect
 
 
 class FakeWindow:
@@ -58,7 +58,7 @@ class FakeDesktop:
 def test_window_exists_zero_timeout_performs_immediate_scan(monkeypatch):
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: FakeDesktop([FakeWindow("Battle.net")])
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     exists = WindowsWindowManager().window_exists(
@@ -77,7 +77,7 @@ def test_window_actions_return_window_bounds(monkeypatch):
     )
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: FakeDesktop([window])
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     region = WindowsWindowManager().focus(
@@ -102,7 +102,7 @@ def test_window_layout_methods_move_resize_and_restore(monkeypatch):
     )
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: FakeDesktop([window])
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
 
     manager = WindowsWindowManager()
@@ -180,7 +180,7 @@ def test_move_window_uses_hwnd_wrapper_when_uia_wrapper_has_no_move_window(monke
     controls = ModuleType("pywinauto.controls")
     hwndwrapper = ModuleType("pywinauto.controls.hwndwrapper")
     hwndwrapper.HwndWrapper = FakeHwndWrapper
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
     monkeypatch.setitem(sys.modules, "pywinauto.controls", controls)
     monkeypatch.setitem(sys.modules, "pywinauto.controls.hwndwrapper", hwndwrapper)
@@ -213,9 +213,9 @@ def test_snap_methods_use_window_monitor_work_area(monkeypatch, method_name, exp
     )
     pywinauto = ModuleType("pywinauto")
     pywinauto.Desktop = lambda backend: FakeDesktop([window])
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setattr(
-        "ritualist.adapters.window_manager._monitor_rects",
+        "setpiece.adapters.window_manager._monitor_rects",
         lambda: [ScreenRect(0, 0, 1920, 1040), ScreenRect(1920, 0, 1920, 1040)],
     )
     monkeypatch.setitem(sys.modules, "pywinauto", pywinauto)
@@ -242,7 +242,7 @@ def test_list_monitors_returns_work_areas(monkeypatch):
         "primary": {"Work": (0, 0, 1920, 1040)},
         "secondary": {"Work": (1920, 0, 3840, 1040)},
     }[monitor]
-    monkeypatch.setattr("ritualist.adapters.window_manager._ensure_windows", lambda: None)
+    monkeypatch.setattr("setpiece.adapters.window_manager._ensure_windows", lambda: None)
     monkeypatch.setitem(sys.modules, "win32api", win32api)
 
     assert WindowsWindowManager().list_monitors() == [
@@ -252,7 +252,7 @@ def test_list_monitors_returns_work_areas(monkeypatch):
 
 
 def test_list_monitors_rejects_unsupported_platform(monkeypatch):
-    monkeypatch.setattr("ritualist.adapters.window_manager.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.adapters.window_manager.sys.platform", "linux")
 
     with pytest.raises(PlatformUnsupportedError, match="Windows UI/window automation"):
         WindowsWindowManager().list_monitors()

@@ -2,27 +2,27 @@ from __future__ import annotations
 
 import pytest
 
-from ritualist.agent.windows.hotkey import (
+from setpiece.agent.windows.hotkey import (
     ERROR_HOTKEY_ALREADY_REGISTERED,
     DEFAULT_HOTKEY,
     FakeGlobalHotkeyAdapter,
     HotkeySpec,
     WindowsGlobalHotkeyAdapter,
 )
-from ritualist.agent.windows.monitor_geometry import (
+from setpiece.agent.windows.monitor_geometry import (
     FakeMonitorGeometryAdapter,
     MonitorGeometry,
     Point,
     WindowsMonitorGeometryAdapter,
     taskbar_edge,
 )
-from ritualist.agent.windows.shell_events import WindowsShellEventAdapter
-from ritualist.agent.windows.tray_geometry import (
+from setpiece.agent.windows.shell_events import WindowsShellEventAdapter
+from setpiece.agent.windows.tray_geometry import (
     TrayIconIdentity,
     WindowsTrayGeometryAdapter,
 )
-from ritualist.errors import PlatformUnsupportedError
-from ritualist.overlay import ScreenRect
+from setpiece.errors import PlatformUnsupportedError
+from setpiece.overlay import ScreenRect
 
 
 class FakeHotkeyWinApi:

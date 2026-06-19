@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ritualist.canvas import (
+from setpiece.canvas import (
     CanvasBindingKind,
     CanvasComponent,
     CanvasComponentBinding,
@@ -17,8 +17,8 @@ from ritualist.canvas import (
     validate_canvas_document,
     validate_canvas_structure,
 )
-from ritualist.errors import RitualistError
-from ritualist.shortcuts import ShortcutResult
+from setpiece.errors import SetpieceError
+from setpiece.shortcuts import ShortcutResult
 
 
 class _FailingActionService:
@@ -264,7 +264,7 @@ def test_shortcuts_reject_auto_run_and_arbitrary_action_strings(tmp_path: Path) 
 
     assert not result.valid
     assert any("auto-run" in error for error in result.errors)
-    with pytest.raises(RitualistError, match="unsupported"):
+    with pytest.raises(SetpieceError, match="unsupported"):
         controller.dispatch(_shortcut_canvas(_folder_component(folder)), "folder", "shell")
 
 

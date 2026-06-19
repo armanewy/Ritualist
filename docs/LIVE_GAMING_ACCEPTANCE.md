@@ -2,7 +2,7 @@
 
 This procedure is the opt-in live integration companion to the packaged fixture acceptance suite. It is only for the real Windows desktop when an operator deliberately arranges one Gaming state at a time.
 
-Fixture acceptance is not live integration. A fake Battle.net window can prove Ritualist contracts, but it cannot prove real Battle.net, Chrome, YouTube, or Diablo IV behavior.
+Fixture acceptance is not live integration. A fake Battle.net window can prove Setpiece contracts, but it cannot prove real Battle.net, Chrome, YouTube, or Diablo IV behavior.
 
 ## Safety Contract
 
@@ -19,7 +19,7 @@ The live harness:
 ## Command
 
 ```powershell
-.\scripts\ritualist_live_gaming_acceptance.ps1 -Live -IUnderstandThisIsLive -Case play_enabled -RecordScreen -HumanNotes "Battle.net showed Diablo IV Play enabled before running Gaming Mode."
+.\scripts\setpiece_live_gaming_acceptance.ps1 -Live -IUnderstandThisIsLive -Case play_enabled -RecordScreen -HumanNotes "Battle.net showed Diablo IV Play enabled before running Gaming Mode."
 ```
 
 Use one case per desktop state where possible. The script writes:

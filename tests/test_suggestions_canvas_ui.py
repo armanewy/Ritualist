@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ritualist.canvas import CanvasSuggestionsReviewBridge
-from ritualist.learning_service import enable_learning
-from ritualist.suggestions.drafts_room import PROMOTED_HERO_ROOM_IDS
-from ritualist.suggestions.models import Suggestion
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.canvas import CanvasSuggestionsReviewBridge
+from setpiece.learning_service import enable_learning
+from setpiece.suggestions.drafts_room import PROMOTED_HERO_ROOM_IDS
+from setpiece.suggestions.models import Suggestion
+from setpiece.suggestions.storage import SuggestionStore
 
 
 def _shortcut_suggestion() -> Suggestion:
@@ -17,7 +17,7 @@ def _shortcut_suggestion() -> Suggestion:
         confidence=0.82,
         evidence_summary="Repeated local shortcut use",
         evidence_count=4,
-        sources=("ritualist_journal",),
+        sources=("setpiece_journal",),
         proposed_actions=(
             {
                 "action": "review_shortcut_component",
@@ -38,7 +38,7 @@ def _ritual_suggestion() -> Suggestion:
         confidence=0.74,
         evidence_summary="Repeated recipe pattern",
         evidence_count=3,
-        sources=("ritualist_journal",),
+        sources=("setpiece_journal",),
         proposed_actions=(
             {
                 "action": "review_ritual_recipe",
@@ -59,7 +59,7 @@ def _room_suggestion() -> Suggestion:
         confidence=0.7,
         evidence_summary="Repeated support workflow",
         evidence_count=2,
-        sources=("ritualist_journal",),
+        sources=("setpiece_journal",),
         proposed_actions=(
             {
                 "action": "review_room_canvas",
@@ -74,7 +74,7 @@ def _room_suggestion() -> Suggestion:
 
 def _bridge(tmp_path: Path) -> CanvasSuggestionsReviewBridge:
     config_path = tmp_path / "config.yaml"
-    enable_learning(("ritualist_journal",), config_path=config_path)
+    enable_learning(("setpiece_journal",), config_path=config_path)
     store = SuggestionStore(path=tmp_path / "suggestions.jsonl")
     store.save_many((_shortcut_suggestion(), _ritual_suggestion(), _room_suggestion()))
     return CanvasSuggestionsReviewBridge(store=store, config_path=config_path)
@@ -85,7 +85,7 @@ def test_canvas_suggestions_bridge_filters_badges_and_review_gates_drafts(tmp_pa
 
     model = bridge.model()
 
-    assert model["schema_version"] == "ritualist.canvas.suggestions_review_ui.v1"
+    assert model["schema_version"] == "setpiece.canvas.suggestions_review_ui.v1"
     assert [item["id"] for item in model["filters"]] == ["all", "shortcut", "ritual", "room"]
     assert model["count"] == 3
     assert {row["kind_label"] for row in model["suggestions"]} == {"Shortcut", "Ritual", "Room"}
@@ -114,7 +114,7 @@ def test_canvas_suggestions_bridge_filters_badges_and_review_gates_drafts(tmp_pa
     assert drafted["last_draft"]["created_artifact"] is False
     assert drafted["last_draft"]["wrote_files"] is False
     assert drafted["last_draft"]["ran"] is False
-    assert drafted["last_draft"]["draft"]["schema_version"] == "ritualist.shortcut_draft.v1"
+    assert drafted["last_draft"]["draft"]["schema_version"] == "setpiece.shortcut_draft.v1"
     assert drafted["last_draft"]["draft"]["status"] == "needs_setup"
     assert {child.name for child in tmp_path.iterdir()} == {"config.yaml", "suggestions.jsonl"}
 
@@ -137,8 +137,8 @@ def test_canvas_suggestions_bridge_edit_before_create_and_delete_all(tmp_path: P
 
 
 def test_canvas_suggestions_review_qml_is_edit_mode_only_and_review_gated() -> None:
-    qml = Path("ritualist/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
-    app = Path("ritualist/canvas/app.py").read_text(encoding="utf-8")
+    qml = Path("setpiece/canvas/qml/CanvasUse.qml").read_text(encoding="utf-8")
+    app = Path("setpiece/canvas/app.py").read_text(encoding="utf-8")
 
     assert "Suggestions" in qml
     assert "Find Suggestions" in qml

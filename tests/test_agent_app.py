@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ritualist.agent.activation import ActivationIntent
-from ritualist.agent.app import start_agent
-from ritualist.agent.instrument_window import FakeInstrumentSurface
-from ritualist.agent.menu_model import MenuAction
-from ritualist.agent.models import AgentConfirmation, AgentRunState, AgentState
-from ritualist.agent.picker_model import (
+from setpiece.agent.activation import ActivationIntent
+from setpiece.agent.app import start_agent
+from setpiece.agent.instrument_window import FakeInstrumentSurface
+from setpiece.agent.menu_model import MenuAction
+from setpiece.agent.models import AgentConfirmation, AgentRunState, AgentState
+from setpiece.agent.picker_model import (
     PICKER_MODEL_SCHEMA_VERSION,
     PickerAction,
     PickerModel,
     PickerRitual,
     PickerRoom,
 )
-from ritualist.agent.picker_window import FakePickerSurface
-from ritualist.agent.single_instance import InstanceActivationResult
-from ritualist.agent.tray import FakeApplication, FakeSystemTrayIcon, fake_qt_types
-from ritualist.agent.windows.hotkey import DEFAULT_HOTKEY, HotkeyEvent, HotkeyRegistrationResult
-from ritualist.runtime_models import RunStarted, StepWaiting
+from setpiece.agent.picker_window import FakePickerSurface
+from setpiece.agent.single_instance import InstanceActivationResult
+from setpiece.agent.tray import FakeApplication, FakeSystemTrayIcon, fake_qt_types
+from setpiece.agent.windows.hotkey import DEFAULT_HOTKEY, HotkeyEvent, HotkeyRegistrationResult
+from setpiece.runtime_models import RunStarted, StepWaiting
 
 
 @dataclass
@@ -95,7 +95,7 @@ def test_startup_agent_is_tray_resident_without_opening_surface() -> None:
     assert result.agent.opened_surfaces == []
     assert app.quit_on_last_window_closed is False
     assert result.agent.tray.system_tray_icon.visible is True
-    assert result.agent.tray.system_tray_icon.tooltip == "Ritualist - Ready"
+    assert result.agent.tray.system_tray_icon.tooltip == "Setpiece is ready"
 
 
 def test_manual_agent_launch_requests_picker_without_running_ritual() -> None:
@@ -150,7 +150,7 @@ def test_tray_menu_dispatches_settings_and_explicit_exit() -> None:
     assert result.agent is not None
 
     result.agent.tray.actions[MenuAction.OPEN_SETTINGS].triggered.emit()
-    result.agent.tray.actions[MenuAction.EXIT_RITUALIST].triggered.emit()
+    result.agent.tray.actions[MenuAction.EXIT_SETPIECE].triggered.emit()
 
     assert result.agent.opened_surfaces == ["open_settings"]
     assert result.agent.received_intents[-1] == "exit"

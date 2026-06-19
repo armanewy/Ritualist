@@ -6,7 +6,7 @@ Date: 2026-06-18
 
 ## Context
 
-Ritualist currently launches into Home by default. Home remains visible and
+Setpiece currently launches into Home by default. Home remains visible and
 spawns Room processes. Canvas Use Mode is implemented as a separate
 `ApplicationWindow` and still carries everyday runtime responsibilities.
 
@@ -26,7 +26,7 @@ application at rest, multiple runtime windows, and unclear close/exit behavior.
 
 ## Decision
 
-Ritualist will be tray-first.
+Setpiece will be tray-first.
 
 The accepted architecture is one resident per-user local Agent with:
 
@@ -50,8 +50,8 @@ targets.
 
 - Tray left-click opens Picker when idle and the active Quiet Instrument or
   exact review state when a run requires attention.
-- Tray right-click opens a stable menu: Open Ritualist, Active ritual when
-  present, Rooms, Recent rituals, Run Log, Settings, and Exit Ritualist.
+- Tray right-click opens a stable menu: Open Setpiece, Active ritual when
+  present, Rooms, Recent rituals, Run Log, Settings, and Exit Setpiece.
 - `Win+Ctrl+R` matches tray left-click.
 - Double-click has no unique action.
 - Closing a surface hides or closes only that surface.

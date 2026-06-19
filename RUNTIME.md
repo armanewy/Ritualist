@@ -1,7 +1,7 @@
 # Runtime v2 Concepts
 
 Runtime v2 is the contract between recipe execution, run logs, and the GUI/Home
-experience. It keeps Ritualist local-first and event-driven: runtime work happens
+experience. It keeps Setpiece local-first and event-driven: runtime work happens
 off the GUI thread, and Home updates from small runtime events instead of
 polling logs or scanning recipes synchronously.
 
@@ -248,7 +248,7 @@ Recipe shape:
 preflight:
   - name: Wait for exported settings
     action: assert.file_exists
-    path: "%USERPROFILE%\\Documents\\Ritualist\\exports\\settings.json"
+    path: "%USERPROFILE%\\Documents\\Setpiece\\exports\\settings.json"
     timeout_seconds: 60
 ```
 

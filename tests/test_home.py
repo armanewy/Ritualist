@@ -6,17 +6,17 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ritualist.cli import app
-from ritualist.errors import DependencyMissingError
-from ritualist.home import app as home_app
-from ritualist.home import (
+from setpiece.cli import app
+from setpiece.errors import DependencyMissingError
+from setpiece.home import app as home_app
+from setpiece.home import (
     FakeHomeStatusEmitter,
     HomeCardStatus,
     HomeEventBridge,
     HomeRuntimeEvent,
     create_mock_home_model,
 )
-from ritualist.home.models import HomeCardStatus
+from setpiece.home.models import HomeCardStatus
 
 
 class FakeClock:
@@ -59,14 +59,14 @@ def test_home_command_loads_installed_recipes_by_default(monkeypatch):
 
 def test_home_dependency_error_preserves_gui_extra(monkeypatch):
     def missing_home(*, mock: bool) -> None:
-        raise DependencyMissingError("Home requires PySide6; install ritualist[gui]")
+        raise DependencyMissingError("Home requires PySide6; install setpiece[gui]")
 
     monkeypatch.setattr(home_app, "run_home", missing_home)
 
     result = CliRunner().invoke(app, ["home", "--mock"])
 
     assert result.exit_code == 1
-    assert "ritualist[gui]" in result.output
+    assert "setpiece[gui]" in result.output
 
 
 def test_home_doctor_incompatible_maps_to_failed_card_status():
@@ -76,7 +76,7 @@ def test_home_doctor_incompatible_maps_to_failed_card_status():
 
 
 def test_home_qml_has_stop_control_and_modal_confirmation_blocker():
-    qml = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "qml" / "Home.qml").read_text(
+    qml = (Path(__file__).resolve().parents[1] / "setpiece" / "home" / "qml" / "Home.qml").read_text(
         encoding="utf-8"
     )
 
@@ -137,12 +137,12 @@ def test_home_rooms_payload_exposes_exactly_three_promoted_rooms() -> None:
 
 
 def test_home_room_launch_command_uses_packaged_room_arguments(monkeypatch) -> None:
-    monkeypatch.setattr(home_app.sys, "executable", "Ritualist.exe")
+    monkeypatch.setattr(home_app.sys, "executable", "Setpiece.exe")
     monkeypatch.setattr(home_app.sys, "frozen", True, raising=False)
 
     command, args, room = home_app._room_launch_command("gaming", "desktop-work-area")
 
-    assert command == "Ritualist.exe"
+    assert command == "Setpiece.exe"
     assert args == [
         "--room",
         "gaming",
@@ -163,7 +163,7 @@ def test_home_room_launch_command_uses_source_canvas_cli(monkeypatch) -> None:
     assert command == sys.executable
     assert args == [
         "-m",
-        "ritualist",
+        "setpiece",
         "canvas",
         "use",
         "helpdesk_desktop",
@@ -176,17 +176,17 @@ def test_home_room_launch_command_uses_source_canvas_cli(monkeypatch) -> None:
 
 
 def test_home_classic_gui_launch_command_keeps_source_and_packaged_paths(monkeypatch) -> None:
-    monkeypatch.setattr(home_app.sys, "executable", "Ritualist.exe")
+    monkeypatch.setattr(home_app.sys, "executable", "Setpiece.exe")
     monkeypatch.setattr(home_app.sys, "frozen", True, raising=False)
-    assert home_app._classic_gui_launch_command() == ("Ritualist.exe", ["--classic-gui"])
+    assert home_app._classic_gui_launch_command() == ("Setpiece.exe", ["--classic-gui"])
 
     monkeypatch.setattr(home_app.sys, "executable", sys.executable)
     monkeypatch.setattr(home_app.sys, "frozen", False, raising=False)
-    assert home_app._classic_gui_launch_command() == (sys.executable, ["-m", "ritualist", "gui"])
+    assert home_app._classic_gui_launch_command() == (sys.executable, ["-m", "setpiece", "gui"])
 
 
 def test_home_runtime_control_is_active_before_action_state_signal():
-    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+    source = (Path(__file__).resolve().parents[1] / "setpiece" / "home" / "app.py").read_text(
         encoding="utf-8"
     )
     start = source.index("def _start_runtime_action")
@@ -200,7 +200,7 @@ def test_home_runtime_control_is_active_before_action_state_signal():
 
 
 def test_home_confirmation_wait_refreshes_run_logger_heartbeat():
-    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+    source = (Path(__file__).resolve().parents[1] / "setpiece" / "home" / "app.py").read_text(
         encoding="utf-8"
     )
     assert "def _heartbeat_home_confirmation" in source
@@ -208,7 +208,7 @@ def test_home_confirmation_wait_refreshes_run_logger_heartbeat():
 
 
 def test_home_uses_native_confirmation_presenter_when_available():
-    source = (Path(__file__).resolve().parents[1] / "ritualist" / "home" / "app.py").read_text(
+    source = (Path(__file__).resolve().parents[1] / "setpiece" / "home" / "app.py").read_text(
         encoding="utf-8"
     )
     assert "app = QApplication.instance() or QApplication(sys.argv)" in source
@@ -223,7 +223,7 @@ def test_home_uses_native_confirmation_presenter_when_available():
 
 
 def test_home_confirmation_presenter_uses_win32_fallback_when_qt_factory_fails(monkeypatch):
-    from ritualist.home import confirmation as home_confirmation
+    from setpiece.home import confirmation as home_confirmation
 
     fallback = object()
 
@@ -250,7 +250,7 @@ def test_home_command_import_does_not_load_pyside6():
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-from ritualist.cli import app
+from setpiece.cli import app
 
 loaded = [name for name in sys.modules if name == "PySide6" or name.startswith("PySide6.")]
 if loaded:
@@ -389,17 +389,17 @@ def test_home_import_does_not_load_runtime_automation():
     repo_root = Path(__file__).resolve().parents[1]
     code = """
 import sys
-import ritualist.home.app
-import ritualist.home.fake_events
-import ritualist.home.models
+import setpiece.home.app
+import setpiece.home.fake_events
+import setpiece.home.models
 
 blocked = [
     name for name in sys.modules
     if name == "PySide6"
     or name.startswith("PySide6.")
-    or name == "ritualist.executor"
-    or name == "ritualist.adapters.windows_uia"
-    or name == "ritualist.adapters.browser_playwright"
+    or name == "setpiece.executor"
+    or name == "setpiece.adapters.windows_uia"
+    or name == "setpiece.adapters.browser_playwright"
 ]
 if blocked:
     raise SystemExit(f"Home import loaded blocked modules: {blocked}")

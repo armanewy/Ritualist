@@ -1,4 +1,4 @@
-schema: ritualist.release_acceptance.v1
+schema: setpiece.release_acceptance.v1
 release: v0.2.0-alpha.1
 semantics:
   PASS: "Machine evidence satisfies the check without adding product scope."
@@ -22,7 +22,7 @@ checks:
       - process_tree
       - window_tree
       - e2e_event: home.ready
-    pass_when: "Ritualist Home window is visible and process stays alive for the scenario dwell."
+    pass_when: "Setpiece Home window is visible and process stays alive for the scenario dwell."
   - id: room_picker_three_heroes_taskbar_visible
     blocker: "Room picker is windowed, taskbar-preserving, and promotes exactly three hero Rooms."
     expected_evidence:
@@ -39,7 +39,7 @@ checks:
       - process_tree
       - window_tree
       - e2e_event: canvas.ready
-    pass_when: "Ritualist Canvas window is visible and process stays alive for the scenario dwell."
+    pass_when: "Setpiece Canvas window is visible and process stays alive for the scenario dwell."
   - id: edit_mode_builder_visible
     blocker: "Packaged Canvas Edit Mode opens visibly as the Room Builder support surface."
     expected_evidence:
@@ -59,7 +59,7 @@ checks:
       - process_tree
       - window_tree
       - e2e_event: classic_gui.ready
-    pass_when: "Classic Ritualist window is visible and process stays alive for the scenario dwell."
+    pass_when: "Classic Setpiece window is visible and process stays alive for the scenario dwell."
   - id: gaming_desktop_renders
     blocker: "`gaming_desktop` renders correctly, not blank/white."
     expected_evidence:
@@ -143,7 +143,7 @@ checks:
       - foreground_window
       - z_order_snapshot
       - confirmation_window_tree
-    pass_when: "Ritualist Confirmation Required is a top-level dialog above the fake Battle.net window."
+    pass_when: "Setpiece Confirmation Required is a top-level dialog above the fake Battle.net window."
   - id: declining_play_stopped
     blocker: "Declining Play ends as `stopped`."
     expected_evidence:

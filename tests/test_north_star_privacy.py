@@ -7,32 +7,32 @@ from zipfile import ZipFile
 import pytest
 import yaml
 
-from ritualist.actions.registry import create_default_registry
-from ritualist.config import load_app_config
-from ritualist.learning_config import LocalLearningConfig
-from ritualist.learning_service import (
+from setpiece.actions.registry import create_default_registry
+from setpiece.config import load_app_config
+from setpiece.learning_config import LocalLearningConfig
+from setpiece.learning_service import (
     delete_learning_data,
     enable_learning,
     learning_sources_payload,
 )
-from ritualist.learning_sources import (
+from setpiece.learning_sources import (
     ALLOWED_LEARNING_SOURCE_IDS,
     get_learning_source,
     is_forbidden_learning_source,
     learning_source_registry,
 )
-from ritualist.packs import PACK_SCHEMA_V1, PackValidationError, import_pack, validate_pack
-from ritualist.rooms import list_rooms
-from ritualist.suggestions.drafts_recipe import build_draft_recipe
-from ritualist.suggestions.models import Suggestion, SuggestionStatus
-from ritualist.suggestions.review import (
+from setpiece.packs import PACK_SCHEMA_V1, PackValidationError, import_pack, validate_pack
+from setpiece.rooms import list_rooms
+from setpiece.suggestions.drafts_recipe import build_draft_recipe
+from setpiece.suggestions.models import Suggestion, SuggestionStatus
+from setpiece.suggestions.review import (
     approve_suggestion,
     can_create_draft,
     require_approval_for_draft,
     SuggestionReviewRequiredError,
 )
-from ritualist.suggestions.service import scan_suggestions_payload
-from ritualist.suggestions.storage import SuggestionStore
+from setpiece.suggestions.service import scan_suggestions_payload
+from setpiece.suggestions.storage import SuggestionStore
 
 
 REVIEWED_AT = "2026-06-18T10:11:12Z"
@@ -82,7 +82,7 @@ def test_learning_registry_excludes_history_capture_screenshot_ocr_and_keystroke
     registry = learning_source_registry()
 
     assert tuple(registry) == ALLOWED_LEARNING_SOURCE_IDS
-    assert tuple(registry) == ("ritualist_journal", "open_windows", "recent_items")
+    assert tuple(registry) == ("setpiece_journal", "open_windows", "recent_items")
     assert all(source.enabled_by_default is False for source in registry.values())
     assert all(source.background_collection is False for source in registry.values())
 
@@ -119,7 +119,7 @@ def test_learning_sources_payload_is_local_opt_in_and_has_no_browser_history_sou
     assert payload["local_only"] is True
     assert payload["background_collection"] is False
     assert [source["id"] for source in payload["sources"]] == [
-        "ritualist_journal",
+        "setpiece_journal",
         "open_windows",
         "recent_items",
     ]
@@ -185,13 +185,13 @@ def test_imported_packs_cannot_enable_learning_or_run_on_import(
     config_path = tmp_path / "config.yaml"
     imported_root = tmp_path / "imported-packs"
     recipes_root = tmp_path / "recipes"
-    monkeypatch.setattr("ritualist.packs.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.packs.imported_packs_path", lambda: imported_root)
     monkeypatch.setattr(
-        "ritualist.packs.imported_packs_dir",
+        "setpiece.packs.imported_packs_dir",
         lambda: imported_root.mkdir(parents=True, exist_ok=True) or imported_root,
     )
     monkeypatch.setattr(
-        "ritualist.packs.recipes_dir",
+        "setpiece.packs.recipes_dir",
         lambda: recipes_root.mkdir(parents=True, exist_ok=True) or recipes_root,
     )
     config_path.write_text(
@@ -227,7 +227,7 @@ def test_pack_manifest_cannot_smuggle_learning_or_arbitrary_code(
             "name": "Demo",
             "steps": [{"action": "shell.run", "command": "echo unsafe"}],
         },
-        name="code.ritualistpack",
+        name="code.setpiecepack",
     )
 
     with pytest.raises(PackValidationError, match="arbitrary code actions"):
@@ -322,9 +322,9 @@ def test_learning_data_deletion_removes_journal_and_suggestions(
     suggestions = tmp_path / "learning-suggestions.jsonl"
     journal.write_text('{"event_type":"room_opened"}\n', encoding="utf-8")
     suggestions.write_text('{"suggestion":{}}\n', encoding="utf-8")
-    monkeypatch.setattr("ritualist.learning_service.learning_journal_path", lambda: journal)
+    monkeypatch.setattr("setpiece.learning_service.learning_journal_path", lambda: journal)
     monkeypatch.setattr(
-        "ritualist.learning_service.learning_suggestions_path",
+        "setpiece.learning_service.learning_suggestions_path",
         lambda: suggestions,
     )
 
@@ -344,7 +344,7 @@ class _StaticCollector:
 
     def collect(self, *, context=None):
         del context
-        from ritualist.activity_signals import ActivityCollectionResult, ActivitySignal
+        from setpiece.activity_signals import ActivityCollectionResult, ActivitySignal
 
         return ActivityCollectionResult(
             collector_id=self.collector_id,
@@ -360,7 +360,7 @@ def _recipe_suggestion() -> Suggestion:
         confidence=0.8,
         evidence_summary="Repeated project setup pattern",
         evidence_count=3,
-        sources=("ritualist_journal", "recent_items"),
+        sources=("setpiece_journal", "recent_items"),
         proposed_actions=(
             {
                 "action": "review_ritual_recipe",
@@ -383,7 +383,7 @@ def _manifest(
         "id": "demo_pack",
         "name": "Demo Pack",
         "version": "1.0.0",
-        "required_ritualist_version": ">=0.1.0-alpha.1",
+        "required_setpiece_version": ">=0.1.0-alpha.1",
         "supported_os": ["windows", "macos", "linux"],
         "required_capabilities": required_capabilities or [],
         "required_actions": required_actions or ["wait.seconds"],
@@ -406,7 +406,7 @@ def _write_pack(
     *,
     manifest: dict[str, object],
     recipe: dict[str, object],
-    name: str = "demo.ritualistpack",
+    name: str = "demo.setpiecepack",
 ) -> Path:
     path = tmp_path / name
     with ZipFile(path, "w") as archive:

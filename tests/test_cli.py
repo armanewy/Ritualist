@@ -4,14 +4,14 @@ import json
 
 from typer.testing import CliRunner
 
-from ritualist.adapters.fake import FakeAdapters
-from ritualist.app_setup import InitReport, MigrationResult
-from ritualist.cli import app
-from ritualist.errors import DependencyMissingError
-from ritualist.models import Recipe
-from ritualist.preferences import RememberedApprovalScope, remember_approval
-from ritualist.run_logs import ReconciledRun, RunRecord
-from ritualist.adapters.windows_uia import WindowInspection
+from setpiece.adapters.fake import FakeAdapters
+from setpiece.app_setup import InitReport, MigrationResult
+from setpiece.cli import app
+from setpiece.errors import DependencyMissingError
+from setpiece.models import Recipe
+from setpiece.preferences import RememberedApprovalScope, remember_approval
+from setpiece.run_logs import ReconciledRun, RunRecord
+from setpiece.adapters.windows_uia import WindowInspection
 
 
 class DummyRunLogWriter:
@@ -38,9 +38,9 @@ def test_run_defaults_to_real_run(monkeypatch):
             "steps": [{"action": "app.launch", "command": "demo.exe"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
 
     result = CliRunner().invoke(app, ["run", "demo"])
 
@@ -87,11 +87,11 @@ def test_keyboard_interrupt_requests_runtime_stop_and_finalizes_stopped(monkeypa
         def __init__(self):
             writers.append(self)
 
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: FakeAdapters().bundle())
-    monkeypatch.setattr("ritualist.cli.RuntimeControl", FakeRuntimeControl)
-    monkeypatch.setattr("ritualist.cli.WorkflowExecutor", InterruptingExecutor)
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", CapturingRunLogWriter)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: FakeAdapters().bundle())
+    monkeypatch.setattr("setpiece.cli.RuntimeControl", FakeRuntimeControl)
+    monkeypatch.setattr("setpiece.cli.WorkflowExecutor", InterruptingExecutor)
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", CapturingRunLogWriter)
 
     result = CliRunner().invoke(app, ["run", "demo"])
 
@@ -112,9 +112,9 @@ def test_dry_run_command_does_not_call_adapters(monkeypatch):
             "steps": [{"action": "app.launch", "command": "demo.exe"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
 
     result = CliRunner().invoke(app, ["dry-run", "demo"])
 
@@ -138,12 +138,12 @@ steps:
 """.lstrip(),
         encoding="utf-8",
     )
-    monkeypatch.setattr("ritualist.cli.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.cli.imported_packs_path", lambda: imported_root)
 
     def fail_load(*_args, **_kwargs):
         raise AssertionError("quarantined run should be blocked before loading")
 
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", fail_load)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", fail_load)
 
     result = CliRunner().invoke(app, ["run", str(recipe_path)])
 
@@ -161,10 +161,10 @@ def test_dry_run_allows_quarantined_imported_recipe_path(monkeypatch, tmp_path):
             "steps": [{"action": "wait.seconds", "seconds": 0.1}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.imported_packs_path", lambda: imported_root)
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: FakeAdapters().bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli.imported_packs_path", lambda: imported_root)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: FakeAdapters().bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
 
     result = CliRunner().invoke(app, ["dry-run", str(recipe_path)])
 
@@ -188,9 +188,9 @@ def test_run_prints_runbook_summary(monkeypatch, tmp_path):
             "verify": [{"action": "assert.path_exists", "path": str(marker)}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
 
     result = CliRunner().invoke(app, ["run", "demo"], input="y\n")
 
@@ -207,14 +207,14 @@ def test_run_prints_runbook_summary(monkeypatch, tmp_path):
 
 def test_exception_text_is_rich_escaped(monkeypatch):
     def raise_error(*_args, **_kwargs):
-        raise DependencyMissingError("install ritualist[gui]")
+        raise DependencyMissingError("install setpiece[gui]")
 
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", raise_error)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", raise_error)
 
     result = CliRunner().invoke(app, ["validate", "demo"])
 
     assert result.exit_code == 1
-    assert "ritualist[gui]" in result.output
+    assert "setpiece[gui]" in result.output
 
 
 def test_inspect_window_help_works():
@@ -263,7 +263,7 @@ def test_perf_load_recipes_prints_duration_and_counts(tmp_path, monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.discover_recipes",
+        "setpiece.cli.discover_recipes",
         lambda: [(tmp_path / "demo.yaml", recipe, None)],
     )
 
@@ -286,7 +286,7 @@ def test_perf_doctor_json_is_valid(tmp_path, monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
 
@@ -307,7 +307,7 @@ def test_perf_list_runs_json_counts_steps(tmp_path, monkeypatch):
         metadata={"recipe_id": "demo", "status": "success"},
         steps=[{"index": 1, "status": "success"}],
     )
-    monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
+    monkeypatch.setattr("setpiece.cli.list_recent_runs", lambda *, limit: [record])
 
     result = CliRunner().invoke(app, ["perf", "list-runs", "--json"])
 
@@ -363,8 +363,8 @@ def test_perf_fake_run_uses_fake_adapters_and_confirms(monkeypatch):
             ],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.FakeAdapters", lambda: fakes)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.FakeAdapters", lambda: fakes)
 
     result = CliRunner().invoke(app, ["perf", "fake-run", "demo", "--json"])
 
@@ -413,7 +413,7 @@ def test_init_prints_created_copied_and_migrated_report(tmp_path, monkeypatch):
             ],
         ),
     )
-    monkeypatch.setattr("ritualist.cli.initialize_app", lambda: report)
+    monkeypatch.setattr("setpiece.cli.initialize_app", lambda: report)
 
     result = CliRunner().invoke(app, ["init"])
 
@@ -435,7 +435,7 @@ def test_init_prints_noop_report(tmp_path, monkeypatch):
             changed=False,
         ),
     )
-    monkeypatch.setattr("ritualist.cli.initialize_app", lambda: report)
+    monkeypatch.setattr("setpiece.cli.initialize_app", lambda: report)
 
     result = CliRunner().invoke(app, ["init"])
 
@@ -456,8 +456,8 @@ def test_runs_lists_recent_run_records(tmp_path, monkeypatch):
         },
         steps=[],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.list_recent_runs", lambda *, limit: [record])
 
     result = CliRunner().invoke(app, ["runs", "--limit", "1"])
 
@@ -482,16 +482,16 @@ def test_runs_repairs_and_reports_interrupted_records(tmp_path, monkeypatch):
         steps=[],
     )
     monkeypatch.setattr(
-        "ritualist.cli.reconcile_running_runs",
+        "setpiece.cli.reconcile_running_runs",
         lambda **_kwargs: [
             ReconciledRun(
                 run_id="20260615T175148Z_gaming_mode",
                 path=run_path,
-                message="Ritualist exited before finalizing this run.",
+                message="Setpiece exited before finalizing this run.",
             )
         ],
     )
-    monkeypatch.setattr("ritualist.cli.list_recent_runs", lambda *, limit: [record])
+    monkeypatch.setattr("setpiece.cli.list_recent_runs", lambda *, limit: [record])
 
     result = CliRunner().invoke(app, ["runs"])
 
@@ -511,13 +511,13 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
             "dry_run": False,
             "started_at": "2026-06-15T12:00:00+00:00",
             "ended_at": "2026-06-15T12:01:00+00:00",
-            "final_message": "Ritualist exited before finalizing this run.",
+            "final_message": "Setpiece exited before finalizing this run.",
             "stopped_reason": "interrupted",
             "declined_target": {"target_text": "Play", "window_title": "Battle.net"},
             "ownership_ledger": [
                 {
                     "kind": "browser",
-                    "description": "Ritualist-managed browser page/window opened",
+                    "description": "Setpiece-managed browser page/window opened",
                     "owned_by_ritual": True,
                     "cleanup_available": True,
                     "cleanup_action": "close_browser",
@@ -529,8 +529,8 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
                 "options": [
                     {"id": "keep_setup_open", "label": "Keep setup open"},
                     {
-                        "id": "clean_up_ritualist_opened",
-                        "label": "Clean up things Ritualist opened",
+                        "id": "clean_up_setpiece_opened",
+                        "label": "Clean up things Setpiece opened",
                         "available": True,
                     },
                     {"id": "open_run_log", "label": "Open run log"},
@@ -548,15 +548,15 @@ def test_show_run_prints_summary_and_steps(tmp_path, monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
 
     assert result.exit_code == 0
     assert "Gaming Mode" in result.output
     assert "interrupted" in result.output
-    assert "Ritualist exited before finalizing this run." in result.output
+    assert "Setpiece exited before finalizing this run." in result.output
     assert "stopped_reason" in result.output
     assert "declined_target" in result.output
     assert "ownership_ledger" in result.output
@@ -607,8 +607,8 @@ def test_show_run_prints_condition_and_branch_details(tmp_path, monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_flow"])
 
@@ -641,8 +641,8 @@ def test_show_run_prints_user_entered_operator_notes(tmp_path, monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
 
@@ -714,8 +714,8 @@ def test_show_run_prints_runtime_v2_state_metadata(tmp_path, monkeypatch):
         },
         steps=[],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_gaming_mode"])
 
@@ -740,8 +740,8 @@ def test_show_run_handles_missing_fields_gracefully(tmp_path, monkeypatch):
         metadata={},
         steps=[{}],
     )
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: record)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: record)
 
     result = CliRunner().invoke(app, ["show-run", "20260615T120000Z_legacy"])
 
@@ -751,8 +751,8 @@ def test_show_run_handles_missing_fields_gracefully(tmp_path, monkeypatch):
 
 
 def test_show_run_exits_one_for_unknown_run(monkeypatch):
-    monkeypatch.setattr("ritualist.cli.reconcile_running_runs", lambda **_kwargs: [])
-    monkeypatch.setattr("ritualist.cli.load_run", lambda ref: None)
+    monkeypatch.setattr("setpiece.cli.reconcile_running_runs", lambda **_kwargs: [])
+    monkeypatch.setattr("setpiece.cli.load_run", lambda ref: None)
 
     result = CliRunner().invoke(app, ["show-run", "missing-run"])
 
@@ -768,7 +768,7 @@ def test_inspect_window_prints_labels(monkeypatch):
         return [WindowInspection(title="Battle.net", labels=["Diablo IV", "Play"])]
 
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
         inspect,
     )
 
@@ -785,7 +785,7 @@ def test_inspect_window_prints_labels(monkeypatch):
 
 def test_inspect_window_prints_json(monkeypatch):
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.inspect_windows",
         lambda *_args, **_kwargs: [WindowInspection(title="Battle.net", labels=["Play"])],
     )
 
@@ -821,13 +821,13 @@ def test_doctor_reports_recipe_checks(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.browser_profiles_dir", lambda: tmp_path / "profiles")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
     monkeypatch.setattr(
-        "ritualist.doctor.importlib.util.find_spec",
+        "setpiece.doctor.importlib.util.find_spec",
         lambda name: object(),
     )
 
@@ -860,11 +860,11 @@ def test_doctor_reports_assertion_checks(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: object())
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
 
@@ -885,10 +885,10 @@ def test_doctor_warns_when_browser_assertion_has_no_browser_open(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: object())
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
 
@@ -905,13 +905,13 @@ def test_doctor_fails_on_error_and_preserves_dependency_extras(monkeypatch):
             "steps": [{"action": "browser.open", "url": "https://example.test"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
+    monkeypatch.setattr("setpiece.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: None)
 
     result = CliRunner().invoke(app, ["doctor", "gaming_mode"])
 
     assert result.exit_code == 1
-    assert "ritualist[browser]" in result.output
+    assert "setpiece[browser]" in result.output
 
 
 def test_doctor_no_strict_prints_errors_but_exits_zero(monkeypatch):
@@ -922,13 +922,13 @@ def test_doctor_no_strict_prints_errors_but_exits_zero(monkeypatch):
             "steps": [{"action": "browser.open", "url": "https://example.test"}],
         }
     )
-    monkeypatch.setattr("ritualist.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: None)
+    monkeypatch.setattr("setpiece.cli.load_recipe_for_diagnostics", lambda *_args, **_kwargs: (recipe, {}, []))
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: None)
 
     result = CliRunner().invoke(app, ["doctor", "gaming_mode", "--no-strict"])
 
     assert result.exit_code == 0
-    assert "ritualist[browser]" in result.output
+    assert "setpiece[browser]" in result.output
 
 
 def test_doctor_json_outputs_stable_shape(monkeypatch):
@@ -942,7 +942,7 @@ def test_doctor_json_outputs_stable_shape(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
 
@@ -1003,10 +1003,10 @@ def test_doctor_json_reports_warning_status_and_counts(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: object())
 
     result = CliRunner().invoke(app, ["doctor", "runbook", "--json"])
 
@@ -1030,10 +1030,10 @@ def test_doctor_reports_supported_environment_os(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "linux")
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
 
@@ -1051,10 +1051,10 @@ def test_doctor_reports_missing_capability(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "linux")
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
 
@@ -1073,11 +1073,11 @@ def test_doctor_reports_environment_required_capability(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
     monkeypatch.setattr(
-        "ritualist.doctor.importlib.util.find_spec",
+        "setpiece.doctor.importlib.util.find_spec",
         lambda name: None if name == "playwright.sync_api" else object(),
     )
 
@@ -1085,7 +1085,7 @@ def test_doctor_reports_environment_required_capability(monkeypatch):
 
     assert result.exit_code == 1
     assert "Playwright import failed" in result.output
-    assert "ritualist[browser]" in result.output
+    assert "setpiece[browser]" in result.output
 
 
 def test_doctor_reports_missing_pywin32_for_window_management(monkeypatch):
@@ -1097,12 +1097,12 @@ def test_doctor_reports_missing_pywin32_for_window_management(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
     monkeypatch.setattr(
-        "ritualist.doctor.importlib.util.find_spec",
+        "setpiece.doctor.importlib.util.find_spec",
         lambda name: None if name == "win32api" else object(),
     )
 
@@ -1110,7 +1110,7 @@ def test_doctor_reports_missing_pywin32_for_window_management(monkeypatch):
 
     assert result.exit_code == 1
     assert "win32api" in result.output
-    assert "ritualist[windows]" in result.output
+    assert "setpiece[windows]" in result.output
 
 
 def test_doctor_reports_platform_mismatch(monkeypatch):
@@ -1123,10 +1123,10 @@ def test_doctor_reports_platform_mismatch(monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "linux")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "linux")
 
     result = CliRunner().invoke(app, ["doctor", "runbook"])
 
@@ -1150,7 +1150,7 @@ steps:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
 
     result = CliRunner().invoke(app, ["doctor", str(path)])
 
@@ -1169,7 +1169,7 @@ def test_doctor_reports_missing_app_path(tmp_path, monkeypatch):
         }
     )
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
 
@@ -1206,17 +1206,17 @@ def test_doctor_checks_expected_windows_and_labels(monkeypatch):
         return True
 
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: object())
     monkeypatch.setattr(
-        "ritualist.adapters.window_manager.WindowsWindowManager.window_exists",
+        "setpiece.adapters.window_manager.WindowsWindowManager.window_exists",
         window_exists,
     )
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
         text_visible,
     )
 
@@ -1252,17 +1252,17 @@ def test_doctor_expected_label_check_is_side_effect_free(monkeypatch):
         raise AssertionError("doctor must not click expected labels")
 
     monkeypatch.setattr(
-        "ritualist.cli.load_recipe_for_diagnostics",
+        "setpiece.cli.load_recipe_for_diagnostics",
         lambda *_args, **_kwargs: (recipe, {}, []),
     )
-    monkeypatch.setattr("ritualist.doctor.sys.platform", "win32")
-    monkeypatch.setattr("ritualist.doctor.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("setpiece.doctor.sys.platform", "win32")
+    monkeypatch.setattr("setpiece.doctor.importlib.util.find_spec", lambda name: object())
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.text_visible",
         text_visible,
     )
     monkeypatch.setattr(
-        "ritualist.adapters.windows_uia.WindowsUIAutomationAdapter.click_text",
+        "setpiece.adapters.windows_uia.WindowsUIAutomationAdapter.click_text",
         click_text,
     )
 
@@ -1297,10 +1297,10 @@ def test_successful_run_with_keep_open_recipe_requests_keep_alive(monkeypatch):
         }
     )
     called = []
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
-    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli._keep_alive_until_interrupted", lambda: called.append(True))
 
     result = CliRunner().invoke(app, ["run", "demo"])
 
@@ -1326,10 +1326,10 @@ def test_failed_later_step_after_keep_open_browser_keeps_alive(monkeypatch):
         }
     )
     called = []
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
-    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli._keep_alive_until_interrupted", lambda: called.append(True))
 
     result = CliRunner().invoke(app, ["run", "demo"])
 
@@ -1359,10 +1359,10 @@ def test_cancelled_final_confirmation_after_keep_open_browser_keeps_alive(monkey
         }
     )
     called = []
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
-    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli._keep_alive_until_interrupted", lambda: called.append(True))
 
     result = CliRunner().invoke(app, ["run", "demo"], input="n\n")
 
@@ -1395,10 +1395,10 @@ def test_run_can_store_remembered_approval_from_cli_decision(monkeypatch, tmp_pa
             ],
         }
     )
-    monkeypatch.setattr("ritualist.preferences.preferences_path", lambda: approval_store)
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.preferences.preferences_path", lambda: approval_store)
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
 
     result = CliRunner().invoke(app, ["run", "demo"], input="r\n")
 
@@ -1415,7 +1415,7 @@ def test_run_can_store_remembered_approval_from_cli_decision(monkeypatch, tmp_pa
 
 def test_settings_approvals_list_and_revoke(monkeypatch, tmp_path):
     approval_store = tmp_path / "preferences.json"
-    monkeypatch.setattr("ritualist.preferences.preferences_path", lambda: approval_store)
+    monkeypatch.setattr("setpiece.preferences.preferences_path", lambda: approval_store)
     entry = remember_approval(
         RememberedApprovalScope(
             recipe_or_intent_id="demo",
@@ -1467,10 +1467,10 @@ def test_dry_run_never_keeps_alive(monkeypatch):
         }
     )
     called = []
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
-    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli._keep_alive_until_interrupted", lambda: called.append(True))
 
     result = CliRunner().invoke(app, ["dry-run", "demo"])
 
@@ -1489,10 +1489,10 @@ def test_keep_alive_option_runs_even_after_failure(monkeypatch):
         }
     )
     called = []
-    monkeypatch.setattr("ritualist.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
-    monkeypatch.setattr("ritualist.cli.create_default_adapters", lambda: fakes.bundle())
-    monkeypatch.setattr("ritualist.cli.RunLogWriter", DummyRunLogWriter)
-    monkeypatch.setattr("ritualist.cli._keep_alive_until_interrupted", lambda: called.append(True))
+    monkeypatch.setattr("setpiece.cli.load_recipe_reference", lambda *_args, **_kwargs: recipe)
+    monkeypatch.setattr("setpiece.cli.create_default_adapters", lambda: fakes.bundle())
+    monkeypatch.setattr("setpiece.cli.RunLogWriter", DummyRunLogWriter)
+    monkeypatch.setattr("setpiece.cli._keep_alive_until_interrupted", lambda: called.append(True))
 
     result = CliRunner().invoke(app, ["run", "demo", "--keep-alive"])
 
